@@ -79,3 +79,9 @@ select pg_temp.expect((select count(*) = 0 from reactions), 'al eliminar un mome
 
 reset role;
 \echo TODAS LAS PRUEBAS DE PRIVACIDAD PASAN
+
+-- Borrar una cuenta que creó un grupo y una invitación no debe fallar.
+delete from auth.users where id = '00000000-0000-0000-0000-00000000000a';
+select pg_temp.expect((select count(*) = 1 and bool_and(created_by is null) from groups), 'al borrar la cuenta de quien creó el grupo, el grupo se conserva');
+select pg_temp.expect((select count(*) = 0 from moments), 'al borrar una cuenta desaparecen sus momentos');
+\echo BORRADO DE CUENTAS CORRECTO
