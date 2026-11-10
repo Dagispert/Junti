@@ -1,13 +1,11 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Text } from 'react-native';
+import { View } from 'react-native';
 
-import { Button, Field, Notice, Screen, Title } from '@/components/ui';
-import { useTheme } from '@/constants/theme';
+import { Button, Field, Lead, Notice, Screen, Title } from '@/components/ui';
 import { errorText, useStore } from '@/data/store';
 
 export default function NewGroup() {
-  const theme = useTheme();
   const { createGroup } = useStore();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -26,11 +24,14 @@ export default function NewGroup() {
   };
 
   return (
-    <Screen header={<Button label="Cancelar" variant="quiet" onPress={() => router.back()} />}>
+    <Screen
+      header={
+        <View style={{ alignItems: 'flex-start', paddingVertical: 8 }}>
+          <Button compact label="Cancelar" variant="quiet" onPress={() => router.back()} />
+        </View>
+      }>
       <Title>Nuevo grupo</Title>
-      <Text style={{ color: theme.textSecondary, fontSize: 15, lineHeight: 22 }}>
-        Un espacio privado. Solo entra quien tenga vuestro código de invitación.
-      </Text>
+      <Lead strong="Un espacio privado.">Solo entra quien tenga vuestro código de invitación.</Lead>
       <Field
         label="Nombre del grupo"
         value={name}

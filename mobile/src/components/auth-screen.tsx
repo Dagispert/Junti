@@ -1,14 +1,13 @@
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
-import { Spacing, useTheme } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
 
-import { Button, Field, Notice, Screen, Title } from './ui';
+import { Button, Field, Lead, Notice, Screen, Title } from './ui';
 
 /** Entrar o crear cuenta con correo y contraseña. */
 export function AuthScreen() {
-  const theme = useTheme();
   const { signIn, signUp } = useStore();
   const [mode, setMode] = useState<'in' | 'up'>('in');
   const [email, setEmail] = useState('');
@@ -35,11 +34,11 @@ export function AuthScreen() {
 
   return (
     <Screen>
-      <View style={{ paddingTop: Spacing.five, gap: Spacing.two }}>
-        <Title>Junti</Title>
-        <Text style={{ color: theme.textSecondary, fontSize: 16, lineHeight: 23 }}>
-          Un espacio privado para seguir formando parte de la vida de quienes quieres.
-        </Text>
+      <View style={{ paddingTop: 72, gap: Spacing.three }}>
+        <Title style={{ fontSize: 48, lineHeight: 54 }}>Junti</Title>
+        <Lead strong="Un espacio privado">
+          para seguir formando parte de la vida de quienes quieres.
+        </Lead>
       </View>
       <Field
         label="Correo"
@@ -76,7 +75,6 @@ export function AuthScreen() {
 
 /** Primer paso tras crear la cuenta: cómo te verán los demás. */
 export function ProfileSetup() {
-  const theme = useTheme();
   const { saveProfile, signOut } = useStore();
   const [name, setName] = useState('');
   const [city, setCity] = useState('');
@@ -95,11 +93,9 @@ export function ProfileSetup() {
 
   return (
     <Screen>
-      <View style={{ paddingTop: Spacing.five, gap: Spacing.two }}>
+      <View style={{ paddingTop: 72, gap: Spacing.three }}>
         <Title>¿Cómo te llamas?</Title>
-        <Text style={{ color: theme.textSecondary, fontSize: 16, lineHeight: 23 }}>
-          Así te verán las personas de tus grupos. Nadie más.
-        </Text>
+        <Lead strong="Así te verán las personas de tus grupos.">Nadie más.</Lead>
       </View>
       <Field label="Nombre" value={name} onChangeText={setName} autoComplete="name" />
       <Field

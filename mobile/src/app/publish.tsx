@@ -4,8 +4,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { Button, Screen, Title } from '@/components/ui';
-import { Fonts, Radius, Spacing, useTheme } from '@/constants/theme';
+import { Button, Card, Notice, Screen, Tag, Title } from '@/components/ui';
+import { Radius, Spacing, useTheme } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
 
 /** Compartir un momento: foto y/o texto, en el grupo desde el que se abre. */
@@ -72,31 +72,40 @@ export default function Publish() {
     <Screen
       header={
         <View style={styles.header}>
-          <Button label="Cancelar" variant="quiet" onPress={() => router.back()} />
+          <Button compact label="Cancelar" variant="quiet" onPress={() => router.back()} />
           <Button
+            compact
             label={busy ? 'Publicando…' : 'Publicar'}
-            color={group.color}
             disabled={busy || (!imageUri && !text.trim())}
             onPress={publish}
           />
         </View>
       }>
-      <Title>{proposal ? proposal.title : 'Comparte un momento'}</Title>
-      {/* El destino siempre a la vista antes de publicar. */}
-      <Text style={{ color: theme.textSecondary }}>Se publicará en {group.name}</Text>
-
-      {imageUri ? (
-        <Image source={{ uri: imageUri }} style={styles.preview} contentFit="cover" />
-      ) : (
-        <View style={[styles.preview, styles.empty, { borderColor: theme.border }]}>
-          <Text style={{ fontSize: 40 }}>📷</Text>
-        </View>
-      )}
-      <View style={styles.sources}>
-        <Button label="Hacer una foto" variant="quiet" onPress={() => pick('camera')} />
-        <Button label="Elegir de la galería" variant="quiet" onPress={() => pick('library')} />
+      <View style={{ gap: 10 }}>
+        {/* El destino siempre a la vista antes de publicar. */}
+        <Tag>Para {group.name}</Tag>
+        <Title>{proposal ? proposal.title : 'Comparte un momento'}</Title>
       </View>
-      {!!notice && <Text style={{ color: theme.textSecondary }}>{notice}</Text>}
+
+      <Card>
+        {imageUri ? (
+          <Image source={{ uri: imageUri }} style={styles.preview} contentFit="cover" />
+        ) : (
+          <View style={[styles.preview, styles.empty, { backgroundColor: theme.soft }]}>
+            <Text style={{ color: theme.textSecondary, fontSize: 15 }}>Sin foto todavía</Text>
+          </View>
+        )}
+        <View style={styles.sources}>
+          <Button compact label="Hacer una foto" variant="quiet" onPress={() => pick('camera')} />
+          <Button
+            compact
+            label="Elegir de la galería"
+            variant="quiet"
+            onPress={() => pick('library')}
+          />
+        </View>
+      </Card>
+      <Notice>{notice}</Notice>
 
       <TextInput
         value={text}
@@ -104,40 +113,23 @@ export default function Publish() {
         placeholder="Unas palabras, si te apetece…"
         placeholderTextColor={theme.textSecondary}
         multiline
-        style={[
-          styles.input,
-          {
-            color: theme.text,
-            borderColor: theme.border,
-            fontFamily: Fonts?.sans,
-          },
-        ]}
+        style={[styles.input, { color: theme.text, backgroundColor: theme.card }]}
       />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: Spacing.two,
-  },
-  preview: { width: '100%', aspectRatio: 4 / 3, borderRadius: Radius.medium },
-  empty: {
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sources: { flexDirection: 'row', justifyContent: 'center', gap: Spacing.two },
+  header: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: Spacing.two },
+  preview: { width: '100%', aspectRatio: 4 / 5, borderRadius: Radius.inner },
+  empty: { alignItems: 'center', justifyContent: 'center' },
+  sources: { flexDirection: 'row', justifyContent: 'center', paddingTop: 6 },
   input: {
-    minHeight: 96,
-    fontSize: 16,
-    lineHeight: 23,
-    borderWidth: 1,
-    borderRadius: Radius.medium,
-    padding: Spacing.three,
+    minHeight: 110,
+    fontSize: 17,
+    lineHeight: 24,
+    borderRadius: Radius.inner,
+    padding: 20,
     textAlignVertical: 'top',
   },
 });

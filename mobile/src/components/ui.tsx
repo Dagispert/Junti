@@ -1,15 +1,17 @@
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useState, type ReactNode } from 'react';
 import {
-  RefreshControl,
-  TextInput,
-  type TextInputProps,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
   type StyleProp,
+  type TextInputProps,
+  type TextStyle,
   type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -39,6 +41,7 @@ export function Screen({ children, header }: { children: ReactNode; header?: Rea
       <ScrollView
         contentContainerStyle={[styles.column, styles.content]}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -52,10 +55,36 @@ export function Screen({ children, header }: { children: ReactNode; header?: Rea
   );
 }
 
-export function Title({ children }: { children: ReactNode }) {
+/** Titular grande, fino y apretado. */
+export function Title({ children, style }: { children: ReactNode; style?: StyleProp<TextStyle> }) {
+  const theme = useTheme();
+  return <Text style={[styles.title, { color: theme.text }, style]}>{children}</Text>;
+}
+
+/**
+ * Texto en dos tonos: la primera frase en tinta y el resto en gris.
+ * Es el recurso tipográfico principal de la app.
+ */
+export function Lead({ strong, children }: { strong: string; children?: ReactNode }) {
   const theme = useTheme();
   return (
-    <Text style={[styles.title, { color: theme.text, fontFamily: Fonts?.serif }]}>{children}</Text>
+    <Text style={[styles.lead, { color: theme.textSecondary }]}>
+      <Text style={{ color: theme.text }}>{strong}</Text>
+      {children ? ' ' : ''}
+      {children}
+    </Text>
+  );
+}
+
+/** Etiqueta pequeña en monoespaciada sobre gris. */
+export function Tag({ children, center }: { children: ReactNode; center?: boolean }) {
+  const theme = useTheme();
+  return (
+    <View style={[styles.tag, { backgroundColor: theme.soft }, center && { alignSelf: 'center' }]}>
+      <Text style={[styles.tagText, { color: theme.textSecondary, fontFamily: Fonts?.mono }]}>
+        {children}
+      </Text>
+    </View>
   );
 }
 
@@ -66,29 +95,22 @@ export function Avatar({ userId, size = 32 }: { userId: string; size?: number })
       accessibilityLabel={user.name}
       style={[
         styles.avatar,
-        {
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          backgroundColor: user.color,
-        },
+        { width: size, height: size, borderRadius: size / 2, backgroundColor: user.color },
       ]}>
-      <Text style={{ color: '#fff', fontWeight: '700', fontSize: size * 0.42 }}>
-        {user.name[0]}
-      </Text>
+      <Text style={{ color: '#fff', fontWeight: '600', fontSize: size * 0.4 }}>{user.name[0]}</Text>
     </View>
   );
 }
 
-export function AvatarRow({ userIds, size = 26 }: { userIds: string[]; size?: number }) {
+export function AvatarRow({ userIds, size = 28 }: { userIds: string[]; size?: number }) {
   const theme = useTheme();
   return (
     <View style={{ flexDirection: 'row' }}>
-      {userIds.map((id, i) => (
+      {userIds.slice(0, 5).map((id, i) => (
         <View
           key={id}
           style={{
-            marginLeft: i ? -size / 4 : 0,
+            marginLeft: i ? -size / 3 : 0,
             borderRadius: size,
             borderWidth: 2,
             borderColor: theme.card,
@@ -100,32 +122,81 @@ export function AvatarRow({ userIds, size = 26 }: { userIds: string[]; size?: nu
   );
 }
 
-/** La foto de un momento, o su sustituto en los datos de ejemplo. */
+/** La foto de un momento; si es solo texto, un panel gris con sus palabras. */
 export function Photo({ moment, style }: { moment: Moment; style?: StyleProp<ViewStyle> }) {
   const theme = useTheme();
   if (moment.imageUri) {
     return (
-      <View style={[styles.photo, style]}>
+      <View style={[styles.photo, { backgroundColor: theme.soft }, style]}>
         <Image
           source={{ uri: moment.imageUri }}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
+          transition={200}
         />
       </View>
     );
   }
-  // Momento solo de texto.
   return (
-    <View style={[styles.photo, { backgroundColor: theme.border, padding: Spacing.two }, style]}>
-      <Text
-        numberOfLines={4}
-        style={{
-          color: theme.text,
-          fontFamily: Fonts?.serif,
-          textAlign: 'center',
-        }}>
+    <View style={[styles.photo, { backgroundColor: theme.soft, padding: Spacing.two }, style]}>
+      <Text numberOfLines={4} style={{ color: theme.text, fontSize: 13, textAlign: 'center' }}>
         {moment.text}
       </Text>
+    </View>
+  );
+}
+
+/** Velo oscuro para que el texto blanco se lea sobre cualquier foto. */
+export function Scrim({ edge, height = '45%' }: { edge: 'top' | 'bottom'; height?: `${number}%` }) {
+  return (
+    <LinearGradient
+      pointerEvents="none"
+      colors={
+        edge === 'top'
+          ? ['rgba(0,0,0,0.45)', 'rgba(0,0,0,0)']
+          : ['rgba(0,0,0,0)', 'rgba(0,0,0,0.6)']
+      }
+      style={[styles.scrim, edge === 'top' ? { top: 0 } : { bottom: 0 }, { height }]}
+    />
+  );
+}
+
+const FAN = [
+  { rotate: '-9deg', x: -0.42, y: 0.06 },
+  { rotate: '-2deg', x: 0, y: 0 },
+  { rotate: '8deg', x: 0.42, y: 0.05 },
+];
+
+/** Hasta tres fotos apiladas en abanico, con marco blanco. */
+export function PhotoFan({ moments, size = 150 }: { moments: Moment[]; size?: number }) {
+  const theme = useTheme();
+  const shown = moments.slice(0, 3);
+  if (!shown.length) return null;
+  // Con una o dos fotos se usan las posiciones centrales para que no quede cojo.
+  const slots = shown.length === 1 ? [FAN[1]] : shown.length === 2 ? [FAN[0], FAN[2]] : FAN;
+  return (
+    <View style={{ height: size * 1.3, alignItems: 'center', justifyContent: 'center' }}>
+      {shown.map((moment, i) => (
+        <View
+          key={moment.id}
+          style={[
+            styles.fanFrame,
+            {
+              width: size,
+              height: size * 1.12,
+              borderRadius: size * 0.2,
+              backgroundColor: theme.card,
+              boxShadow: theme.shadow,
+              transform: [
+                { translateX: slots[i].x * size },
+                { translateY: slots[i].y * size },
+                { rotate: slots[i].rotate },
+              ],
+            },
+          ]}>
+          <Photo moment={moment} style={{ flex: 1, borderRadius: size * 0.16 }} />
+        </View>
+      ))}
     </View>
   );
 }
@@ -134,17 +205,21 @@ export function Button({
   label,
   onPress,
   variant = 'primary',
-  color,
   disabled,
+  compact,
 }: {
   label: string;
   onPress: () => void;
-  variant?: 'primary' | 'quiet';
-  color?: string;
+  /** primary: píldora de tinta · light: píldora blanca (sobre fotos) · quiet: solo texto. */
+  variant?: 'primary' | 'light' | 'quiet';
   disabled?: boolean;
+  compact?: boolean;
 }) {
   const theme = useTheme();
-  const primary = variant === 'primary';
+  const background =
+    variant === 'primary' ? theme.accent : variant === 'light' ? '#FFFFFF' : 'transparent';
+  const color =
+    variant === 'primary' ? theme.onAccent : variant === 'light' ? '#1D1F22' : theme.textSecondary;
   return (
     <Pressable
       accessibilityRole="button"
@@ -152,25 +227,20 @@ export function Button({
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
-        primary && { backgroundColor: color ?? theme.accent },
-        (pressed || disabled) && { opacity: 0.5 },
+        compact && styles.buttonCompact,
+        { backgroundColor: background },
+        (pressed || disabled) && { opacity: 0.45 },
       ]}>
-      <Text
-        style={{
-          color: primary ? theme.onAccent : theme.textSecondary,
-          fontWeight: '600',
-          fontSize: 15,
-        }}>
-        {label}
-      </Text>
+      <Text style={{ color, fontWeight: '500', fontSize: compact ? 14 : 15 }}>{label}</Text>
     </Pressable>
   );
 }
 
+/** Tarjeta blanca con marco grueso: dentro va una foto con esquinas propias. */
 export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
   const theme = useTheme();
   return (
-    <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }, style]}>
+    <View style={[styles.card, { backgroundColor: theme.card, boxShadow: theme.shadow }, style]}>
       {children}
     </View>
   );
@@ -180,16 +250,12 @@ export function Card({ children, style }: { children: ReactNode; style?: StylePr
 export function Field({ label, style, ...props }: TextInputProps & { label: string }) {
   const theme = useTheme();
   return (
-    <View style={{ gap: Spacing.one }}>
-      <Text style={{ color: theme.textSecondary, fontSize: 13, fontWeight: '600' }}>{label}</Text>
+    <View style={{ gap: 6 }}>
+      <Text style={{ color: theme.textSecondary, fontSize: 13 }}>{label}</Text>
       <TextInput
         accessibilityLabel={label}
         placeholderTextColor={theme.textSecondary}
-        style={[
-          styles.field,
-          { color: theme.text, borderColor: theme.border, backgroundColor: theme.card },
-          style,
-        ]}
+        style={[styles.field, { color: theme.text, backgroundColor: theme.card }, style]}
         {...props}
       />
     </View>
@@ -200,7 +266,7 @@ export function Field({ label, style, ...props }: TextInputProps & { label: stri
 export function Notice({ children }: { children: ReactNode }) {
   const theme = useTheme();
   if (!children) return null;
-  return <Text style={{ color: theme.accent, fontSize: 14, lineHeight: 20 }}>{children}</Text>;
+  return <Text style={{ color: theme.text, fontSize: 14, lineHeight: 20 }}>{children}</Text>;
 }
 
 const styles = StyleSheet.create({
@@ -208,29 +274,30 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: MaxContentWidth,
     alignSelf: 'center',
-    paddingHorizontal: Spacing.three,
+    paddingHorizontal: 20,
   },
-  content: { paddingBottom: Spacing.five, gap: Spacing.three },
-  title: { fontSize: 30, lineHeight: 36, fontWeight: '600' },
+  content: { paddingTop: Spacing.two, paddingBottom: Spacing.five, gap: Spacing.four },
+  title: { fontSize: 34, lineHeight: 40, fontWeight: '500', letterSpacing: -0.8 },
+  lead: { fontSize: 19, lineHeight: 27, letterSpacing: -0.2 },
+  tag: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  tagText: { fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase' },
   avatar: { alignItems: 'center', justifyContent: 'center' },
   photo: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  scrim: { position: 'absolute', left: 0, right: 0 },
+  fanFrame: { position: 'absolute', padding: 7 },
   button: {
-    paddingVertical: 10,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Radius.large,
+    height: 48,
+    paddingHorizontal: 22,
+    borderRadius: Radius.medium,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  buttonCompact: { height: 40, paddingHorizontal: 16, borderRadius: Radius.pill },
+  card: { borderRadius: Radius.frame, padding: 10 },
   field: {
     fontSize: 16,
-    borderWidth: 1,
+    height: 52,
     borderRadius: Radius.medium,
-    paddingVertical: 12,
     paddingHorizontal: Spacing.three,
-  },
-  card: {
-    borderRadius: Radius.medium,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
   },
 });

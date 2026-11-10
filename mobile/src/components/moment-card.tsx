@@ -6,7 +6,7 @@ import { useStore } from '@/data/store';
 import type { Moment } from '@/data/types';
 import { clockIn, relative } from '@/lib/time';
 
-import { Avatar, Card, Photo } from './ui';
+import { Avatar, Card, Photo, Scrim } from './ui';
 
 const QUICK_REACTIONS = ['❤️', '😂', '😮'];
 /** Los comentarios no son un chat: se muestran pocos y el resto se pliega. */
@@ -26,6 +26,8 @@ export function MomentCard({ moment }: { moment: Moment }) {
   const emojis = [...new Set([...QUICK_REACTIONS, ...moment.reactions.map((r) => r.emoji)])];
   const comments = expanded ? moment.comments : moment.comments.slice(-VISIBLE_COMMENTS);
   const hidden = moment.comments.length - comments.length;
+  // La hora local del autor forma parte del recuerdo.
+  const where = `${clockIn(moment.authorTz, moment.createdAt)}${author.city ? ` en ${author.city}` : ''}`;
 
   const send = () => {
     const text = draft.trim();
@@ -36,40 +38,40 @@ export function MomentCard({ moment }: { moment: Moment }) {
 
   return (
     <Card>
-      <View style={styles.header}>
-        <Avatar userId={author.id} size={36} />
+      {moment.imageUri ? (
+        <View style={styles.photoWrap}>
+          <Photo moment={moment} style={StyleSheet.absoluteFill} />
+          <Scrim edge="top" height="32%" />
+          <Text style={styles.overName}>{author.name}</Text>
+          <Text style={styles.overMeta}>{where}</Text>
+          {(!!moment.text || !!proposal) && (
+            <>
+              <Scrim edge="bottom" />
+              <View style={styles.caption}>
+                {proposal && <Text style={styles.overProposal}>{proposal.title}</Text>}
+                {!!moment.text && <Text style={styles.overText}>{moment.text}</Text>}
+              </View>
+            </>
+          )}
+        </View>
+      ) : (
+        <View style={[styles.textPanel, { backgroundColor: theme.soft }]}>
+          {proposal && (
+            <Text style={{ color: theme.textSecondary, fontSize: 14 }}>{proposal.title}</Text>
+          )}
+          <Text style={[styles.bigText, { color: theme.text }]}>{moment.text}</Text>
+        </View>
+      )}
+
+      <View style={styles.footer}>
+        <Avatar userId={author.id} size={40} />
         <View style={{ flex: 1 }}>
-          <Text style={[styles.name, { color: theme.text }]}>{author.name}</Text>
-          {/* La hora local del autor forma parte del recuerdo. */}
-          <Text style={[styles.meta, { color: theme.textSecondary }]}>
-            {clockIn(moment.authorTz, moment.createdAt)}
-            {author.city ? ` en ${author.city}` : ''} · {relative(moment.createdAt)}
+          <Text style={{ color: theme.text, fontSize: 15, fontWeight: '500' }}>{author.name}</Text>
+          <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
+            {moment.imageUri ? '' : `${where} · `}
+            {relative(moment.createdAt)}
           </Text>
         </View>
-        {moment.authorId === me && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Eliminar este momento"
-            onPress={() =>
-              confirming ? deleteMoment(moment.id).catch(() => {}) : setConfirming(true)
-            }>
-            <Text style={[styles.meta, { color: confirming ? theme.accent : theme.textSecondary }]}>
-              {confirming ? '¿Eliminar?' : 'Eliminar'}
-            </Text>
-          </Pressable>
-        )}
-      </View>
-
-      {!!moment.imageUri && <Photo moment={moment} style={styles.photo} />}
-
-      <View style={styles.body}>
-        {proposal && (
-          <Text style={[styles.meta, { color: theme.textSecondary }]}>
-            {proposal.kind === 'challenge' ? 'Reto' : 'Propuesta'} · {proposal.title}
-          </Text>
-        )}
-        {!!moment.text && <Text style={[styles.text, { color: theme.text }]}>{moment.text}</Text>}
-
         <View style={styles.reactions}>
           {emojis.map((emoji) => {
             const count = moment.reactions.filter((r) => r.emoji === emoji).length;
@@ -80,72 +82,109 @@ export function MomentCard({ moment }: { moment: Moment }) {
                 accessibilityRole="button"
                 accessibilityLabel={`Reaccionar con ${emoji}`}
                 onPress={() => toggleReaction(moment.id, emoji).catch(() => {})}
-                style={[styles.chip, { borderColor: mine ? theme.accent : theme.border }]}>
-                <Text style={{ fontSize: 15, opacity: count ? 1 : 0.45 }}>{emoji}</Text>
+                style={[styles.chip, { backgroundColor: mine ? theme.accent : theme.soft }]}>
+                <Text style={{ fontSize: 15, opacity: count ? 1 : 0.5 }}>{emoji}</Text>
                 {count > 0 && (
-                  <Text style={[styles.meta, { color: theme.textSecondary }]}>{count}</Text>
+                  <Text
+                    style={{ fontSize: 13, color: mine ? theme.onAccent : theme.textSecondary }}>
+                    {count}
+                  </Text>
                 )}
               </Pressable>
             );
           })}
         </View>
+      </View>
 
+      <View style={styles.thread}>
         {hidden > 0 && (
           <Pressable onPress={() => setExpanded(true)}>
-            <Text style={[styles.meta, { color: theme.textSecondary }]}>
+            <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
               Ver {hidden} {hidden === 1 ? 'comentario anterior' : 'comentarios anteriores'}
             </Text>
           </Pressable>
         )}
         {comments.map((comment) => (
-          <Text key={comment.id} style={[styles.comment, { color: theme.text }]}>
-            <Text style={{ fontWeight: '700' }}>{user(comment.userId).name} </Text>
+          <Text key={comment.id} style={[styles.comment, { color: theme.textSecondary }]}>
+            <Text style={{ color: theme.text, fontWeight: '500' }}>
+              {user(comment.userId).name}{' '}
+            </Text>
             {comment.text}
           </Text>
         ))}
-
-        <TextInput
-          value={draft}
-          onChangeText={setDraft}
-          onSubmitEditing={send}
-          placeholder="Añadir un comentario…"
-          placeholderTextColor={theme.textSecondary}
-          returnKeyType="send"
-          style={[styles.input, { color: theme.text, borderColor: theme.border }]}
-        />
+        <View style={styles.inputRow}>
+          <TextInput
+            value={draft}
+            onChangeText={setDraft}
+            onSubmitEditing={send}
+            placeholder="Añadir un comentario…"
+            placeholderTextColor={theme.textSecondary}
+            returnKeyType="send"
+            style={[styles.input, { color: theme.text, backgroundColor: theme.soft }]}
+          />
+          {moment.authorId === me && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Eliminar este momento"
+              onPress={() =>
+                confirming ? deleteMoment(moment.id).catch(() => {}) : setConfirming(true)
+              }>
+              <Text style={{ fontSize: 13, color: confirming ? theme.text : theme.textSecondary }}>
+                {confirming ? '¿Eliminar?' : 'Eliminar'}
+              </Text>
+            </Pressable>
+          )}
+        </View>
       </View>
     </Card>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
+  photoWrap: { aspectRatio: 4 / 5, borderRadius: Radius.inner, overflow: 'hidden' },
+  overName: {
+    position: 'absolute',
+    top: 22,
+    left: 16,
+    right: 16,
+    textAlign: 'center',
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: '500',
+    letterSpacing: -0.6,
+  },
+  overMeta: {
+    position: 'absolute',
+    top: 58,
+    left: 16,
+    right: 16,
+    textAlign: 'center',
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 14,
+  },
+  caption: { position: 'absolute', left: 20, right: 20, bottom: 20, gap: 4 },
+  overProposal: { color: 'rgba(255,255,255,0.75)', fontSize: 13 },
+  overText: { color: '#fff', fontSize: 18, lineHeight: 24, fontWeight: '500', letterSpacing: -0.2 },
+  textPanel: { borderRadius: Radius.inner, padding: 24, paddingVertical: 32, gap: Spacing.two },
+  bigText: { fontSize: 24, lineHeight: 31, fontWeight: '500', letterSpacing: -0.5 },
+  footer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
-    padding: Spacing.three,
+    gap: 10,
+    paddingHorizontal: 8,
+    paddingTop: 14,
   },
-  name: { fontSize: 15, fontWeight: '700' },
-  meta: { fontSize: 13, lineHeight: 18 },
-  photo: { width: '100%', aspectRatio: 4 / 3 },
-  body: { padding: Spacing.three, gap: Spacing.two },
-  text: { fontSize: 16, lineHeight: 23 },
-  reactions: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  reactions: { flexDirection: 'row', gap: 6 },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.one,
-    paddingVertical: Spacing.one,
+    gap: 4,
+    height: 36,
     paddingHorizontal: 10,
-    borderRadius: Radius.large,
-    borderWidth: 1,
+    borderRadius: Radius.pill,
   },
+  thread: { paddingHorizontal: 8, paddingTop: 12, paddingBottom: 6, gap: 8 },
   comment: { fontSize: 14, lineHeight: 20 },
-  input: {
-    fontSize: 14,
-    borderWidth: 1,
-    borderRadius: Radius.large,
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.three,
-  },
+  inputRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  input: { flex: 1, fontSize: 14, height: 40, borderRadius: Radius.pill, paddingHorizontal: 16 },
 });

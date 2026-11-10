@@ -1,13 +1,13 @@
 import { Link } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 
 import { Radius, Spacing, useTheme } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
 import type { Group } from '@/data/types';
 import { clockIn } from '@/lib/time';
 
-import { Avatar, Notice, Title } from './ui';
+import { Avatar, Button, Notice, Tag, Title } from './ui';
 
 /** Cabecera del grupo: nombre, invitación y la hora local de cada integrante. */
 export function GroupHeader({ group }: { group: Group }) {
@@ -36,19 +36,13 @@ export function GroupHeader({ group }: { group: Group }) {
         <Link href="/" style={{ color: theme.textSecondary, fontSize: 14 }}>
           ‹ Mis grupos
         </Link>
-        <Pressable accessibilityRole="button" onPress={invite}>
-          <Text style={{ color: group.color, fontSize: 14, fontWeight: '700' }}>Invitar</Text>
-        </Pressable>
+        <Button compact variant="quiet" label="Invitar" onPress={invite} />
       </View>
       <Title>{group.name}</Title>
       {!!code && (
-        <View style={[styles.code, { borderColor: theme.border, backgroundColor: theme.card }]}>
-          <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
-            Código de invitación (caduca en 14 días)
-          </Text>
-          <Text
-            selectable
-            style={{ color: theme.text, fontSize: 20, fontWeight: '700', letterSpacing: 1 }}>
+        <View style={[styles.code, { backgroundColor: theme.card, boxShadow: theme.shadow }]}>
+          <Tag>Código · caduca en 14 días</Tag>
+          <Text selectable style={[styles.codeText, { color: theme.text }]}>
             {code}
           </Text>
         </View>
@@ -61,10 +55,10 @@ export function GroupHeader({ group }: { group: Group }) {
         {group.memberIds.map((id) => {
           const member = user(id);
           return (
-            <View key={id} style={styles.member}>
-              <Avatar userId={id} size={28} />
+            <View key={id} style={[styles.member, { backgroundColor: theme.card }]}>
+              <Avatar userId={id} size={30} />
               <View>
-                <Text style={{ color: theme.text, fontSize: 13, fontWeight: '600' }}>
+                <Text style={{ color: theme.text, fontSize: 13, fontWeight: '500' }}>
                   {member.name}
                 </Text>
                 <Text style={{ color: theme.textSecondary, fontSize: 12 }}>
@@ -83,7 +77,15 @@ export function GroupHeader({ group }: { group: Group }) {
 const styles = StyleSheet.create({
   header: { paddingTop: Spacing.two, paddingBottom: Spacing.three, gap: Spacing.two },
   top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  code: { borderWidth: 1, borderRadius: Radius.medium, padding: Spacing.three, gap: Spacing.one },
-  members: { gap: Spacing.three },
-  member: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  code: { borderRadius: Radius.inner, padding: Spacing.three, gap: Spacing.two },
+  codeText: { fontSize: 24, fontWeight: '500', letterSpacing: 2 },
+  members: { gap: Spacing.two },
+  member: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    padding: 6,
+    paddingRight: 14,
+    borderRadius: Radius.pill,
+  },
 });

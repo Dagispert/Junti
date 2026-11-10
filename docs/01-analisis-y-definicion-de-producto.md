@@ -221,7 +221,7 @@ Quien solo tiene un grupo entra directamente en él. Como pide el briefing, esto
 | Calendario | Cumpleaños, aniversarios, reencuentros; recordatorios. | 2 |
 | Resumen / recopilación | Historia a pantalla completa con narración; revisar y aprobar antes de exportar. | 2 → 3 |
 
-**Línea visual:** fondo cálido y neutro, la fotografía como protagonista, una tipografía con carácter para titulares y otra muy legible para texto, color de acento propio de cada grupo, movimiento sutil. Detalle distintivo: mostrar la **hora local de cada persona** junto a su nombre («Ana · 08:30 en CDMX»), que convierte la distancia en algo tangible y amable.
+**Línea visual (definida a partir de las referencias del autor):** minimalista y neutra. Fondo gris muy claro, tarjetas blancas con marco grueso y esquinas muy redondeadas, sombras amplias y suaves, la fotografía como protagonista con el nombre superpuesto, tipografía sin remates de peso medio con textos en dos tonos (tinta y gris), botones tipo píldora en tinta casi negra, etiquetas pequeñas en monoespaciada y fotos apiladas en abanico. El color lo ponen las fotos, no la interfaz. Detalle distintivo: la **hora local de cada persona** junto a su nombre («Ana · 08:30 en CDMX»).
 
 ---
 

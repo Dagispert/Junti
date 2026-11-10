@@ -2,11 +2,13 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { GroupHeader } from '@/components/group-header';
-import { AvatarRow, Button, Card, Photo, Screen } from '@/components/ui';
+import { AvatarRow, Button, Card, PhotoFan, Screen, Tag } from '@/components/ui';
 import { Spacing, useTheme } from '@/constants/theme';
 import { challengeLibrary } from '@/data/library';
 import { useStore } from '@/data/store';
 import { daysLeft } from '@/lib/time';
+
+import { Missing } from './index';
 
 /** Retos: activos, ideas de la biblioteca y finalizados. */
 export default function Challenges() {
@@ -14,7 +16,7 @@ export default function Challenges() {
   const theme = useTheme();
   const { group: groupById, moments, proposals, addChallenge } = useStore();
   const group = groupById(id);
-  if (!group) return null;
+  if (!group) return <Missing />;
 
   const now = Date.now();
   const challenges = proposals.filter((p) => p.groupId === id && p.kind === 'challenge');
@@ -22,48 +24,42 @@ export default function Challenges() {
   const finished = challenges.filter((p) => p.endsAt && p.endsAt <= now);
   const ideas = challengeLibrary.filter((idea) => !challenges.some((p) => p.title === idea.title));
 
-  const section = (label: string) => (
-    <Text style={[styles.section, { color: theme.textSecondary }]}>{label}</Text>
-  );
-
   const card = (challenge: (typeof challenges)[number], open: boolean) => {
     const answers = moments.filter((m) => m.proposalId === challenge.id);
     // Se muestra quién ha participado; nunca quién falta.
     const participants = [...new Set(answers.map((m) => m.authorId))];
+    const left = challenge.endsAt ? daysLeft(challenge.endsAt) : undefined;
     return (
-      <Card key={challenge.id}>
-        <View style={styles.body}>
-          <Text style={[styles.title, { color: theme.text }]}>{challenge.title}</Text>
-          {!!challenge.body && <Text style={{ color: theme.textSecondary }}>{challenge.body}</Text>}
-          {answers.length > 0 && (
-            <View style={styles.grid}>
-              {answers.map((m) => (
-                <Photo key={m.id} moment={m} style={styles.thumb} />
-              ))}
-            </View>
-          )}
-          <View style={styles.row}>
-            <AvatarRow userIds={participants} />
-            {open && challenge.endsAt && (
-              <Text style={{ color: theme.textSecondary, fontSize: 13, flex: 1 }}>
-                {daysLeft(challenge.endsAt) === 1
+      <Card key={challenge.id} style={styles.card}>
+        {answers.length > 0 && <PhotoFan moments={answers} size={120} />}
+        <View style={{ alignItems: 'center', gap: 10 }}>
+          <Tag center>
+            {!open
+              ? 'Finalizado'
+              : left
+                ? left === 1
                   ? 'Queda 1 día'
-                  : `Quedan ${daysLeft(challenge.endsAt)} días`}
-              </Text>
-            )}
-            {open && (
-              <Button
-                label="Participar"
-                color={group.color}
-                onPress={() =>
-                  router.push({
-                    pathname: '/publish',
-                    params: { groupId: id, proposalId: challenge.id },
-                  })
-                }
-              />
-            )}
-          </View>
+                  : `Quedan ${left} días`
+                : 'Reto'}
+          </Tag>
+          <Text style={[styles.title, { color: theme.text }]}>{challenge.title}</Text>
+          {!!challenge.body && (
+            <Text style={[styles.body, { color: theme.textSecondary }]}>{challenge.body}</Text>
+          )}
+        </View>
+        <View style={styles.row}>
+          <AvatarRow userIds={participants} size={32} />
+          {open && (
+            <Button
+              label="Participar"
+              onPress={() =>
+                router.push({
+                  pathname: '/publish',
+                  params: { groupId: id, proposalId: challenge.id },
+                })
+              }
+            />
+          )}
         </View>
       </Card>
     );
@@ -71,48 +67,56 @@ export default function Challenges() {
 
   return (
     <Screen header={<GroupHeader group={group} />}>
-      {active.length > 0 && section('En marcha')}
       {active.map((c) => card(c, true))}
 
-      {ideas.length > 0 && section('Ideas para el grupo')}
-      {ideas.map((idea) => (
-        <Card key={idea.title}>
-          <View style={[styles.body, styles.row]}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.title, { color: theme.text }]}>{idea.title}</Text>
-              <Text style={{ color: theme.textSecondary }}>{idea.body}</Text>
-            </View>
-            <Button
-              label="Proponer"
-              variant="quiet"
-              onPress={() => addChallenge(id, idea.title, idea.body).catch(() => {})}
-            />
-          </View>
-        </Card>
-      ))}
+      {ideas.length > 0 && (
+        <View style={{ gap: Spacing.two }}>
+          <Tag>Ideas para el grupo</Tag>
+          <Card style={{ padding: 6 }}>
+            {ideas.map((idea, i) => (
+              <View
+                key={idea.title}
+                style={[styles.idea, i > 0 && { borderTopWidth: 1, borderTopColor: theme.soft }]}>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={{ color: theme.text, fontSize: 16, fontWeight: '500' }}>
+                    {idea.title}
+                  </Text>
+                  <Text style={{ color: theme.textSecondary, fontSize: 14, lineHeight: 19 }}>
+                    {idea.body}
+                  </Text>
+                </View>
+                <Button
+                  compact
+                  variant="quiet"
+                  label="Proponer"
+                  onPress={() => addChallenge(id, idea.title, idea.body).catch(() => {})}
+                />
+              </View>
+            ))}
+          </Card>
+        </View>
+      )}
 
-      {finished.length > 0 && section('Finalizados')}
       {finished.map((c) => card(c, false))}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  section: {
-    fontSize: 13,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginTop: Spacing.two,
+  card: { padding: 24, gap: 18 },
+  title: {
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: '500',
+    letterSpacing: -0.5,
+    textAlign: 'center',
   },
-  body: { padding: Spacing.three, gap: Spacing.two },
-  title: { fontSize: 17, fontWeight: '700' },
+  body: { fontSize: 16, lineHeight: 22, textAlign: 'center' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
     justifyContent: 'space-between',
+    minHeight: 36,
   },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.one },
-  thumb: { width: 84, height: 84, borderRadius: 10 },
+  idea: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, padding: 14 },
 });

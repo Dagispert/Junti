@@ -3,8 +3,8 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { GroupHeader } from '@/components/group-header';
 import { MomentCard } from '@/components/moment-card';
-import { Button, Card, Screen } from '@/components/ui';
-import { Fonts, Spacing, useTheme } from '@/constants/theme';
+import { Button, Card, Lead, Screen, Tag } from '@/components/ui';
+import { Spacing, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
 
 /** Hoy: la propuesta vigente y los momentos recientes del grupo. */
@@ -30,43 +30,37 @@ export default function Today() {
   return (
     <Screen header={<GroupHeader group={group} />}>
       {proposal && (
-        <Card style={{ borderColor: group.color, borderWidth: 1.5 }}>
-          <View style={styles.proposal}>
-            <Text style={{ color: theme.textSecondary, fontSize: 13 }}>Propuesta de hoy</Text>
-            <Text style={[styles.question, { color: theme.text, fontFamily: Fonts?.serif }]}>
-              {proposal.title}
-            </Text>
-            <View style={styles.actions}>
-              <Button
-                label="Responder"
-                color={group.color}
-                onPress={() =>
-                  router.push({
-                    pathname: '/publish',
-                    params: { groupId: id, proposalId: proposal.id },
-                  })
-                }
-              />
-              {/* Posponer u omitir no deja rastro visible para los demás. */}
-              <Button
-                label="Más tarde"
-                variant="quiet"
-                onPress={() => dismissProposal(proposal.id, 'snoozed').catch(() => {})}
-              />
-              <Button
-                label="Omitir"
-                variant="quiet"
-                onPress={() => dismissProposal(proposal.id, 'skipped').catch(() => {})}
-              />
-            </View>
+        <Card style={styles.proposal}>
+          <Tag>Propuesta de hoy</Tag>
+          <Text style={[styles.question, { color: theme.text }]}>{proposal.title}</Text>
+          <View style={styles.actions}>
+            <Button
+              label="Responder"
+              onPress={() =>
+                router.push({
+                  pathname: '/publish',
+                  params: { groupId: id, proposalId: proposal.id },
+                })
+              }
+            />
+            {/* Posponer u omitir no deja rastro visible para los demás. */}
+            <Button
+              label="Más tarde"
+              variant="quiet"
+              onPress={() => dismissProposal(proposal.id, 'snoozed').catch(() => {})}
+            />
+            <Button
+              label="Omitir"
+              variant="quiet"
+              onPress={() => dismissProposal(proposal.id, 'skipped').catch(() => {})}
+            />
           </View>
         </Card>
       )}
       {feed.length === 0 && (
-        <Text style={{ color: theme.textSecondary, fontSize: 16, lineHeight: 23 }}>
-          Aquí aparecerán los momentos del grupo. Comparte el primero con el botón «+» e invita a
-          los demás con «Invitar».
-        </Text>
+        <Lead strong="Aquí aparecerán los momentos del grupo.">
+          Comparte el primero con el botón «+» e invita a los demás con «Invitar».
+        </Lead>
       )}
       {feed.map((moment) => (
         <MomentCard key={moment.id} moment={moment} />
@@ -77,24 +71,18 @@ export default function Today() {
 
 /** El grupo no existe o ya no pertenezco a él. */
 export function Missing() {
-  const theme = useTheme();
   return (
     <Screen>
-      <Text style={{ color: theme.textSecondary, paddingTop: Spacing.five }}>
-        No se encuentra este grupo. Tira hacia abajo para recargar.
-      </Text>
-      <Button label="Volver a mis grupos" variant="quiet" onPress={() => router.replace('/')} />
+      <View style={{ paddingTop: Spacing.five, gap: Spacing.three }}>
+        <Lead strong="No se encuentra este grupo.">Tira hacia abajo para recargar.</Lead>
+        <Button label="Volver a mis grupos" variant="quiet" onPress={() => router.replace('/')} />
+      </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  proposal: { padding: Spacing.three, gap: Spacing.two },
-  question: { fontSize: 22, lineHeight: 29 },
-  actions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.one,
-    marginTop: Spacing.one,
-  },
+  proposal: { padding: 24, gap: 14 },
+  question: { fontSize: 26, lineHeight: 32, fontWeight: '500', letterSpacing: -0.6 },
+  actions: { flexDirection: 'row', alignItems: 'center', marginTop: 4, marginLeft: -2 },
 });

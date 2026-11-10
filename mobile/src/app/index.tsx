@@ -1,8 +1,8 @@
-import { Link, router } from 'expo-router';
+import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { AvatarRow, Button, Card, Photo, Screen, Title } from '@/components/ui';
-import { Spacing, useTheme } from '@/constants/theme';
+import { AvatarRow, Button, Card, Lead, Photo, Scrim, Screen, Title } from '@/components/ui';
+import { Radius, Spacing, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import { relative } from '@/lib/time';
 
@@ -17,59 +17,99 @@ export default function MyGroups() {
         <View style={styles.header}>
           <Title>Junti</Title>
           <Pressable accessibilityRole="button" onPress={signOut}>
-            <Text style={{ color: theme.textSecondary }}>{user(me).name} · Salir</Text>
+            <Text style={{ color: theme.textSecondary, fontSize: 14 }}>
+              {user(me).name} · Salir
+            </Text>
           </Pressable>
         </View>
       }>
       {groups.length === 0 && (
-        <Text style={[styles.empty, { color: theme.textSecondary }]}>
-          Todavía no estás en ningún grupo. Crea uno e invita a los tuyos, o únete con el código que
-          te hayan pasado.
-        </Text>
+        <View style={{ paddingVertical: Spacing.five }}>
+          <Lead strong="Todavía no estás en ningún grupo.">
+            Crea uno e invita a los tuyos, o únete con el código que te hayan pasado.
+          </Lead>
+        </View>
       )}
+
       {groups.map((group) => {
+        // (el margen inferior deja sitio a las tarjetas que asoman por debajo)
         const recent = moments.filter((m) => m.groupId === group.id);
         const last = recent[0];
+        const cover = recent.find((m) => m.imageUri);
         const pending = proposals
           .filter((p) => p.groupId === group.id && p.kind === 'prompt' && !dismissed.includes(p.id))
           .sort((a, b) => b.startsAt - a.startsAt)[0];
         const answered =
           pending && recent.some((m) => m.proposalId === pending.id && m.authorId === me);
+        const open = () => router.push({ pathname: '/group/[id]', params: { id: group.id } });
+        const people = `${group.memberIds.length} ${group.memberIds.length === 1 ? 'persona' : 'personas'}`;
+
         return (
-          <Link key={group.id} href={{ pathname: '/group/[id]', params: { id: group.id } }} asChild>
-            <Pressable>
-              <Card>
-                {recent.length > 0 && (
-                  <View style={styles.mosaic}>
-                    {recent.slice(0, 3).map((moment) => (
-                      <Photo key={moment.id} moment={moment} style={styles.tile} />
-                    ))}
-                  </View>
-                )}
-                <View style={styles.info}>
-                  <View style={styles.row}>
-                    <Text style={[styles.name, { color: theme.text }]}>{group.name}</Text>
-                    <AvatarRow userIds={group.memberIds} />
-                  </View>
-                  <Text style={{ color: theme.textSecondary, fontSize: 14 }}>
-                    {last
-                      ? `${user(last.authorId).name} compartió un momento · ${relative(last.createdAt)}`
-                      : 'Aún no hay momentos. Estrena el grupo.'}
+          <Pressable
+            key={group.id}
+            accessibilityRole="button"
+            onPress={open}
+            style={{ marginBottom: 20 }}>
+            {/* Dos tarjetas asomando por debajo: el grupo como una baraja de momentos. */}
+            <View
+              style={[
+                styles.deck,
+                styles.deckFar,
+                { backgroundColor: theme.card, boxShadow: theme.shadow },
+              ]}
+            />
+            <View
+              style={[
+                styles.deck,
+                styles.deckNear,
+                { backgroundColor: theme.card, boxShadow: theme.shadow },
+              ]}
+            />
+            <Card>
+              {cover ? (
+                <View style={styles.cover}>
+                  <Photo moment={cover} style={StyleSheet.absoluteFill} />
+                  <Scrim edge="top" height="40%" />
+                  <Text style={[styles.groupName, { color: '#fff' }]}>{group.name}</Text>
+                  <Text style={[styles.groupMeta, { color: 'rgba(255,255,255,0.85)' }]}>
+                    {people}
                   </Text>
-                  {pending && !answered && (
-                    <View style={styles.row}>
-                      <View style={[styles.dot, { backgroundColor: group.color }]} />
-                      <Text style={{ color: theme.text, fontSize: 14, flex: 1 }}>
-                        {pending.title}
-                      </Text>
-                    </View>
-                  )}
                 </View>
-              </Card>
-            </Pressable>
-          </Link>
+              ) : (
+                <View style={[styles.cover, styles.coverEmpty, { backgroundColor: theme.soft }]}>
+                  <Text style={[styles.groupName, { color: theme.text }]}>{group.name}</Text>
+                  <Text style={[styles.groupMeta, { color: theme.textSecondary }]}>{people}</Text>
+                </View>
+              )}
+              <View style={styles.footer}>
+                <AvatarRow userIds={group.memberIds} size={34} />
+                <View style={{ flex: 1 }}>
+                  <Text
+                    numberOfLines={1}
+                    style={{ color: theme.text, fontSize: 15, fontWeight: '500' }}>
+                    {last ? user(last.authorId).name : 'Sin momentos aún'}
+                  </Text>
+                  <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
+                    {last ? relative(last.createdAt) : 'Estrena el grupo'}
+                  </Text>
+                </View>
+                <Button compact label="Entrar" onPress={open} />
+              </View>
+              {pending && !answered && (
+                <View style={styles.pending}>
+                  <View style={[styles.dot, { backgroundColor: theme.text }]} />
+                  <Text
+                    numberOfLines={1}
+                    style={{ color: theme.textSecondary, fontSize: 14, flex: 1 }}>
+                    {pending.title}
+                  </Text>
+                </View>
+              )}
+            </Card>
+          </Pressable>
         );
       })}
+
       <View style={styles.actions}>
         <Button label="Crear un grupo" onPress={() => router.push('/new-group')} />
         <Button label="Unirme con un código" variant="quiet" onPress={() => router.push('/join')} />
@@ -83,19 +123,39 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'space-between',
-    paddingVertical: Spacing.three,
+    paddingTop: Spacing.three,
+    paddingBottom: Spacing.two,
   },
-  empty: { fontSize: 16, lineHeight: 23, paddingVertical: Spacing.four },
-  mosaic: { flexDirection: 'row', height: 130, gap: 2 },
-  tile: { flex: 1 },
-  info: { padding: Spacing.three, gap: Spacing.two },
-  row: {
+  deck: { position: 'absolute', height: 60, borderRadius: Radius.frame },
+  deckNear: { left: 16, right: 16, bottom: -12, opacity: 0.9 },
+  deckFar: { left: 34, right: 34, bottom: -24, opacity: 0.7 },
+  cover: { aspectRatio: 1, borderRadius: Radius.inner, overflow: 'hidden' },
+  coverEmpty: { aspectRatio: 1.9, justifyContent: 'center' },
+  groupName: {
+    marginTop: 26,
+    paddingHorizontal: 16,
+    textAlign: 'center',
+    fontSize: 30,
+    fontWeight: '500',
+    letterSpacing: -0.7,
+  },
+  groupMeta: { textAlign: 'center', fontSize: 14, marginTop: 4 },
+  footer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.two,
+    gap: 10,
+    paddingHorizontal: 8,
+    paddingTop: 14,
+    paddingBottom: 6,
   },
-  name: { fontSize: 19, fontWeight: '700', flex: 1 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  actions: { gap: Spacing.one, marginTop: Spacing.two },
+  pending: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingTop: 6,
+    paddingBottom: 8,
+  },
+  dot: { width: 6, height: 6, borderRadius: 3 },
+  actions: { gap: Spacing.one, marginTop: Spacing.three },
 });
