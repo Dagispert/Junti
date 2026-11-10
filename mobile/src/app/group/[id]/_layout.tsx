@@ -4,14 +4,14 @@ import { Pressable, StyleSheet, Text, View, type PressableProps } from 'react-na
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MaxContentWidth, Spacing, useTheme } from '@/constants/theme';
-import { getGroup } from '@/data/store';
+import { useStore } from '@/data/store';
 
 /** Nivel 1: el espacio de un grupo. Hoy · Retos · (+) · Memoria. El Mapa llega en la Fase 2. */
 export default function GroupLayout() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const group = getGroup(id);
+  const group = useStore().group(id);
 
   return (
     <Tabs>

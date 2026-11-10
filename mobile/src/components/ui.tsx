@@ -1,6 +1,9 @@
 import { Image } from 'expo-image';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
+  RefreshControl,
+  TextInput,
+  type TextInputProps,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,24 +15,37 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Fonts, MaxContentWidth, Radius, Spacing, useTheme } from '@/constants/theme';
-import { getUser } from '@/data/store';
+import { useStore } from '@/data/store';
 import type { Moment } from '@/data/types';
 
-/** Contenedor de pantalla con scroll, márgenes seguros y ancho máximo. */
+/** Contenedor de pantalla con scroll, márgenes seguros y ancho máximo. Al tirar hacia abajo, recarga. */
 export function Screen({ children, header }: { children: ReactNode; header?: ReactNode }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const { refresh } = useStore();
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refresh();
+    } catch {
+      // Sin conexión: se queda lo que ya había en pantalla.
+    }
+    setRefreshing(false);
+  };
   return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: theme.background,
-        paddingTop: insets.top,
-      }}>
+    <View style={{ flex: 1, backgroundColor: theme.background, paddingTop: insets.top }}>
       <View style={styles.column}>{header}</View>
       <ScrollView
         contentContainerStyle={[styles.column, styles.content]}
-        keyboardShouldPersistTaps="handled">
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.textSecondary}
+          />
+        }>
         {children}
       </ScrollView>
     </View>
@@ -44,7 +60,7 @@ export function Title({ children }: { children: ReactNode }) {
 }
 
 export function Avatar({ userId, size = 32 }: { userId: string; size?: number }) {
-  const user = getUser(userId);
+  const user = useStore().user(userId);
   return (
     <View
       accessibilityLabel={user.name}
@@ -95,13 +111,6 @@ export function Photo({ moment, style }: { moment: Moment; style?: StyleProp<Vie
           style={StyleSheet.absoluteFill}
           contentFit="cover"
         />
-      </View>
-    );
-  }
-  if (moment.placeholder) {
-    return (
-      <View style={[styles.photo, { backgroundColor: moment.placeholder.color }, style]}>
-        <Text style={styles.photoEmoji}>{moment.placeholder.emoji}</Text>
       </View>
     );
   }
@@ -167,6 +176,33 @@ export function Card({ children, style }: { children: ReactNode; style?: StylePr
   );
 }
 
+/** Campo de texto con etiqueta. */
+export function Field({ label, style, ...props }: TextInputProps & { label: string }) {
+  const theme = useTheme();
+  return (
+    <View style={{ gap: Spacing.one }}>
+      <Text style={{ color: theme.textSecondary, fontSize: 13, fontWeight: '600' }}>{label}</Text>
+      <TextInput
+        accessibilityLabel={label}
+        placeholderTextColor={theme.textSecondary}
+        style={[
+          styles.field,
+          { color: theme.text, borderColor: theme.border, backgroundColor: theme.card },
+          style,
+        ]}
+        {...props}
+      />
+    </View>
+  );
+}
+
+/** Mensaje de error o de aviso bajo un formulario. */
+export function Notice({ children }: { children: ReactNode }) {
+  const theme = useTheme();
+  if (!children) return null;
+  return <Text style={{ color: theme.accent, fontSize: 14, lineHeight: 20 }}>{children}</Text>;
+}
+
 const styles = StyleSheet.create({
   column: {
     width: '100%',
@@ -178,13 +214,19 @@ const styles = StyleSheet.create({
   title: { fontSize: 30, lineHeight: 36, fontWeight: '600' },
   avatar: { alignItems: 'center', justifyContent: 'center' },
   photo: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  photoEmoji: { fontSize: 64 },
   button: {
     paddingVertical: 10,
     paddingHorizontal: Spacing.three,
     borderRadius: Radius.large,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  field: {
+    fontSize: 16,
+    borderWidth: 1,
+    borderRadius: Radius.medium,
+    paddingVertical: 12,
+    paddingHorizontal: Spacing.three,
   },
   card: {
     borderRadius: Radius.medium,

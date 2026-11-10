@@ -2,7 +2,7 @@
 
 Aplicación móvil de conexión y memoria compartida: grupos privados donde amigos, familia o pareja que viven lejos comparten pequeños momentos del día a día, que con el tiempo se convierten en el archivo de su historia común.
 
-**Estado:** prototipo navegable con datos de ejemplo y esquema de base de datos. Sin cuentas ni servidor todavía.
+**Estado:** primera versión conectada a Supabase (cuentas, grupos, invitaciones, momentos, retos). En pruebas.
 
 ## Contenido
 

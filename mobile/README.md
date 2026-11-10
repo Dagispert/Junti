@@ -2,7 +2,7 @@
 
 App de iPhone y Android hecha con [Expo](https://expo.dev) (React Native + TypeScript).
 
-**Estado:** prototipo navegable con datos de ejemplo guardados en memoria. Todavía no hay cuentas ni servidor: lo que publiques desaparece al cerrar la app.
+**Estado:** conectada a Supabase: cuentas con correo y contraseña, grupos, invitaciones por código, momentos con foto, reacciones, comentarios, propuesta del día y retos. La conexión se configura en `.env` (solo datos públicos del proyecto).
 
 ## Probarla en tu móvil
 
@@ -23,15 +23,18 @@ Para verla en el navegador del ordenador: `npx expo start --web`.
 
 | Pantalla | Archivo |
 |---|---|
+| Entrar, crear cuenta y perfil | `src/components/auth-screen.tsx` |
 | Mis grupos | `src/app/index.tsx` |
+| Crear grupo / unirse con código | `src/app/new-group.tsx`, `src/app/join.tsx` |
 | Hoy (propuesta + momentos) | `src/app/group/[id]/index.tsx` |
 | Retos | `src/app/group/[id]/retos.tsx` |
 | Memoria por meses | `src/app/group/[id]/memoria.tsx` |
 | Compartir un momento | `src/app/publish.tsx` |
 | Barra inferior del grupo | `src/app/group/[id]/_layout.tsx` |
 
-- `src/data/sample.ts`: personas, grupos y momentos de ejemplo.
-- `src/data/store.tsx`: estado en memoria. Es la pieza que se sustituirá por Supabase.
+- `src/data/store.tsx`: todo lo que la app lee y escribe en Supabase.
+- `src/data/library.ts`: propuestas del día y retos sugeridos.
+- `src/lib/supabase.ts`: conexión con el proyecto.
 - `src/components/`: tarjeta de momento, cabecera de grupo y piezas básicas.
 - `src/constants/theme.ts`: colores (claro y oscuro), espaciado y tipografías.
 

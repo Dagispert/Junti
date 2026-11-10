@@ -6,7 +6,7 @@ import { StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Button, Screen, Title } from '@/components/ui';
 import { Fonts, Radius, Spacing, useTheme } from '@/constants/theme';
-import { getGroup, useStore } from '@/data/store';
+import { errorText, useStore } from '@/data/store';
 
 /** Compartir un momento: foto y/o texto, en el grupo desde el que se abre. */
 export default function Publish() {
@@ -15,12 +15,13 @@ export default function Publish() {
     proposalId?: string;
   }>();
   const theme = useTheme();
-  const { proposals, addMoment } = useStore();
+  const { group: groupById, proposals, addMoment } = useStore();
+  const [busy, setBusy] = useState(false);
   const [imageUri, setImageUri] = useState<string>();
   const [text, setText] = useState('');
   const [notice, setNotice] = useState('');
 
-  const group = getGroup(groupId);
+  const group = groupById(groupId);
   const proposal = proposals.find((p) => p.id === proposalId);
   if (!group) return null;
 
@@ -50,14 +51,21 @@ export default function Publish() {
     }
   };
 
-  const publish = () => {
-    addMoment({
-      groupId,
-      proposalId: proposal?.id,
-      imageUri,
-      text: text.trim() || undefined,
-    });
-    router.back();
+  const publish = async () => {
+    setNotice('');
+    setBusy(true);
+    try {
+      await addMoment({
+        groupId,
+        proposalId: proposal?.id,
+        imageUri,
+        text: text.trim() || undefined,
+      });
+      router.back();
+    } catch (error) {
+      setNotice(errorText(error));
+      setBusy(false);
+    }
   };
 
   return (
@@ -66,18 +74,16 @@ export default function Publish() {
         <View style={styles.header}>
           <Button label="Cancelar" variant="quiet" onPress={() => router.back()} />
           <Button
-            label="Publicar"
+            label={busy ? 'Publicando…' : 'Publicar'}
             color={group.color}
-            disabled={!imageUri && !text.trim()}
+            disabled={busy || (!imageUri && !text.trim())}
             onPress={publish}
           />
         </View>
       }>
       <Title>{proposal ? proposal.title : 'Comparte un momento'}</Title>
       {/* El destino siempre a la vista antes de publicar. */}
-      <Text style={{ color: theme.textSecondary }}>
-        Se publicará en {group.emoji} {group.name}
-      </Text>
+      <Text style={{ color: theme.textSecondary }}>Se publicará en {group.name}</Text>
 
       {imageUri ? (
         <Image source={{ uri: imageUri }} style={styles.preview} contentFit="cover" />

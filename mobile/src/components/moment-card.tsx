@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Radius, Spacing, useTheme } from '@/constants/theme';
-import { getUser, useStore } from '@/data/store';
+import { useStore } from '@/data/store';
 import type { Moment } from '@/data/types';
 import { clockIn, relative } from '@/lib/time';
 
@@ -14,11 +14,12 @@ const VISIBLE_COMMENTS = 2;
 
 export function MomentCard({ moment }: { moment: Moment }) {
   const theme = useTheme();
-  const { me, proposals, toggleReaction, addComment } = useStore();
+  const { me, user, proposals, toggleReaction, addComment, deleteMoment } = useStore();
   const [draft, setDraft] = useState('');
   const [expanded, setExpanded] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
-  const author = getUser(moment.authorId);
+  const author = user(moment.authorId);
   const proposal = proposals.find((p) => p.id === moment.proposalId);
 
   // Reacciones agrupadas por emoji; las rápidas siempre están disponibles.
@@ -29,8 +30,8 @@ export function MomentCard({ moment }: { moment: Moment }) {
   const send = () => {
     const text = draft.trim();
     if (!text) return;
-    addComment(moment.id, text);
     setDraft('');
+    addComment(moment.id, text).catch(() => setDraft(text));
   };
 
   return (
@@ -41,12 +42,25 @@ export function MomentCard({ moment }: { moment: Moment }) {
           <Text style={[styles.name, { color: theme.text }]}>{author.name}</Text>
           {/* La hora local del autor forma parte del recuerdo. */}
           <Text style={[styles.meta, { color: theme.textSecondary }]}>
-            {clockIn(author.tz, moment.createdAt)} en {author.city} · {relative(moment.createdAt)}
+            {clockIn(moment.authorTz, moment.createdAt)}
+            {author.city ? ` en ${author.city}` : ''} · {relative(moment.createdAt)}
           </Text>
         </View>
+        {moment.authorId === me && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Eliminar este momento"
+            onPress={() =>
+              confirming ? deleteMoment(moment.id).catch(() => {}) : setConfirming(true)
+            }>
+            <Text style={[styles.meta, { color: confirming ? theme.accent : theme.textSecondary }]}>
+              {confirming ? '¿Eliminar?' : 'Eliminar'}
+            </Text>
+          </Pressable>
+        )}
       </View>
 
-      {(moment.imageUri || moment.placeholder) && <Photo moment={moment} style={styles.photo} />}
+      {!!moment.imageUri && <Photo moment={moment} style={styles.photo} />}
 
       <View style={styles.body}>
         {proposal && (
@@ -65,7 +79,7 @@ export function MomentCard({ moment }: { moment: Moment }) {
                 key={emoji}
                 accessibilityRole="button"
                 accessibilityLabel={`Reaccionar con ${emoji}`}
-                onPress={() => toggleReaction(moment.id, emoji)}
+                onPress={() => toggleReaction(moment.id, emoji).catch(() => {})}
                 style={[styles.chip, { borderColor: mine ? theme.accent : theme.border }]}>
                 <Text style={{ fontSize: 15, opacity: count ? 1 : 0.45 }}>{emoji}</Text>
                 {count > 0 && (
@@ -85,7 +99,7 @@ export function MomentCard({ moment }: { moment: Moment }) {
         )}
         {comments.map((comment) => (
           <Text key={comment.id} style={[styles.comment, { color: theme.text }]}>
-            <Text style={{ fontWeight: '700' }}>{getUser(comment.userId).name} </Text>
+            <Text style={{ fontWeight: '700' }}>{user(comment.userId).name} </Text>
             {comment.text}
           </Text>
         ))}

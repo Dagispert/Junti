@@ -1,39 +1,75 @@
 import { Link } from 'expo-router';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 
-import { Spacing, useTheme } from '@/constants/theme';
-import { getUser } from '@/data/store';
+import { Radius, Spacing, useTheme } from '@/constants/theme';
+import { errorText, useStore } from '@/data/store';
 import type { Group } from '@/data/types';
 import { clockIn } from '@/lib/time';
 
-import { Avatar, Title } from './ui';
+import { Avatar, Notice, Title } from './ui';
 
-/** Cabecera del grupo: nombre y la hora local de cada integrante. */
+/** Cabecera del grupo: nombre, invitación y la hora local de cada integrante. */
 export function GroupHeader({ group }: { group: Group }) {
   const theme = useTheme();
+  const { user, createInvite } = useStore();
+  const [code, setCode] = useState('');
+  const [notice, setNotice] = useState('');
+
+  const invite = async () => {
+    setNotice('');
+    try {
+      const next = code || (await createInvite(group.id));
+      setCode(next);
+      // En el móvil abre el menú de compartir; en web no existe y basta con mostrar el código.
+      await Share.share({
+        message: `Únete a «${group.name}» en Junti con este código: ${next}`,
+      }).catch(() => {});
+    } catch (error) {
+      setNotice(errorText(error));
+    }
+  };
+
   return (
     <View style={styles.header}>
-      <Link href="/" style={{ color: theme.textSecondary, fontSize: 14 }}>
-        ‹ Mis grupos
-      </Link>
-      <Title>
-        {group.emoji} {group.name}
-      </Title>
+      <View style={styles.top}>
+        <Link href="/" style={{ color: theme.textSecondary, fontSize: 14 }}>
+          ‹ Mis grupos
+        </Link>
+        <Pressable accessibilityRole="button" onPress={invite}>
+          <Text style={{ color: group.color, fontSize: 14, fontWeight: '700' }}>Invitar</Text>
+        </Pressable>
+      </View>
+      <Title>{group.name}</Title>
+      {!!code && (
+        <View style={[styles.code, { borderColor: theme.border, backgroundColor: theme.card }]}>
+          <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
+            Código de invitación (caduca en 14 días)
+          </Text>
+          <Text
+            selectable
+            style={{ color: theme.text, fontSize: 20, fontWeight: '700', letterSpacing: 1 }}>
+            {code}
+          </Text>
+        </View>
+      )}
+      <Notice>{notice}</Notice>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.members}>
         {group.memberIds.map((id) => {
-          const user = getUser(id);
+          const member = user(id);
           return (
             <View key={id} style={styles.member}>
               <Avatar userId={id} size={28} />
               <View>
                 <Text style={{ color: theme.text, fontSize: 13, fontWeight: '600' }}>
-                  {user.name}
+                  {member.name}
                 </Text>
                 <Text style={{ color: theme.textSecondary, fontSize: 12 }}>
-                  {clockIn(user.tz)} · {user.city}
+                  {clockIn(member.tz)}
+                  {member.city ? ` · ${member.city}` : ''}
                 </Text>
               </View>
             </View>
@@ -45,11 +81,9 @@ export function GroupHeader({ group }: { group: Group }) {
 }
 
 const styles = StyleSheet.create({
-  header: {
-    paddingTop: Spacing.two,
-    paddingBottom: Spacing.three,
-    gap: Spacing.two,
-  },
+  header: { paddingTop: Spacing.two, paddingBottom: Spacing.three, gap: Spacing.two },
+  top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  code: { borderWidth: 1, borderRadius: Radius.medium, padding: Spacing.three, gap: Spacing.one },
   members: { gap: Spacing.three },
   member: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
 });

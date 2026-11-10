@@ -4,7 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { GroupHeader } from '@/components/group-header';
 import { Photo, Screen } from '@/components/ui';
 import { Fonts, Spacing, useTheme } from '@/constants/theme';
-import { getGroup, useStore } from '@/data/store';
+import { useStore } from '@/data/store';
 import type { Moment } from '@/data/types';
 import { monthOf } from '@/lib/time';
 
@@ -12,8 +12,8 @@ import { monthOf } from '@/lib/time';
 export default function Memory() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
-  const { moments } = useStore();
-  const group = getGroup(id);
+  const { group: groupById, moments } = useStore();
+  const group = groupById(id);
   if (!group) return null;
 
   const months: { key: string; label: string; items: Moment[] }[] = [];
@@ -26,6 +26,11 @@ export default function Memory() {
 
   return (
     <Screen header={<GroupHeader group={group} />}>
+      {months.length === 0 && (
+        <Text style={{ color: theme.textSecondary, fontSize: 16, lineHeight: 23 }}>
+          La memoria del grupo se irá llenando sola, mes a mes, con lo que compartáis.
+        </Text>
+      )}
       {months.map((month) => (
         <View key={month.key} style={{ gap: Spacing.two }}>
           <Text style={[styles.month, { color: theme.text, fontFamily: Fonts?.serif }]}>

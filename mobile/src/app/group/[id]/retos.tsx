@@ -4,15 +4,16 @@ import { StyleSheet, Text, View } from 'react-native';
 import { GroupHeader } from '@/components/group-header';
 import { AvatarRow, Button, Card, Photo, Screen } from '@/components/ui';
 import { Spacing, useTheme } from '@/constants/theme';
-import { challengeLibrary, getGroup, useStore } from '@/data/store';
+import { challengeLibrary } from '@/data/library';
+import { useStore } from '@/data/store';
 import { daysLeft } from '@/lib/time';
 
 /** Retos: activos, ideas de la biblioteca y finalizados. */
 export default function Challenges() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
-  const { moments, proposals, addChallenge } = useStore();
-  const group = getGroup(id);
+  const { group: groupById, moments, proposals, addChallenge } = useStore();
+  const group = groupById(id);
   if (!group) return null;
 
   const now = Date.now();
@@ -84,7 +85,7 @@ export default function Challenges() {
             <Button
               label="Proponer"
               variant="quiet"
-              onPress={() => addChallenge(id, idea.title, idea.body)}
+              onPress={() => addChallenge(id, idea.title, idea.body).catch(() => {})}
             />
           </View>
         </Card>
