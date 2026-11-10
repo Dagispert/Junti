@@ -1,0 +1,137 @@
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
+
+import { Button, Screen, Title } from '@/components/ui';
+import { Fonts, Radius, Spacing, useTheme } from '@/constants/theme';
+import { getGroup, useStore } from '@/data/store';
+
+/** Compartir un momento: foto y/o texto, en el grupo desde el que se abre. */
+export default function Publish() {
+  const { groupId, proposalId } = useLocalSearchParams<{
+    groupId: string;
+    proposalId?: string;
+  }>();
+  const theme = useTheme();
+  const { proposals, addMoment } = useStore();
+  const [imageUri, setImageUri] = useState<string>();
+  const [text, setText] = useState('');
+  const [notice, setNotice] = useState('');
+
+  const group = getGroup(groupId);
+  const proposal = proposals.find((p) => p.id === proposalId);
+  if (!group) return null;
+
+  const pick = async (source: 'camera' | 'library') => {
+    setNotice('');
+    try {
+      if (source === 'camera') {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) {
+          setNotice(
+            'Sin permiso para usar la cámara. Puedes activarlo en los ajustes del teléfono.',
+          );
+          return;
+        }
+      }
+      const options: ImagePicker.ImagePickerOptions = {
+        mediaTypes: ['images'],
+        quality: 0.8,
+      };
+      const result =
+        source === 'camera'
+          ? await ImagePicker.launchCameraAsync(options)
+          : await ImagePicker.launchImageLibraryAsync(options);
+      if (!result.canceled) setImageUri(result.assets[0].uri);
+    } catch {
+      setNotice('No se ha podido abrir la cámara o la galería en este dispositivo.');
+    }
+  };
+
+  const publish = () => {
+    addMoment({
+      groupId,
+      proposalId: proposal?.id,
+      imageUri,
+      text: text.trim() || undefined,
+    });
+    router.back();
+  };
+
+  return (
+    <Screen
+      header={
+        <View style={styles.header}>
+          <Button label="Cancelar" variant="quiet" onPress={() => router.back()} />
+          <Button
+            label="Publicar"
+            color={group.color}
+            disabled={!imageUri && !text.trim()}
+            onPress={publish}
+          />
+        </View>
+      }>
+      <Title>{proposal ? proposal.title : 'Comparte un momento'}</Title>
+      {/* El destino siempre a la vista antes de publicar. */}
+      <Text style={{ color: theme.textSecondary }}>
+        Se publicará en {group.emoji} {group.name}
+      </Text>
+
+      {imageUri ? (
+        <Image source={{ uri: imageUri }} style={styles.preview} contentFit="cover" />
+      ) : (
+        <View style={[styles.preview, styles.empty, { borderColor: theme.border }]}>
+          <Text style={{ fontSize: 40 }}>📷</Text>
+        </View>
+      )}
+      <View style={styles.sources}>
+        <Button label="Hacer una foto" variant="quiet" onPress={() => pick('camera')} />
+        <Button label="Elegir de la galería" variant="quiet" onPress={() => pick('library')} />
+      </View>
+      {!!notice && <Text style={{ color: theme.textSecondary }}>{notice}</Text>}
+
+      <TextInput
+        value={text}
+        onChangeText={setText}
+        placeholder="Unas palabras, si te apetece…"
+        placeholderTextColor={theme.textSecondary}
+        multiline
+        style={[
+          styles.input,
+          {
+            color: theme.text,
+            borderColor: theme.border,
+            fontFamily: Fonts?.sans,
+          },
+        ]}
+      />
+    </Screen>
+  );
+}
+
+const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: Spacing.two,
+  },
+  preview: { width: '100%', aspectRatio: 4 / 3, borderRadius: Radius.medium },
+  empty: {
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sources: { flexDirection: 'row', justifyContent: 'center', gap: Spacing.two },
+  input: {
+    minHeight: 96,
+    fontSize: 16,
+    lineHeight: 23,
+    borderWidth: 1,
+    borderRadius: Radius.medium,
+    padding: Spacing.three,
+    textAlignVertical: 'top',
+  },
+});

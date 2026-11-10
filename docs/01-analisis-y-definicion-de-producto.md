@@ -1,7 +1,7 @@
 # Junti — Análisis y definición de producto
 
 > Documento de trabajo v0.1 · Respuesta al briefing «Aplicación de conexión y memoria compartida».
-> Cubre los 11 puntos pedidos en la sección 19 del briefing. Todavía no hay código: las decisiones marcadas como **[DECISIÓN]** están pendientes de validar (ver §12).
+> Cubre los 11 puntos pedidos en la sección 19 del briefing. Las decisiones marcadas como **[DECISIÓN]** están pendientes de validar (ver §12).
 > «Junti» es el nombre del repositorio; lo uso como nombre provisional del producto.
 
 ---
@@ -109,7 +109,7 @@ No elimino ninguna funcionalidad importante; fusiono o aplazo las siguientes, co
 
 ## 5. Arquitectura técnica
 
-### 5.1 Stack recomendado **[DECISIÓN]**
+### 5.1 Stack
 
 | Capa | Elección | Motivo |
 |---|---|---|
@@ -357,17 +357,19 @@ Los resúmenes semanales **por reglas** llegan en la Fase 2 y la IA los mejora e
 
 ---
 
-## 12. Decisiones abiertas
+## 12. Decisiones
 
-Ordenadas por cuánto condicionan el trabajo siguiente. Entre paréntesis, mi recomendación.
+### Tomadas
 
-**Condicionan el arranque**
+1. **Equipo:** una sola persona, con sus conocimientos y ayuda de IA. Refuerza la elección de servicios gestionados; los plazos de §11.4, pensados para un equipo pequeño, serán previsiblemente más largos.
+2. **Stack:** React Native + Expo y Supabase en la UE.
+3. **Nombre:** «Junti», provisional.
+4. **Idiomas:** español primero, con la app preparada para traducir.
+5. **Acceso:** correo con código + Apple + Google. Teléfono, más adelante.
 
-1. **Equipo y presupuesto.** ¿Quién va a construirlo (tú con ayuda de IA, un equipo, una agencia) y con qué horizonte? Determina el stack y los plazos.
-2. **Stack.** ¿Conforme con React Native/Expo + Supabase en la UE? (Sí, salvo que haya experiencia previa en otra tecnología.)
-3. **Nombre.** ¿«Junti» es el nombre del producto o solo del repositorio?
-4. **Idiomas de lanzamiento.** (Español primero, con la app preparada para traducir; inglés en Fase 2.)
-5. **Métodos de acceso.** (Correo con código + Apple + Google; teléfono más adelante.)
+### Abiertas
+
+Entre paréntesis, mi recomendación; el prototipo y el esquema de datos la asumen mientras no se diga otra cosa.
 
 **Condicionan el diseño**
 
@@ -387,6 +389,8 @@ Ordenadas por cuánto condicionan el trabajo siguiente. Entre paréntesis, mi re
 
 ---
 
-## 13. Siguiente paso propuesto
+## 13. Estado y siguiente paso
 
-Con las cinco primeras decisiones cerradas se puede empezar la Etapa 0 en paralelo por dos vías: prototipo navegable de las pantallas clave (Mis grupos, Hoy, Publicar, Propuesta, Memoria) y esqueleto técnico del proyecto con el esquema de datos y las políticas de acceso de §9.
+Hecho: prototipo navegable (`mobile/`) con Mis grupos, Hoy, Retos, Memoria y Compartir, sobre datos de ejemplo; y esquema de base de datos del MVP con políticas de acceso probadas (`supabase/`).
+
+Siguiente: crear el proyecto de Supabase, conectar el alta (correo, Apple, Google) y sustituir los datos de ejemplo por datos reales, empezando por grupos, invitaciones y momentos.
