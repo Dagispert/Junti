@@ -78,8 +78,6 @@ const styles = StyleSheet.create({
     fontSize: 29,
     lineHeight: 33,
     textAlign: 'center',
-    textShadowColor: 'rgba(244,239,230,0.95)',
-    textShadowRadius: 8,
   },
-  hidden: { color: 'transparent', textShadowColor: 'transparent' },
+  hidden: { color: 'transparent' },
 });
