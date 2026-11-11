@@ -42,7 +42,12 @@ export default function MomentView() {
               <SkyBadge tz={moment.authorTz} at={moment.createdAt} size={14} />
               <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
                 {clockIn(moment.authorTz, moment.createdAt)}
-                {author.city ? ` en ${author.city}` : ''} · {date}
+                {moment.place
+                  ? ` · 📍 ${moment.place.name}`
+                  : author.city
+                    ? ` en ${author.city}`
+                    : ''}{' '}
+                · {date}
               </Text>
             </View>
           </View>

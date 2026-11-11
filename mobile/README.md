@@ -39,6 +39,7 @@ Para verla en el navegador del ordenador: `npx expo start --web`.
 - `src/components/film-roll.tsx`, `scrapbook.tsx`, `soundtrack.tsx`: la memoria como carrete de fotos con polaroids, pegatinas y notas a mano, y la banda sonora con su tocadiscos. `src/lib/music.ts` busca en el catálogo gratuito de iTunes (portada y fragmento de 30 s).
 - `src/lib/recap.ts`, `src/app/recap.tsx`, `recap-card.tsx`, `on-this-day.tsx`: resúmenes semanales y mensuales como historia a pantalla completa (selección equilibrada por persona y frases con plantillas, sin IA todavía) y «Tal día como hoy».
 - `src/app/calendar.tsx`, `src/app/event.tsx`, `event-card.tsx`, `upcoming-card.tsx`, `src/lib/calendar.ts`: calendario compartido, eventos como billete o tarjeta, cuenta atrás y celebración de cumpleaños en Hoy.
+- Lugar de los momentos: se elige en `src/app/publish.tsx` (buscador o tu ciudad) y forma el «mapa de recuerdos» en la pestaña Mapa, con filtros por personas, recuerdos y periodo.
 - `src/components/world-map.tsx`, `sky-badge.tsx`, `cinematics.tsx`: el mapa de luces con el día y la noche reales, el cielo de cada persona y las animaciones de entrada y de envío.
 - `src/lib/geo.ts`: buscador de ciudades (Open-Meteo, gratuito y sin clave; solo recibe el texto que se escribe), distancias, husos horarios y posición del sol.
 - `src/data/world-dots.ts`: la tierra firme en una cuadrícula de 1°, generada a partir de Natural Earth (dominio público).

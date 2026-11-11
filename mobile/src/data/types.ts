@@ -61,6 +61,8 @@ export type Moment = {
   authorTz: string;
   /** Si responde a una propuesta o reto. */
   proposalId?: string;
+  /** Dónde se compartió, si se quiso decir (nombre «Ciudad, País» y coordenadas de ciudad). */
+  place?: { name: string; lat: number; lng: number };
   reactions: Reaction[];
   comments: Comment[];
 };

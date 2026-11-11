@@ -146,6 +146,12 @@ export function buildRecap(
           : `Desde ${join(cities)}, cada uno en su sitio y todos un poco más cerca.`,
       );
     }
+    const visited = [
+      ...new Set(moments.filter((m) => m.place).map((m) => m.place!.name.split(',')[0])),
+    ];
+    if (visited.length) {
+      story.push(`Hubo momentos desde ${join(visited.slice(0, 5))}.`);
+    }
     // Lo que había apuntado en el calendario durante el periodo.
     const marked = events.filter((e) => {
       for (let t = from; t < to; t += DAY) if (happensOn(e, new Date(t))) return true;

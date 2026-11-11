@@ -31,7 +31,8 @@ export function MomentCard({ moment }: { moment: Moment }) {
   const comments = expanded ? moment.comments : moment.comments.slice(-VISIBLE_COMMENTS);
   const hidden = moment.comments.length - comments.length;
   // La hora local del autor forma parte del recuerdo.
-  const where = `${clockIn(moment.authorTz, moment.createdAt)}${author.city ? ` en ${author.city}` : ''}`;
+  const placeName = moment.place?.name.split(',')[0];
+  const where = `${clockIn(moment.authorTz, moment.createdAt)}${placeName ? ` · 📍 ${placeName}` : author.city ? ` en ${author.city}` : ''}`;
 
   const send = () => {
     const text = draft.trim();

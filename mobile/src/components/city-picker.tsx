@@ -11,13 +11,26 @@ import { searchPlaces, type Place } from '@/lib/geo';
 export function CityPicker({
   value,
   onChange,
+  label = 'Ciudad',
+  empty = 'Elige dónde vives',
+  hint = 'Te sitúa en el mapa de tus grupos. Solo la ciudad, nunca tu ubicación exacta.',
+  clear = 'No mostrar mi ciudad',
+  startOpen = false,
+  onClose,
 }: {
   /** null = sin ciudad. */
   value: Place | null;
   onChange: (place: Place | null) => void;
+  label?: string;
+  empty?: string;
+  hint?: string;
+  clear?: string;
+  startOpen?: boolean;
+  /** Al cerrar el buscador sin elegir. */
+  onClose?: () => void;
 }) {
   const theme = useTheme();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(startOpen);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Place[]>([]);
   const [state, setState] = useState<'idle' | 'searching' | 'error'>('idle');
@@ -54,7 +67,7 @@ export function CityPicker({
   if (!open) {
     return (
       <View style={{ gap: 6 }}>
-        <Text style={{ color: theme.textSecondary, fontSize: 13 }}>Ciudad</Text>
+        <Text style={{ color: theme.textSecondary, fontSize: 13 }}>{label}</Text>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Elegir ciudad"
@@ -64,7 +77,7 @@ export function CityPicker({
           }}
           style={[styles.field, { backgroundColor: theme.soft }]}>
           <Text style={{ color: value ? theme.text : theme.textSecondary, fontSize: 16, flex: 1 }}>
-            {value ? value.name : 'Elige dónde vives'}
+            {value ? value.name : empty}
           </Text>
           {value && describe(value) ? (
             <Text
@@ -74,16 +87,14 @@ export function CityPicker({
             </Text>
           ) : null}
         </Pressable>
-        <Text style={{ color: theme.textSecondary, fontSize: 13, lineHeight: 18 }}>
-          Te sitúa en el mapa de tus grupos. Solo la ciudad, nunca tu ubicación exacta.
-        </Text>
+        <Text style={{ color: theme.textSecondary, fontSize: 13, lineHeight: 18 }}>{hint}</Text>
       </View>
     );
   }
 
   return (
     <View style={{ gap: 8 }}>
-      <Text style={{ color: theme.textSecondary, fontSize: 13 }}>Ciudad</Text>
+      <Text style={{ color: theme.textSecondary, fontSize: 13 }}>{label}</Text>
       <TextInput
         autoFocus
         accessibilityLabel="Buscar ciudad"
@@ -129,10 +140,15 @@ export function CityPicker({
               onChange(null);
               setOpen(false);
             }}>
-            <Text style={{ color: theme.textSecondary, fontSize: 14 }}>No mostrar mi ciudad</Text>
+            <Text style={{ color: theme.textSecondary, fontSize: 14 }}>{clear}</Text>
           </Pressable>
         )}
-        <Pressable accessibilityRole="button" onPress={() => setOpen(false)}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            setOpen(false);
+            onClose?.();
+          }}>
           <Text style={{ color: theme.textSecondary, fontSize: 14 }}>Cancelar</Text>
         </Pressable>
       </View>

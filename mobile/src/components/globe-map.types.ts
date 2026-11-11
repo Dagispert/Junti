@@ -10,6 +10,9 @@ export type GlobePerson = MapPerson & {
   color: string;
 };
 
+/** Un recuerdo con lugar: se dibuja como una burbuja con su foto. */
+export type GlobeMemory = { id: string; lat: number; lng: number; photo?: string; title?: string };
+
 export type GlobeMapProps = {
   people: GlobePerson[];
   height?: number;
@@ -18,6 +21,14 @@ export type GlobeMapProps = {
   /** Persona a la que viajar; null para volver a ver el mundo entero. */
   focusId?: string | null;
   onSelect?: (id: string) => void;
+  /** Recuerdos con lugar («mapa de recuerdos»). */
+  memories?: GlobeMemory[];
+  /** Al tocar una burbuja: los recuerdos de ese sitio. */
+  onMemories?: (ids: string[]) => void;
+  /** Viajar a un punto (por ejemplo, un grupo de recuerdos) cuando no hay persona elegida. */
+  focusPoint?: { lat: number; lng: number } | null;
+  /** Ocultar las chinchetas de personas. */
+  hidePeople?: boolean;
   /** Esquinas redondeadas (cuando va dentro de una tarjeta). */
   rounded?: boolean;
 };

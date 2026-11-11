@@ -7,9 +7,9 @@ import type { GeometryCollection, Topology } from 'topojson-specification';
 
 import { localHour, skyPhase } from '@/lib/geo';
 
-import type { GlobeMapProps, GlobePerson } from './globe-map.types';
+import type { GlobeMapProps, GlobeMemory, GlobePerson } from './globe-map.types';
 
-export type { GlobePerson } from './globe-map.types';
+export type { GlobeMemory, GlobePerson } from './globe-map.types';
 
 // Un pequeño planeta de dibujo animado: países en verdes con sus fronteras, mar
 // turquesa, playas, árboles, nubes que flotan, una casita y una chincheta con
@@ -181,6 +181,16 @@ const CSS = `
   box-shadow:0 4px 12px rgba(20,40,30,.2)}
 .jpin-label small{font-weight:500;color:#6B7076;font-size:10px}
 .jpin-sky{width:14px;height:14px;border-radius:50%}
+.jmem{position:absolute;left:0;top:0;cursor:pointer;will-change:transform,opacity;transition:opacity .25s}
+.jmem-in{transform:translate(-50%,-50%);animation:jmem-in .7s cubic-bezier(.2,1.6,.4,1) both;animation-delay:var(--d,0s)}
+.jmem-b{width:38px;height:38px;border-radius:50%;border:3px solid #fff;overflow:hidden;background:#F3E2AE;
+  box-shadow:0 8px 16px rgba(20,40,30,.3);display:flex;align-items:center;justify-content:center;font-size:17px;
+  transition:transform .35s cubic-bezier(.2,1.5,.4,1)}
+.jmem:hover .jmem-b,.jmem.is-focus .jmem-b{transform:scale(1.25)}
+.jmem-b img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+.jmem-n{position:absolute;right:-6px;top:-6px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#E2703A;
+  color:#fff;font:700 11px Inter,system-ui,sans-serif;display:flex;align-items:center;justify-content:center;border:2px solid #fff}
+@keyframes jmem-in{0%{opacity:0;transform:translate(-50%,-50%) scale(0)}100%{opacity:1;transform:translate(-50%,-50%) scale(1)}}
 @keyframes jpin-in{0%{opacity:0;transform:translate(-50%,-160%) scale(.5)}100%{opacity:1;transform:translate(-50%,-100%)}}
 `;
 function injectCss() {
@@ -249,6 +259,53 @@ function pinElement(p: GlobePerson, index: number, onSelect: (id: string) => voi
   el.addEventListener('click', (e) => {
     e.stopPropagation();
     onSelect(p.id);
+  });
+  return el;
+}
+
+/** Agrupa recuerdos cercanos (misma ciudad, ~15 km) en una sola burbuja. */
+function clusterMemories(list: GlobeMemory[]) {
+  const groups: { lat: number; lng: number; items: GlobeMemory[] }[] = [];
+  for (const m of list) {
+    const g = groups.find((x) => Math.abs(x.lat - m.lat) < 0.15 && Math.abs(x.lng - m.lng) < 0.15);
+    if (g) g.items.push(m);
+    else groups.push({ lat: m.lat, lng: m.lng, items: [m] });
+  }
+  return groups;
+}
+
+function memoryElement(items: GlobeMemory[], index: number, onTap: (ids: string[]) => void) {
+  const el = document.createElement('div');
+  el.className = 'jmem';
+  el.setAttribute('role', 'button');
+  el.setAttribute(
+    'aria-label',
+    `${items.length} ${items.length === 1 ? 'recuerdo' : 'recuerdos'}${items[0].title ? `: ${items[0].title}` : ''}`,
+  );
+  const inner = document.createElement('div');
+  inner.className = 'jmem-in';
+  inner.style.setProperty('--d', `${0.8 + index * 0.08}s`);
+  const b = document.createElement('div');
+  b.className = 'jmem-b';
+  const photo = items.find((m) => m.photo)?.photo;
+  if (photo) {
+    const img = document.createElement('img');
+    img.src = photo;
+    img.alt = '';
+    b.appendChild(img);
+  } else b.textContent = '✎';
+  inner.appendChild(b);
+  if (items.length > 1) {
+    const n = document.createElement('div');
+    n.className = 'jmem-n';
+    n.textContent = String(items.length);
+    inner.appendChild(n);
+  }
+  el.appendChild(inner);
+  el.addEventListener('pointerdown', (e) => e.stopPropagation());
+  el.addEventListener('click', (e) => {
+    e.stopPropagation();
+    onTap(items.map((m) => m.id));
   });
   return el;
 }
@@ -428,12 +485,23 @@ export function GlobeMap({
   focusId = null,
   onSelect,
   rounded,
+  memories = [],
+  onMemories,
+  focusPoint = null,
+  hidePeople = false,
 }: GlobeMapProps) {
   const host = useRef<HTMLDivElement>(null);
   const api = useRef<{
     setPeople: (p: GlobePerson[]) => void;
     focus: (id: string | null) => void;
+    setMemories: (m: GlobeMemory[]) => void;
+    focusAt: (lat: number, lng: number) => void;
+    showPeople: (show: boolean) => void;
   } | null>(null);
+  const memoriesRef = useRef(memories);
+  memoriesRef.current = memories;
+  const memoriesCb = useRef(onMemories);
+  memoriesCb.current = onMemories;
   const peopleRef = useRef(people);
   peopleRef.current = people;
   const selectRef = useRef(onSelect);
@@ -481,6 +549,8 @@ export function GlobeMap({
     const view = { yaw: 2.2, pitch: 0.3, dist: interactive ? 9 : 3.6 };
     const target = { yaw: 0, pitch: 0.35, dist: 3.4 };
     let pins: { id: string; el: HTMLDivElement; pos: THREE.Vector3 }[] = [];
+    let mems: { ids: string[]; el: HTMLDivElement; pos: THREE.Vector3 }[] = [];
+    let peopleVisible = true;
     let arcs: ArcObj[] = [];
     let lastTouch = -1e9;
     let focused: string | null = null;
@@ -578,7 +648,34 @@ export function GlobeMap({
     }
     setPeople(peopleRef.current);
 
+    function setMemories(list: GlobeMemory[]) {
+      mems.forEach((m) => m.el.remove());
+      mems = clusterMemories(list).map((g, i) => {
+        const el = memoryElement(g.items, i, (ids) => memoriesCb.current?.(ids));
+        pinLayer.appendChild(el);
+        return { ids: g.items.map((m) => m.id), el, pos: toVec(g.lat, g.lng, R * 1.01) };
+      });
+    }
+    setMemories(memoriesRef.current);
+
     api.current = {
+      setMemories,
+      showPeople: (show) => {
+        peopleVisible = show;
+        people3d.visible = show;
+        arcs.forEach((a) => {
+          a.tube.visible = show;
+          a.comet.visible = show;
+        });
+      },
+      focusAt: (lat, lng) => {
+        focused = 'point';
+        const f = facing(lat, lng);
+        target.yaw = nearestYaw(f.yaw);
+        target.pitch = Math.max(-1.2, Math.min(1.2, f.pitch));
+        target.dist = 2.3;
+        lastTouch = -1e9;
+      },
       setPeople: (list) => {
         setPeople(list);
         if (!focused) aimOverview();
@@ -701,7 +798,7 @@ export function GlobeMap({
         const g = a.tube.geometry as THREE.BufferGeometry;
         g.setDrawRange(0, Math.floor((g.index?.count ?? 0) * grow));
         const k = ((t * 0.28 + a.offset) % 1.25) / 1;
-        a.comet.visible = grow >= 1 && k <= 1;
+        a.comet.visible = peopleVisible && grow >= 1 && k <= 1;
         if (a.comet.visible) a.comet.position.copy(a.curve.getPointAt(Math.min(1, k)));
       });
 
@@ -720,8 +817,25 @@ export function GlobeMap({
         p.el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) scale(${(0.75 + vis * 0.25).toFixed(3)})`;
         p.el.style.opacity = vis.toFixed(2);
         p.el.style.zIndex = String(Math.round(vis * 100));
-        p.el.style.pointerEvents = interactive && vis > 0.5 ? 'auto' : 'none';
+        p.el.style.pointerEvents = interactive && vis > 0.5 && peopleVisible ? 'auto' : 'none';
       }
+      for (const m of mems) {
+        proj.copy(m.pos).applyMatrix4(world.matrixWorld);
+        const facingCam = proj
+          .clone()
+          .normalize()
+          .dot(camera.position.clone().sub(proj).normalize());
+        proj.project(camera);
+        const x = (proj.x * 0.5 + 0.5) * w;
+        const y = (-proj.y * 0.5 + 0.5) * h;
+        const vis = Math.max(0, Math.min(1, (facingCam - 0.05) * 5));
+        m.el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
+        m.el.style.opacity = vis.toFixed(2);
+        // Por encima de las chinchetas de personas: son más pequeñas y si no, quedarían tapadas.
+        m.el.style.zIndex = String(101 + Math.round(vis * 90));
+        m.el.style.pointerEvents = interactive && vis > 0.5 ? 'auto' : 'none';
+      }
+      if (!peopleVisible) for (const p of pins) p.el.style.opacity = '0';
       renderer.render(scene, camera);
     };
     frame = requestAnimationFrame(tick);
@@ -750,6 +864,25 @@ export function GlobeMap({
   useEffect(() => {
     api.current?.setPeople(peopleRef.current);
   }, [key]);
+
+  const memKey = memories.map((m) => `${m.id}:${m.photo ? 1 : 0}`).join('|');
+  useEffect(() => {
+    api.current?.setMemories(memoriesRef.current);
+  }, [memKey]);
+  useEffect(() => {
+    api.current?.showPeople(!hidePeople);
+  }, [hidePeople]);
+  const hadPoint = useRef(false);
+  useEffect(() => {
+    if (focusPoint && !focusId) {
+      hadPoint.current = true;
+      api.current?.focusAt(focusPoint.lat, focusPoint.lng);
+    } else if (!focusPoint && !focusId && hadPoint.current) {
+      hadPoint.current = false;
+      api.current?.focus(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusPoint?.lat, focusPoint?.lng]);
 
   const first = useRef(true);
   useEffect(() => {

@@ -40,6 +40,8 @@ type Store = {
     text?: string;
     imageUri?: string;
     proposalId?: string;
+    /** Lugar elegido voluntariamente (a nivel de ciudad). */
+    place?: Place;
   }) => Promise<void>;
   deleteMoment: (momentId: string) => Promise<void>;
   toggleReaction: (momentId: string, emoji: string) => Promise<void>;
@@ -133,7 +135,7 @@ async function load(me: string): Promise<Data> {
       supabase
         .from('moments')
         .select(
-          'id, group_id, author_id, text, created_at, author_tz, proposal_id, ' +
+          'id, group_id, author_id, text, created_at, author_tz, proposal_id, place_name, lat, lng, ' +
             'reactions(emoji, user_id), comments(id, user_id, text, created_at, deleted_at), ' +
             'moment_media(position, media_assets(storage_path))',
         )
@@ -238,6 +240,10 @@ async function load(me: string): Promise<Data> {
       createdAt: Date.parse(row.created_at),
       authorTz: row.author_tz,
       proposalId: row.proposal_id ?? undefined,
+      place:
+        row.lat != null && row.lng != null
+          ? { name: row.place_name ?? '', lat: row.lat, lng: row.lng }
+          : undefined,
       reactions: (row.reactions ?? []).map((r: any) => ({ emoji: r.emoji, userId: r.user_id })),
       comments: (row.comments ?? [])
         .filter((c: any) => !c.deleted_at)
@@ -448,7 +454,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return row!.code;
     },
 
-    addMoment: async ({ groupId, text, imageUri, proposalId }) => {
+    addMoment: async ({ groupId, text, imageUri, proposalId, place }) => {
       let assetId: string | undefined;
       if (imageUri) {
         const bytes = await (await fetch(imageUri)).arrayBuffer();
@@ -474,6 +480,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             text: text || null,
             proposal_id: proposalId ?? null,
             author_tz: deviceTz(),
+            place_name: place ? [place.name, place.country].filter(Boolean).join(', ') : null,
+            lat: place?.lat ?? null,
+            lng: place?.lng ?? null,
           })
           .select('id')
           .single(),
