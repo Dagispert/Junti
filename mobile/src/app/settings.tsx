@@ -1,8 +1,9 @@
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Image as RNImage, StyleSheet, View } from 'react-native';
 
+import { AvatarCropper } from '@/components/avatar-cropper';
 import { Avatar, Button, Card, Field, Lead, Notice, Screen, Tag, Title } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
@@ -34,15 +35,50 @@ export default function Settings() {
     setBusy(false);
   };
 
+  // La foto elegida pasa primero por el editor de encuadre; el sistema no lo ofrece en la web.
+  const [cropping, setCropping] = useState<{ uri: string; width: number; height: number }>();
+
   const pickAvatar = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.7,
-    });
-    if (!result.canceled) await run(() => setAvatar(result.assets[0].uri), 'Foto actualizada.');
+    setNotice('');
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 1,
+      });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      let { width, height } = asset;
+      if (!width || !height) {
+        ({ width, height } = await new Promise<{ width: number; height: number }>((ok, fail) =>
+          RNImage.getSize(asset.uri, (w, h) => ok({ width: w, height: h }), fail),
+        ));
+      }
+      setCropping({ uri: asset.uri, width, height });
+    } catch {
+      setNotice('No se ha podido abrir la foto. Prueba con otra.');
+    }
   };
+
+  if (cropping) {
+    return (
+      <Screen>
+        <View style={{ paddingTop: Spacing.four }}>
+          <AvatarCropper
+            {...cropping}
+            busy={busy}
+            onCancel={() => setCropping(undefined)}
+            onDone={(uri) =>
+              run(async () => {
+                await setAvatar(uri);
+                setCropping(undefined);
+              }, 'Foto actualizada.')
+            }
+          />
+          <Notice>{notice}</Notice>
+        </View>
+      </Screen>
+    );
+  }
 
   return (
     <Screen
