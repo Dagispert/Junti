@@ -164,13 +164,7 @@ export default function Publish() {
       <Card>
         {media?.kind === 'video' ? (
           <View style={[styles.preview, { overflow: 'hidden', backgroundColor: '#000' }]}>
-            <InlineVideo
-              uri={media.uri}
-              muted
-              loop
-              controls={false}
-              style={StyleSheet.absoluteFill}
-            />
+            <InlineVideo uri={media.uri} />
             {!!media.duration && (
               <Text style={styles.videoTag}>▶ {Math.round(media.duration)} s</Text>
             )}

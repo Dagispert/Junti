@@ -18,6 +18,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Fonts, MaxContentWidth, Radius, Spacing, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
+
+import { VideoFrame, Waveform } from './media-players';
 import type { Moment } from '@/data/types';
 
 /** Contenedor de pantalla con scroll, márgenes seguros y ancho máximo. Al tirar hacia abajo, recarga. */
@@ -162,17 +164,22 @@ export function Photo({
     );
   }
   if (moment.videoUri) {
-    // Vídeo sin portada (por ejemplo, subido desde el móvil nativo).
+    // Vídeo sin portada guardada: se muestra su primer fotograma.
     return (
       <View style={[styles.photo, { backgroundColor: '#2B2E33' }, style]}>
-        <Text style={{ color: '#fff', fontSize: 22 }}>▶</Text>
+        <VideoFrame uri={moment.videoUri} />
+        {badge && (
+          <View style={styles.playBadge}>
+            <Text style={{ color: '#1D1F22', fontSize: 10, marginLeft: 1 }}>▶</Text>
+          </View>
+        )}
       </View>
     );
   }
   return (
     <View style={[styles.photo, { backgroundColor: theme.soft, padding: Spacing.two }, style]}>
       {moment.voice && !moment.text ? (
-        <Text style={{ fontSize: 26 }}>🎙</Text>
+        <Waveform wave={moment.voice.waveform} height={56} />
       ) : (
         <Text numberOfLines={4} style={{ color: theme.text, fontSize: 13, textAlign: 'center' }}>
           {moment.voice ? '🎙 ' : ''}

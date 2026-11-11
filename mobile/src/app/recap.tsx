@@ -12,7 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { InlineVideo, VoiceNote } from '@/components/media-players';
+import { InlineVideo, VoiceNote, Waveform } from '@/components/media-players';
 import { PolaroidPile, Scribble, Sticker, StickyNote } from '@/components/scrapbook';
 import { SkyBadge } from '@/components/sky-badge';
 import { Avatar, Photo } from '@/components/ui';
@@ -325,7 +325,7 @@ function MomentSlide({
   return (
     <View style={[styles.center, { paddingHorizontal: 22, gap: 16 }]}>
       {loved && <Text style={[styles.kicker, { marginBottom: 18 }]}>Lo que más os llegó</Text>}
-      {moment.imageUri ? (
+      {moment.imageUri || moment.videoUri ? (
         <Animated.View entering={ZoomIn.springify().damping(16)} style={styles.frame}>
           <View style={styles.photoBox}>
             {moment.videoUri ? (
@@ -365,7 +365,13 @@ function MomentSlide({
         </Animated.View>
       ) : (
         <Animated.View entering={ZoomIn.springify().damping(15)} style={styles.paper}>
-          <Text style={styles.paperText}>{moment.text}</Text>
+          {moment.text ? (
+            <Text style={styles.paperText}>{moment.text}</Text>
+          ) : moment.voice ? (
+            <View style={{ alignItems: 'center' }}>
+              <Waveform wave={moment.voice.waveform} height={110} />
+            </View>
+          ) : null}
         </Animated.View>
       )}
       <Animated.View entering={FadeInDown.delay(300)} style={styles.byline}>

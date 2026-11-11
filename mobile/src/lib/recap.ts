@@ -77,15 +77,20 @@ const quote = (t: string) => `«${t.trim().replace(/[.…]+$/, '')}»`;
 
 function pickVerb(m: Moment, i: number, proposals: Proposal[]) {
   const proposal = proposals.find((p) => p.id === m.proposalId);
-  if (proposal && !m.imageUri) return `respondió a ${quote(proposal.title)}`;
+  const visual = m.imageUri || m.videoUri;
+  if (proposal && !visual) return `respondió a ${quote(proposal.title)}`;
   if (proposal?.kind === 'challenge') return `se sumó al reto ${quote(proposal.title)}`;
-  if (!m.imageUri)
+  if (!visual) {
+    if (!m.text && m.voice) return 'nos dejó una nota de voz';
     return (
       ['nos contó', 'escribió', 'nos dejó'][i % 3] +
       (m.text ? ` ${quote(m.text)}` : ' unas palabras')
     );
+  }
+  const what = m.videoUri ? 'un vídeo' : 'una foto';
   return (
-    ['nos enseñó', 'compartió', 'nos trajo'][i % 3] + (m.text ? ` ${quote(m.text)}` : ' una foto')
+    ['nos enseñó', 'compartió', 'nos trajo'][i % 3] +
+    (m.text ? ` ${quote(m.text)}${m.videoUri ? ' en vídeo' : ''}` : ` ${what}`)
   );
 }
 

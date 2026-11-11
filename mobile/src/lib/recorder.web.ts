@@ -18,6 +18,12 @@ function downsample(levels: number[], n: number): number[] {
   return out;
 }
 
+/** Escala la forma de onda para que el pico más alto llegue a 100. */
+function normalized(wave: number[]): number[] {
+  const max = Math.max(1, ...wave);
+  return wave.map((v) => Math.round((v / max) * 100));
+}
+
 /** Grabar una nota de voz con el micrófono del navegador (hasta 2 minutos). */
 export function useVoiceRecorder() {
   const supported =
@@ -74,9 +80,11 @@ export function useVoiceRecorder() {
       const started = Date.now();
       const timer = window.setInterval(() => {
         analyser.getByteTimeDomainData(buf);
-        let peak = 0;
-        for (const v of buf) peak = Math.max(peak, Math.abs(v - 128));
-        const level = Math.min(100, (peak / 128) * 160);
+        // Volumen eficaz (RMS) con curva de raíz: la voz normal se ve, los golpes no saturan.
+        let sum = 0;
+        for (const v of buf) sum += ((v - 128) / 128) ** 2;
+        const rms = Math.sqrt(sum / buf.length);
+        const level = Math.min(100, Math.sqrt(rms) * 140);
         all.current.push(level);
         setLevels(all.current.slice(-BARS));
         const s = (Date.now() - started) / 1000;
@@ -91,7 +99,7 @@ export function useVoiceRecorder() {
           uri: URL.createObjectURL(blob),
           mime: type.split(';')[0],
           duration,
-          waveform: downsample(all.current, BARS),
+          waveform: normalized(downsample(all.current, BARS)),
         });
         setState('done');
         cleanup();

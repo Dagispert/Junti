@@ -2,7 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { ZoomIn } from 'react-native-reanimated';
 
-import { VideoMoment, VoiceNote } from '@/components/media-players';
+import { VideoMoment, VoiceNote, Waveform } from '@/components/media-players';
 import { Sticker, StickyNote } from '@/components/scrapbook';
 import { SkyBadge } from '@/components/sky-badge';
 import { Photo, Screen } from '@/components/ui';
@@ -59,6 +59,14 @@ export default function MomentView() {
         {moment.videoUri ? (
           <View style={[styles.photo, { overflow: 'hidden' }]}>
             <VideoMoment moment={moment} style={StyleSheet.absoluteFill} />
+          </View>
+        ) : moment.voice && !moment.imageUri && !moment.text ? (
+          <View
+            style={[
+              styles.photo,
+              { backgroundColor: '#FFF4EC', alignItems: 'center', justifyContent: 'center' },
+            ]}>
+            <Waveform wave={moment.voice.waveform} height={160} />
           </View>
         ) : (
           <Photo moment={moment} style={styles.photo} />

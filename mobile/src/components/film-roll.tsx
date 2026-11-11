@@ -90,7 +90,7 @@ export function FilmRoll({
                     accessibilityRole="button"
                     accessibilityLabel={m.text ?? 'Ver el momento'}
                     onPress={() => router.push({ pathname: '/moment/[id]', params: { id: m.id } })}>
-                    {m.imageUri ? (
+                    {m.imageUri || m.videoUri ? (
                       <Photo moment={m} style={styles.frame} />
                     ) : (
                       <View style={[styles.frame, styles.paper]}>
