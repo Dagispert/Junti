@@ -221,3 +221,62 @@ select pg_temp.expect(
   event_occurrence(row(null, null, null, 'birthday', 'x', null, null, '2000-02-29', null, true, null, now())::events, '2027-01-10') = '2027-02-28',
   'quien nació el 29 de febrero lo celebra el 28 en años no bisiestos');
 \echo CALENDARIO CORRECTO
+
+-- ── Avisos de actividad ──
+reset role;
+insert into auth.users (id) values
+  ('00000000-0000-0000-0000-0000000000e1'), ('00000000-0000-0000-0000-0000000000e2'), ('00000000-0000-0000-0000-0000000000e3');
+insert into profiles (id, name) values
+  ('00000000-0000-0000-0000-0000000000e1', 'Eva'),
+  ('00000000-0000-0000-0000-0000000000e2', 'Félix Gómez'),
+  ('00000000-0000-0000-0000-0000000000e3', 'Gema');
+insert into push_subscriptions (user_id, endpoint, p256dh, auth) values
+  ('00000000-0000-0000-0000-0000000000e1', 'https://push.example/e1', 'k', 'a'),
+  ('00000000-0000-0000-0000-0000000000e2', 'https://push.example/e2', 'k', 'a'),
+  ('00000000-0000-0000-0000-0000000000e3', 'https://push.example/e3', 'k', 'a');
+insert into groups (id, name, created_by) values ('10000000-0000-0000-0000-0000000000ae', 'Actividad', '00000000-0000-0000-0000-0000000000e1');
+insert into memberships (group_id, user_id) values ('10000000-0000-0000-0000-0000000000ae', '00000000-0000-0000-0000-0000000000e2');
+insert into memberships (group_id, user_id) values ('10000000-0000-0000-0000-0000000000ae', '00000000-0000-0000-0000-0000000000e3');
+update memberships set quiet_from = 0, quiet_to = 0 where group_id = '10000000-0000-0000-0000-0000000000ae';
+insert into moments (id, group_id, author_id, text, author_tz) values
+  ('20000000-0000-0000-0000-0000000000e1', '10000000-0000-0000-0000-0000000000ae', '00000000-0000-0000-0000-0000000000e2', 'Uno', 'Europe/Madrid'),
+  ('20000000-0000-0000-0000-0000000000e2', '10000000-0000-0000-0000-0000000000ae', '00000000-0000-0000-0000-0000000000e2', 'Dos', 'Europe/Madrid'),
+  ('20000000-0000-0000-0000-0000000000e3', '10000000-0000-0000-0000-0000000000ae', '00000000-0000-0000-0000-0000000000e3', 'Tres', 'Europe/Madrid');
+insert into comments (moment_id, user_id, text) values
+  ('20000000-0000-0000-0000-0000000000e1', '00000000-0000-0000-0000-0000000000e1', '¡Qué bonito!'),
+  ('20000000-0000-0000-0000-0000000000e1', '00000000-0000-0000-0000-0000000000e2', 'Gracias');
+select pg_temp.expect((select count(*) = 0 from activity_queue where user_id = actor_id), 'nunca se avisa a alguien de lo suyo');
+update activity_queue set created_at = now() - interval '2 minutes';
+set role service_role;
+create temp table actividad as select * from claim_activity() where g_name = 'Actividad';
+reset role;
+select pg_temp.expect((select count(*) = 3 from actividad), 'un solo aviso por persona y grupo, con todo agrupado');
+select pg_temp.expect((select body from actividad where sub_endpoint = 'https://push.example/e1') =
+  'Félix y Gema han compartido 3 momentos · Félix y Gema se han unido al grupo 👋', 'Eva: momentos agrupados y gente nueva');
+select pg_temp.expect((select body from actividad where sub_endpoint = 'https://push.example/e2') =
+  'Gema ha compartido un momento · Eva ha comentado tu momento: «¡Qué bonito!» · Gema se ha unido al grupo 👋', 'Félix: el comentario en su momento');
+select pg_temp.expect((select body from actividad where sub_endpoint = 'https://push.example/e3') =
+  'Félix ha compartido 2 momentos', 'Gema: solo lo de los demás');
+set role service_role;
+select pg_temp.expect((select count(*) = 0 from claim_activity()), 'los avisos no se repiten');
+reset role;
+-- Silenciado: no se avisa. En horas de descanso: espera.
+update memberships set muted_until = now() + interval '1 day'
+  where group_id = '10000000-0000-0000-0000-0000000000ae' and user_id = '00000000-0000-0000-0000-0000000000e3';
+update memberships set quiet_from = extract(hour from now() at time zone 'Europe/Madrid')::int,
+  quiet_to = (extract(hour from now() at time zone 'Europe/Madrid')::int + 1) % 24
+  where group_id = '10000000-0000-0000-0000-0000000000ae' and user_id = '00000000-0000-0000-0000-0000000000e2';
+insert into moments (group_id, author_id, text, author_tz) values
+  ('10000000-0000-0000-0000-0000000000ae', '00000000-0000-0000-0000-0000000000e1', 'Cuatro', 'Europe/Madrid');
+update activity_queue set created_at = now() - interval '2 minutes' where sent_at is null;
+set role service_role;
+select pg_temp.expect((select count(*) = 0 from claim_activity()), 'ni a quien silenció el grupo ni a quien está descansando');
+reset role;
+select pg_temp.expect((select sent_at is not null from activity_queue where user_id = '00000000-0000-0000-0000-0000000000e3' order by id desc limit 1), 'lo silenciado se descarta');
+select pg_temp.expect((select sent_at is null from activity_queue where user_id = '00000000-0000-0000-0000-0000000000e2' order by id desc limit 1), 'lo de las horas de descanso espera a la mañana');
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000e1';
+select pg_temp.expect((select count(*) = 0 from activity_queue), 'la cola de avisos no se ve desde la app');
+select pg_temp.fails($$select claim_activity()$$, 'la app no puede reclamar avisos');
+reset role;
+\echo ACTIVIDAD CORRECTA

@@ -11,7 +11,7 @@ where exists (select 1 from cron.job where jobname = 'junti-propuestas');
 
 select cron.schedule(
   'junti-propuestas',
-  '*/15 * * * *',
+  '*/5 * * * *',
   $$
     select net.http_post(
       url := 'https://ktyagcmczbklsjahgfxx.supabase.co/functions/v1/send-proposals',

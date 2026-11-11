@@ -12,6 +12,8 @@ Esquema de PostgreSQL para [Supabase](https://supabase.com), con las reglas de p
 - `migrations/0008_calendario.sql`: calendario del grupo (cumpleaños y aniversarios anuales, viajes, reencuentros, celebraciones) y los recordatorios: el mismo día y, para lo esperado, una semana antes y la víspera.
 - `migrations/0009_video_y_voz.sql`: tipo y forma de onda de los archivos; límite de 50 MB por archivo y solo imágenes, vídeo y audio en el almacén.
 - `migrations/0010_narradora.sql`: la narradora (IA) por grupo, desactivada por defecto, con estilo y opción de cada persona de no participar; tabla de narraciones que solo escribe el servidor.
+- `migrations/0011_escenas.sql`, `0012_voz_narradora.sql`: la crónica por escenas y su voz (audio en `media/<grupo>/narradora/`).
+- `migrations/0013_avisos_de_actividad.sql`: avisos agrupados de momentos nuevos, comentarios en tus momentos y gente nueva; respetan el silencio y las horas de descanso.
 - `functions/narrate/`: escribe la crónica de una semana o un mes con Gemini. Necesita el secreto `GEMINI_API_KEY` en *Edge Functions → Secrets* (opcional `GEMINI_MODEL`). Solo envía textos, nunca fotos, vídeos ni audios.
 - `functions/send-proposals/`: programa del servidor que envía esos avisos y los recordatorios del calendario. Genera sus propias claves la primera vez.
 - `programar_avisos.sql`: lo ejecuta cada 15 minutos. Se lanza una vez, a mano, tras desplegar la función.

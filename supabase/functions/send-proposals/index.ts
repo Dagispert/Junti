@@ -1,8 +1,9 @@
 // Junti · envío de la propuesta del día
 //
-// Se ejecuta cada 15 minutos (ver supabase/programar_avisos.sql). Pregunta a la
+// Se ejecuta cada 5 minutos (ver supabase/programar_avisos.sql). Pregunta a la
 // base de datos a quién le toca recibir la propuesta del día o un recordatorio
-// del calendario, y envía un aviso a cada uno de sus dispositivos. Toda la lógica de «a quién y cuándo» está en la
+// del calendario, y envía un aviso a cada uno de sus dispositivos. También envía, agrupados, los
+// avisos de actividad (momentos nuevos, comentarios, gente nueva). Toda la lógica de «a quién y cuándo» está en la
 // función SQL claim_due_notifications(); aquí solo se envía.
 //
 // Llamarla de más no hace daño: la base de datos apunta cada aviso y no lo repite.
@@ -65,9 +66,13 @@ Deno.serve(async () => {
     // Recordatorios del calendario (cumpleaños, viajes, reencuentros…).
     const { data: reminders, error: remindersError } = await supabase.rpc('claim_event_reminders');
     if (remindersError) console.error('recordatorios', remindersError.message);
+    // Actividad del grupo: momentos nuevos, comentarios y gente nueva (agrupados).
+    const { data: activity, error: activityError } = await supabase.rpc('claim_activity');
+    if (activityError) console.error('actividad', activityError.message);
     const due = [
       ...(proposals ?? []).map((n: any) => ({ ...n, body: n.p_title })),
       ...(reminders ?? []).map((n: any) => ({ ...n, p_id: null })),
+      ...(activity ?? []).map((n: any) => ({ ...n, p_id: null })),
     ];
 
     let sent = 0;
