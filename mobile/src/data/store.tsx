@@ -7,7 +7,7 @@ import { disablePush } from '@/lib/push';
 import { AVATAR_BUCKET, MEDIA_BUCKET, supabase } from '@/lib/supabase';
 
 import { dailyPrompts } from './library';
-import type { Group, GroupEvent, Moment, Proposal, Song, User } from './types';
+import type { Group, GroupEvent, Moment, Narration, Proposal, Song, User } from './types';
 
 // Estado de la app, respaldado por Supabase. Todo lo que se lee aquí ya viene
 // filtrado por las políticas de la base de datos: solo los grupos a los que pertenezco.
@@ -74,6 +74,19 @@ type Store = {
   setPreferredHour: (groupId: string, hour: number) => Promise<void>;
   /** Silencia los avisos de un grupo hasta una fecha, o los reactiva con null. */
   setMuted: (groupId: string, until: number | null) => Promise<void>;
+  /** Solo administradores: activa o apaga la narradora y elige su estilo. */
+  setNarrative: (groupId: string, enabled: boolean, style: string) => Promise<void>;
+  /** Que mis momentos no se usen (o sí) en la narración de este grupo. */
+  setNarrativeOptOut: (groupId: string, optOut: boolean) => Promise<void>;
+  /** Pide (o recupera) la crónica de un periodo. */
+  narrate: (args: {
+    groupId: string;
+    kind: 'week' | 'month';
+    from: number;
+    to: number;
+    label: string;
+    force?: boolean;
+  }) => Promise<{ narration: Narration | null; reason?: string }>;
   reportMoment: (momentId: string) => Promise<void>;
   addSong: (
     groupId: string,
@@ -129,12 +142,14 @@ async function load(me: string): Promise<Data> {
     await Promise.all([
       supabase
         .from('memberships')
-        .select('group_id, user_id, role, frequency_vote, preferred_hour, muted_until')
+        .select(
+          'group_id, user_id, role, frequency_vote, preferred_hour, muted_until, narrative_opt_out',
+        )
         .eq('status', 'active')
         .then(check),
       supabase
         .from('groups')
-        .select('id, name, description, color, cadence_days')
+        .select('id, name, description, color, cadence_days, narrative_enabled, narrative_style')
         .order('created_at')
         .then(check),
       supabase
@@ -222,6 +237,9 @@ async function load(me: string): Promise<Data> {
           Date.parse(members.find((m) => m.user_id === me)?.muted_until ?? '') || undefined,
         adminIds: members.filter((m) => m.role === 'admin').map((m) => m.user_id),
         cadenceDays: g.cadence_days ?? [],
+        narrativeEnabled: !!g.narrative_enabled,
+        narrativeStyle: g.narrative_style ?? 'emotivo',
+        myNarrativeOptOut: !!members.find((m) => m.user_id === me)?.narrative_opt_out,
         votes: Object.fromEntries(
           members.filter((m) => m.frequency_vote).map((m) => [m.user_id, m.frequency_vote]),
         ),
@@ -735,6 +753,45 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           .match({ group_id: groupId, user_id: me }),
       );
       await refresh();
+    },
+    setNarrative: async (groupId, enabled, style) => {
+      check(
+        await supabase
+          .from('groups')
+          .update({ narrative_enabled: enabled, narrative_style: style })
+          .eq('id', groupId),
+      );
+      await refresh();
+    },
+    setNarrativeOptOut: async (groupId, optOut) => {
+      check(
+        await supabase
+          .from('memberships')
+          .update({ narrative_opt_out: optOut })
+          .match({ group_id: groupId, user_id: me }),
+      );
+      await refresh();
+    },
+    narrate: async ({ groupId, kind, from, to, label, force }) => {
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const d = new Date(from);
+      const { data, error } = await supabase.functions.invoke('narrate', {
+        body: {
+          groupId,
+          kind,
+          from: new Date(from).toISOString(),
+          to: new Date(to).toISOString(),
+          periodStart: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+          label,
+          force: !!force,
+        },
+      });
+      if (error) {
+        // El servidor explica el motivo en el cuerpo de la respuesta.
+        const detail = await (error as { context?: Response }).context?.json?.().catch(() => null);
+        throw new Error(detail?.error ?? error.message);
+      }
+      return data as { narration: Narration | null; reason?: string };
     },
     addSong: async (groupId, song) => {
       check(

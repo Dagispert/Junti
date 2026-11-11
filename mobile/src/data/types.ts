@@ -33,6 +33,19 @@ export type Group = {
   cadenceDays: number[];
   /** Preferencia de cada integrante: propuestas por semana. */
   votes: Record<string, number>;
+  /** La narradora (IA) está activada en el grupo, y con qué estilo. */
+  narrativeEnabled: boolean;
+  narrativeStyle: string;
+  /** Si he pedido que mis momentos no se usen en la narración. */
+  myNarrativeOptOut: boolean;
+};
+
+/** Crónica de un periodo escrita por la narradora. */
+export type Narration = {
+  title: string;
+  body: string;
+  style: string;
+  generations: number;
 };
 
 /** Una propuesta del día ("prompt") o un reto ("challenge"): mismo objeto, distinta duración. */

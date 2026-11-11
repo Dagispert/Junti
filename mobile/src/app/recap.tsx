@@ -19,9 +19,10 @@ import { Avatar, Photo } from '@/components/ui';
 import { WorldMap } from '@/components/world-map';
 import { Hand, HandBold } from '@/constants/theme';
 import { useStore } from '@/data/store';
-import type { Moment } from '@/data/types';
+import type { Moment, Narration } from '@/data/types';
 import { progress, useClock } from '@/lib/clock';
 import { usePreview } from '@/lib/music';
+import { styleOf } from '@/lib/narrative';
 import { buildRecap } from '@/lib/recap';
 import { clockIn } from '@/lib/time';
 
@@ -47,7 +48,7 @@ export default function RecapScreen() {
     kind: 'week' | 'month';
     from: string;
   }>();
-  const { moments, user, proposals, songs, group, events } = useStore();
+  const { moments, user, proposals, songs, group, events, narrate } = useStore();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
@@ -67,21 +68,58 @@ export default function RecapScreen() {
     [groupId, kind, from],
   );
 
+  // La crónica de la narradora, si el grupo la tiene activada. Mientras se
+  // escribe (o si falla) se ven las frases de siempre.
+  const narrating = !!group(groupId)?.narrativeEnabled && recap.moments.length > 0;
+  const [narration, setNarration] = useState<Narration | null>(null);
+  const [writing, setWriting] = useState(false);
+  const [narrationNote, setNarrationNote] = useState('');
+  const write = async (force = false) => {
+    setWriting(true);
+    setNarrationNote('');
+    try {
+      const result = await narrate({
+        groupId,
+        kind: recap.kind,
+        from: recap.from,
+        to: recap.to,
+        label: recap.range,
+        force,
+      });
+      if (result.narration) setNarration(result.narration);
+      if (result.reason === 'limit') setNarrationNote('Ya no quedan más versiones para este resumen.');
+    } catch (error) {
+      setNarrationNote(error instanceof Error ? error.message : String(error));
+    }
+    setWriting(false);
+  };
+  useEffect(() => {
+    if (narrating) write();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [narrating]);
+
   const slides: Slide[] = useMemo(() => {
     const list: Slide[] = [{ type: 'cover' }];
-    if (recap.story.length) list.push({ type: 'story' });
+    if (recap.story.length || narrating) list.push({ type: 'story' });
     for (const m of recap.picks) list.push({ type: 'moment', moment: m });
     if (recap.loved && recap.loved.reactions.length + recap.loved.comments.length > 1)
       list.push({ type: 'loved', moment: recap.loved });
     list.push({ type: 'stats' }, { type: 'end' });
     return list;
-  }, [recap]);
+  }, [recap, narrating]);
 
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const slide = slides[index];
+  const words = narration ? (narration.title + ' ' + narration.body).split(/\s+/).length : 0;
   const duration =
-    slide.type === 'story' ? 4200 + recap.story.length * 1800 : slide.type === 'end' ? 6000 : 5200;
+    slide.type === 'story'
+      ? narration
+        ? Math.min(45_000, 4000 + words * 280)
+        : 4200 + recap.story.length * 1800
+      : slide.type === 'end'
+        ? 6000
+        : 5200;
 
   // Reloj de la diapositiva (se reinicia en cada una y se detiene en pausa).
   const elapsed = useRef(0);
@@ -207,8 +245,42 @@ export default function RecapScreen() {
             </View>
           )}
 
-          {slide.type === 'story' && (
+          {slide.type === 'story' && narration && (
+            <View
+              key={narration.body}
+              style={[styles.center, { paddingHorizontal: 26, gap: 14 }]}>
+              <Animated.Text entering={FadeIn.duration(600)} style={styles.narrator}>
+                ✨ Narrado en estilo {styleOf(narration.style).label.toLowerCase()}
+              </Animated.Text>
+              {!!narration.title && (
+                <Animated.Text
+                  entering={FadeInDown.delay(250).duration(800)}
+                  style={styles.narrationTitle}>
+                  {narration.title}
+                </Animated.Text>
+              )}
+              {narration.body.split(/\n+/).map((paragraph, i) => (
+                <Animated.Text
+                  key={i}
+                  entering={FadeInDown.delay(700 + i * 1400).duration(900)}
+                  style={[styles.narrationText, words > 130 && { fontSize: 16, lineHeight: 23 }]}>
+                  {paragraph}
+                </Animated.Text>
+              ))}
+            </View>
+          )}
+
+          {slide.type === 'story' && !narration && writing && !recap.story.length && (
+            <View style={styles.center}>
+              <Text style={styles.narrator}>✨ La narradora está escribiendo…</Text>
+            </View>
+          )}
+
+          {slide.type === 'story' && !narration && (
             <View style={[styles.center, { paddingHorizontal: 28, gap: 22 }]}>
+              {writing && !!recap.story.length && (
+                <Text style={styles.narrator}>✨ La narradora está escribiendo…</Text>
+              )}
               {recap.story.map((line, i) => (
                 <Animated.Text
                   key={i}
@@ -293,6 +365,25 @@ export default function RecapScreen() {
               <Pressable accessibilityRole="button" onPress={close} style={styles.cta}>
                 <Text style={styles.ctaText}>Volver</Text>
               </Pressable>
+              {narrating && (
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={writing}
+                  onPress={async () => {
+                    await write(true);
+                    setIndex(1);
+                  }}
+                  style={styles.again}>
+                  <Text style={styles.againText}>
+                    {writing ? '✨ Escribiendo otra versión…' : '✨ Otra versión de la crónica'}
+                  </Text>
+                </Pressable>
+              )}
+              {!!narrationNote && (
+                <Text style={[styles.sub, { fontSize: 14, textAlign: 'center', paddingHorizontal: 30 }]}>
+                  {narrationNote}
+                </Text>
+              )}
             </View>
           )}
         </Animated.View>
@@ -438,6 +529,17 @@ const styles = StyleSheet.create({
   sub: { color: 'rgba(42,39,36,0.6)', fontSize: 18 },
   music: { fontFamily: Hand, fontSize: 20, color: '#C2477A', marginTop: 8 },
   kicker: { fontFamily: HandBold, fontSize: 30, color: '#C2477A' },
+  narrator: { fontFamily: Hand, fontSize: 20, color: '#C2477A', textAlign: 'center' },
+  narrationTitle: {
+    fontFamily: HandBold,
+    fontSize: 34,
+    lineHeight: 38,
+    color: INK,
+    textAlign: 'center',
+  },
+  narrationText: { color: INK, fontSize: 18, lineHeight: 26, textAlign: 'center' },
+  again: { paddingVertical: 10, paddingHorizontal: 16 },
+  againText: { fontFamily: Hand, fontSize: 21, color: '#C2477A' },
   storyLine: { color: INK, fontSize: 21, lineHeight: 29, letterSpacing: -0.2, textAlign: 'center' },
   frame: {
     width: '100%',

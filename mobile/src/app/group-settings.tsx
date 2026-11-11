@@ -6,6 +6,7 @@ import { Avatar, Button, Card, Field, Lead, Notice, Screen, Tag, Title } from '@
 import { Radius, Spacing, useTheme } from '@/constants/theme';
 import { frequencies } from '@/data/library';
 import { errorText, useStore } from '@/data/store';
+import { NARRATIVE_STYLES } from '@/lib/narrative';
 
 const sameDays = (a: number[], b: number[]) =>
   a.length === b.length && [...a].sort().join() === [...b].sort().join();
@@ -153,6 +154,87 @@ export default function GroupSettings() {
       </View>
 
       <View style={{ gap: Spacing.two }}>
+        <Tag>Narradora</Tag>
+        <Lead strong={group.narrativeEnabled ? '✨ Activada.' : 'Apagada.'}>
+          Escribe con IA la crónica de cada semana y cada mes a partir de lo que compartís.
+        </Lead>
+        {group.isAdmin && (
+          <Button
+            label={group.narrativeEnabled ? 'Apagar la narradora' : 'Activar la narradora'}
+            variant={group.narrativeEnabled ? 'quiet' : 'primary'}
+            disabled={busy}
+            onPress={() =>
+              run(
+                () => store.setNarrative(group.id, !group.narrativeEnabled, group.narrativeStyle),
+                group.narrativeEnabled ? 'Narradora apagada.' : 'Narradora activada.',
+              )
+            }
+          />
+        )}
+        {group.narrativeEnabled && (
+          <>
+            <Text style={{ color: theme.textSecondary, fontSize: 14 }}>
+              {group.isAdmin ? 'Elige su estilo:' : 'Estilo elegido por el grupo:'}
+            </Text>
+            <View style={styles.styles}>
+              {NARRATIVE_STYLES.map((option) => {
+                const on = group.narrativeStyle === option.id;
+                return (
+                  <Pressable
+                    key={option.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Estilo ${option.label}`}
+                    accessibilityState={{ selected: on }}
+                    disabled={busy || !group.isAdmin}
+                    onPress={() => run(() => store.setNarrative(group.id, true, option.id))}
+                    style={[
+                      styles.style,
+                      { borderColor: on ? theme.accent : theme.border },
+                      on && { backgroundColor: theme.soft },
+                      !group.isAdmin && !on && { opacity: 0.45 },
+                    ]}>
+                    <Text style={{ fontSize: 20 }}>{option.emoji}</Text>
+                    <Text style={{ color: theme.text, fontSize: 15, fontWeight: '500' }}>
+                      {option.label}
+                    </Text>
+                    <Text style={{ color: theme.textSecondary, fontSize: 12 }}>{option.hint}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Card style={{ padding: 6 }}>
+              <View style={styles.option}>
+                <Text style={{ flex: 1, color: theme.text, fontSize: 16 }}>
+                  {group.myNarrativeOptOut
+                    ? 'Tus momentos no se usan'
+                    : 'Tus momentos forman parte de la crónica'}
+                </Text>
+                <Button
+                  compact
+                  variant="quiet"
+                  label={group.myNarrativeOptOut ? 'Incluirlos' : 'No usarlos'}
+                  disabled={busy}
+                  onPress={() =>
+                    run(() => store.setNarrativeOptOut(group.id, !group.myNarrativeOptOut))
+                  }
+                />
+              </View>
+            </Card>
+          </>
+        )}
+        {!group.isAdmin && !group.narrativeEnabled && (
+          <Text style={{ color: theme.textSecondary, fontSize: 14 }}>
+            Quien administra el grupo puede activarla.
+          </Text>
+        )}
+        <Text style={{ color: theme.textSecondary, fontSize: 13, lineHeight: 19 }}>
+          Usa Gemini, la IA de Google, en su plan gratuito. Solo se envían nombres de pila, ciudades
+          y los textos, lugares, reacciones y comentarios del periodo; nunca fotos, vídeos ni
+          audios. En ese plan, Google puede revisar y usar lo enviado para mejorar sus servicios.
+        </Text>
+      </View>
+
+      <View style={{ gap: Spacing.two }}>
         <Tag>Tus avisos de este grupo</Tag>
         <Card style={{ padding: 6 }}>
           <View style={styles.option}>
@@ -281,5 +363,14 @@ const styles = StyleSheet.create({
   header: { alignItems: 'flex-start', paddingVertical: Spacing.two },
   card: { padding: 20, gap: Spacing.three },
   option: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
+  styles: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  style: {
+    flexBasis: '47%',
+    flexGrow: 1,
+    borderWidth: 1.5,
+    borderRadius: 16,
+    padding: 12,
+    gap: 2,
+  },
   radio: { width: 20, height: 20, borderRadius: Radius.pill, borderWidth: 2 },
 });
