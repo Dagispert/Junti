@@ -616,14 +616,16 @@ async function narrateAloud(
   if (!key) throw new Error('Falta la clave GEMINI_API_KEY en los secretos de Supabase');
   const base = 'https://generativelanguage.googleapis.com/v1beta';
   const script = scenes.join('\n\n');
-  const prompt = `Lee este texto en español de España, ${style.read}, como una narradora real y nada robótica, haciendo una pausa larga, de casi un segundo, entre párrafos:\n\n${script}`;
-  const call = (model: string, voice: string | null, ms: number) =>
+  // La forma de leer va aparte (instrucción de sistema): si fuera en el texto, la leería en voz alta.
+  const direction = `Eres una narradora. Lee el texto en español de España, ${style.read}, de forma natural y nada robótica, con una pausa larga entre párrafos. Lee solo el texto, sin añadir nada.`;
+  const call = (model: string, voice: string | null, ms: number, withDirection = true) =>
     fetch(`${base}/models/${model}:generateContent`, {
       method: 'POST',
       signal: AbortSignal.timeout(ms),
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
       body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        ...(withDirection && { systemInstruction: { parts: [{ text: direction }] } }),
+        contents: [{ role: 'user', parts: [{ text: script }] }],
         generationConfig: {
           responseModalities: ['AUDIO'],
           ...(voice && { speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } }),
@@ -663,16 +665,21 @@ async function narrateAloud(
     tried.add(model);
     const left = 135_000 - (Date.now() - started);
     if (left < 15_000) break;
-    for (const voice of [style.voice, 'Kore', null]) {
+    let withDirection = true;
+    for (const voice of [style.voice, style.voice, 'Kore', null]) {
       let res: Response;
       try {
-        res = await call(model, voice, left);
+        res = await call(model, voice, left, withDirection);
       } catch {
         log.push(`${model}: sin respuesta a tiempo`);
         break;
       }
       const data = await res.json().catch(() => ({}));
       const message: string = data?.error?.message ?? '';
+      if (res.status === 400 && /system|instruction/i.test(message) && withDirection) {
+        withDirection = false; // este modelo no admite instrucciones aparte
+        continue;
+      }
       if (res.status === 400 && /voice/i.test(message)) continue; // otra voz
       if (!res.ok) {
         log.push(`${model}: ${res.status} ${message.slice(0, 140)}`);
