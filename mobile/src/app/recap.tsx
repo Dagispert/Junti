@@ -132,8 +132,11 @@ export default function RecapScreen() {
   useEffect(() => {
     elapsed.current = 0;
   }, [index]);
+  // Si la narradora sigue escribiendo, su diapositiva espera (como mucho 25 s).
+  const waiting = slide.type === 'story' && writing && !narration && elapsed.current < 25_000;
   useEffect(() => {
-    if (elapsed.current >= duration && index < slides.length - 1) setIndex((i) => i + 1);
+    if (elapsed.current >= duration && !waiting && index < slides.length - 1)
+      setIndex((i) => i + 1);
   });
 
   // Banda sonora: una canción del periodo o, si no, la última del grupo.
