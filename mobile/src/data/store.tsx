@@ -86,6 +86,8 @@ type Store = {
     to: number;
     label: string;
     force?: boolean;
+    /** «voice»: el audio de la crónica ya escrita. */
+    action?: 'voice';
   }) => Promise<{ narration: Narration | null; reason?: string }>;
   reportMoment: (momentId: string) => Promise<void>;
   addSong: (
@@ -105,6 +107,7 @@ async function requestNarration({
   to,
   label,
   force,
+  action,
 }: {
   groupId: string;
   kind: 'week' | 'month';
@@ -112,6 +115,7 @@ async function requestNarration({
   to: number;
   label: string;
   force?: boolean;
+  action?: 'voice';
 }): Promise<{ narration: Narration | null; reason?: string }> {
   const pad = (n: number) => String(n).padStart(2, '0');
   const d = new Date(from);
@@ -124,6 +128,7 @@ async function requestNarration({
       periodStart: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
       label,
       force: !!force,
+      action,
     },
   });
   if (error) {
@@ -132,13 +137,25 @@ async function requestNarration({
     throw new Error(detail?.error ?? error.message);
   }
   const row = data?.narration as
-    | (Omit<Narration, 'scenes'> & { scenes?: { moment_id: string | null; text: string }[] })
+    | (Omit<Narration, 'scenes' | 'audioUrl' | 'sceneTimes' | 'audioDuration'> & {
+        scenes?: { moment_id: string | null; text: string }[];
+        audio_url?: string | null;
+        scene_times?: number[] | null;
+        audio_duration?: number | null;
+      })
     | null;
   return {
     reason: data?.reason,
     narration: row && {
-      ...row,
+      id: row.id,
+      title: row.title,
+      body: row.body,
+      style: row.style,
+      generations: row.generations,
       scenes: (row.scenes ?? []).map((e) => ({ momentId: e.moment_id, text: e.text })),
+      audioUrl: row.audio_url,
+      sceneTimes: row.scene_times,
+      audioDuration: row.audio_duration,
     },
   };
 }
@@ -820,12 +837,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       );
       await refresh();
     },
-    narrate: ({ groupId, kind, from, to, label, force }) => {
-      // Si ya se está pidiendo la misma crónica (p. ej. preparándola de antemano), se espera a esa.
-      const key = `${groupId}:${kind}:${from}`;
+    narrate: ({ groupId, kind, from, to, label, force, action }) => {
+      // Si ya se está pidiendo lo mismo (p. ej. preparándolo de antemano), se espera a eso.
+      const key = `${groupId}:${kind}:${from}:${action ?? 'text'}`;
       const running = force ? undefined : inFlight.get(key);
       if (running) return running;
-      const job = requestNarration({ groupId, kind, from, to, label, force }).finally(() =>
+      const job = requestNarration({ groupId, kind, from, to, label, force, action }).finally(() =>
         inFlight.delete(key),
       );
       if (!force) inFlight.set(key, job);

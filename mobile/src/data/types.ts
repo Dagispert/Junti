@@ -45,8 +45,14 @@ export type Narration = {
   title: string;
   body: string;
   /** La crónica por escenas: cada una acompaña a un momento (o a ninguno). */
+  /** momentId: un momento, o «stats» (las cifras), «end» (despedida) o null (general). */
   scenes: { momentId: string | null; text: string }[];
   style: string;
+  id: string;
+  /** La voz: dirección temporal del audio y segundo en que empieza cada escena. */
+  audioUrl?: string | null;
+  sceneTimes?: number[] | null;
+  audioDuration?: number | null;
   generations: number;
 };
 

@@ -2,107 +2,60 @@ import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
-import { speak, type Speaking } from '@/lib/speech';
+import { Hand } from '@/constants/theme';
 
-/** Letras por segundo cuando no hay voz (o mientras no avisa de sus palabras). */
+/** Letras por segundo cuando no hay voz que marque el ritmo. */
 const PACE = 15;
 
 /**
- * Subtítulo de la narradora: las letras aparecen al ritmo de su voz. Si no hay
- * voz (silenciada o no disponible), aparecen a ritmo de lectura. Avisa al
- * terminar para pasar a la siguiente foto.
+ * Subtítulo de la narradora, escrito a mano y sin recuadro. Las letras
+ * aparecen al ritmo de su voz («progress», de 0 a 1). Sin voz, aparecen a
+ * ritmo de lectura y avisa al terminar para pasar a la siguiente foto.
  */
 export function Subtitle({
   text,
-  voice,
+  progress,
   paused,
   onDone,
   bottom = 28,
 }: {
   text: string;
-  voice: boolean;
+  /** Lo que lleva dicho la voz (0–1). Sin voz, se omite. */
+  progress?: number;
   paused: boolean;
   onDone: () => void;
   bottom?: number;
 }) {
-  const [shown, setShown] = useState(0);
+  const [timed, setTimed] = useState(0);
   const elapsed = useRef(0);
-  const spoken = useRef(0); // hasta dónde ha dicho la voz
-  const speaking = useRef<Speaking | null>(null);
-  const voiced = useRef(false); // la voz está hablando de verdad
-  const finished = useRef(false);
   const done = useRef(onDone);
   done.current = onDone;
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
+  const voiced = progress !== undefined;
 
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const finish = (delay: number) => {
-    if (finished.current) return;
-    finished.current = true;
-    setShown(text.length);
-    timer.current = setTimeout(() => done.current(), delay);
-  };
-  useEffect(
-    () => () => {
-      finished.current = true;
-      clearTimeout(timer.current);
-    },
-    [],
-  );
-
-  // La voz.
+  // Sin voz: el reloj de lectura.
   useEffect(() => {
-    voiced.current = false;
-    if (!voice) {
-      speaking.current = null;
-      return;
-    }
-    const s = speak(text, {
-      word: (end) => {
-        voiced.current = true;
-        spoken.current = Math.max(spoken.current, end);
-      },
-      end: () => finish(900),
-      fail: () => {
-        voiced.current = false;
-        speaking.current = null;
-      },
-    });
-    speaking.current = s;
-    return () => s?.cancel();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text, voice]);
-
-  // Pausa al mantener pulsado.
-  useEffect(() => {
-    if (paused) speaking.current?.pause();
-    else speaking.current?.resume();
-  }, [paused]);
-
-  // El reloj de las letras.
-  useEffect(() => {
+    if (voiced) return;
     let last = Date.now();
+    let finished = false;
     const id = setInterval(() => {
       const now = Date.now();
       if (!pausedRef.current) elapsed.current += now - last;
       last = now;
-      if (finished.current) return;
-      const byTime = (elapsed.current / 1000) * PACE;
-      const reveal = voiced.current
-        ? // Con voz: lo que ha dicho, y un poco por delante para que fluya.
-          Math.min(text.length, Math.max(spoken.current, Math.min(byTime, spoken.current + 6)))
-        : byTime;
-      setShown(Math.min(text.length, Math.floor(reveal)));
-      const reading = (text.length / PACE) * 1000;
-      const withVoice = voice && speaking.current;
-      // Sin voz: termina tras leerlo con calma. Con voz: si la voz no avisa, por si acaso.
-      if (!withVoice && elapsed.current > reading + 1600) finish(0);
-      if (withVoice && elapsed.current > reading * 2 + 5000) finish(0);
+      setTimed(Math.min(text.length, Math.floor((elapsed.current / 1000) * PACE)));
+      if (!finished && elapsed.current > (text.length / PACE) * 1000 + 1800) {
+        finished = true;
+        done.current();
+      }
     }, 50);
     return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text, voice]);
+  }, [text, voiced]);
+
+  // Con voz: un pelín por delante de lo dicho, para que se lea con fluidez.
+  const shown = voiced
+    ? Math.min(text.length, Math.ceil(Math.min(1, progress * 1.08 + 0.02) * text.length))
+    : timed;
 
   return (
     <Animated.View
@@ -118,21 +71,15 @@ export function Subtitle({
 }
 
 const styles = StyleSheet.create({
-  band: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    backgroundColor: 'rgba(24,21,19,0.78)',
-    borderRadius: 18,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-  },
+  band: { position: 'absolute', left: 22, right: 22 },
   text: {
-    color: '#fff',
-    fontSize: 19,
-    lineHeight: 27,
-    fontWeight: '500',
+    fontFamily: Hand,
+    color: '#2A2724',
+    fontSize: 29,
+    lineHeight: 33,
     textAlign: 'center',
+    textShadowColor: 'rgba(244,239,230,0.95)',
+    textShadowRadius: 8,
   },
-  hidden: { color: 'transparent' },
+  hidden: { color: 'transparent', textShadowColor: 'transparent' },
 });

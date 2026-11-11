@@ -22,7 +22,7 @@ import { useStore } from '@/data/store';
 import type { Moment, Narration } from '@/data/types';
 import { progress, useClock } from '@/lib/clock';
 import { usePreview } from '@/lib/music';
-import { speechSupported, stopSpeech, unlockSpeech } from '@/lib/speech';
+import { narratorAudio, primeNarrator, stopNarrator } from '@/lib/narrator';
 import { Subtitle } from '@/components/subtitle';
 import { styleOf } from '@/lib/narrative';
 import { buildRecap } from '@/lib/recap';
@@ -31,11 +31,11 @@ import { clockIn } from '@/lib/time';
 type Slide =
   | { type: 'cover' }
   | { type: 'story' }
-  | { type: 'moment'; moment: Moment; line?: string }
+  | { type: 'moment'; moment: Moment; line?: string; scene?: number }
   | { type: 'loved'; moment: Moment }
-  | { type: 'scene'; line: string }
-  | { type: 'stats' }
-  | { type: 'end' };
+  | { type: 'scene'; line: string; scene: number }
+  | { type: 'stats'; line?: string; scene?: number }
+  | { type: 'end'; line?: string; scene?: number };
 
 const PAPER = '#F4EFE6';
 const INK = '#2A2724';
@@ -71,60 +71,71 @@ export default function RecapScreen() {
     [groupId, kind, from],
   );
 
-  // La crónica de la narradora, si el grupo la tiene activada. Mientras se
-  // escribe (o si falla) se ven las frases de siempre.
+  // La crónica de la narradora, si el grupo la tiene activada: primero el
+  // texto y luego su voz. Mientras tanto (o si falla) se ven las frases de siempre.
   const narrating = !!group(groupId)?.narrativeEnabled && recap.moments.length > 0;
   const [narration, setNarration] = useState<Narration | null>(null);
   const [writing, setWriting] = useState(false);
+  const [voicing, setVoicing] = useState(false);
   const [narrationNote, setNarrationNote] = useState('');
+  // La crónica que se cuenta: se fija al salir de la portada, para que la
+  // historia no cambie a medias si la narradora termina tarde.
+  const [story, setStory] = useState<Narration | null>(null);
   const write = async (force = false) => {
     setWriting(true);
     setNarrationNote('');
+    const args = {
+      groupId,
+      kind: recap.kind,
+      from: recap.from,
+      to: recap.to,
+      label: recap.range,
+    };
     try {
-      const result = await narrate({
-        groupId,
-        kind: recap.kind,
-        from: recap.from,
-        to: recap.to,
-        label: recap.range,
-        force,
-      });
-      if (result.narration) {
-        setNarration(result.narration);
-        if (force) setStory(result.narration);
+      const result = await narrate({ ...args, force });
+      let text = result.narration;
+      if (text) {
+        setNarration(text);
+        if (force) setStory(text);
       }
       if (result.reason === 'limit')
         setNarrationNote('Ya no quedan más versiones para este resumen.');
+      setWriting(false);
+      if (text && !text.audioUrl) {
+        setVoicing(true);
+        const voiced = await narrate({ ...args, action: 'voice' });
+        if (voiced.narration?.id === text.id && voiced.narration.generations === text.generations) {
+          text = voiced.narration;
+          setNarration(text);
+          setStory((current) => (current?.id === text!.id ? text : current));
+        }
+      }
     } catch (error) {
       setNarrationNote(error instanceof Error ? error.message : String(error));
     }
     setWriting(false);
+    setVoicing(false);
   };
   useEffect(() => {
     if (narrating) write();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [narrating]);
 
-  // La crónica que se cuenta: se fija al salir de la portada, para que la
-  // historia no cambie a medias si la narradora termina tarde.
-  const [story, setStory] = useState<Narration | null>(null);
-
   const slides: Slide[] = useMemo(() => {
     const list: Slide[] = [{ type: 'cover' }];
     const scenes = story?.scenes ?? [];
     if (scenes.length) {
-      // Cada escena acompaña a su momento; las generales, a un collage.
-      for (const scene of scenes) {
-        const moment = scene.momentId
-          ? recap.moments.find((m) => m.id === scene.momentId)
-          : undefined;
-        list.push(
-          moment
-            ? { type: 'moment', moment, line: scene.text }
-            : { type: 'scene', line: scene.text },
-        );
-      }
-      list.push({ type: 'stats' }, { type: 'end' });
+      // Cada escena acompaña a su momento; las cifras y la despedida, a sus
+      // diapositivas; las generales, a un collage.
+      scenes.forEach((e, scene) => {
+        const moment = recap.moments.find((m) => m.id === e.momentId);
+        if (moment) list.push({ type: 'moment', moment, line: e.text, scene });
+        else if (e.momentId === 'stats') list.push({ type: 'stats', line: e.text, scene });
+        else if (e.momentId === 'end') list.push({ type: 'end', line: e.text, scene });
+        else list.push({ type: 'scene', line: e.text, scene });
+      });
+      if (!list.some((x) => x.type === 'stats')) list.push({ type: 'stats' });
+      if (!list.some((x) => x.type === 'end')) list.push({ type: 'end' });
       return list;
     }
     if (recap.story.length) list.push({ type: 'story' });
@@ -138,11 +149,11 @@ export default function RecapScreen() {
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const slide = slides[index];
-  // Las diapositivas con una frase de la narradora avanzan cuando ella termina.
   const line = 'line' in slide ? slide.line : undefined;
-  const [voiceOn, setVoiceOn] = useState(speechSupported);
+  const scene = 'scene' in slide ? slide.scene : undefined;
+  const [voiceOn, setVoiceOn] = useState(true);
   const duration = line
-    ? (line.length / 15) * 1000 + 1600
+    ? (line.length / 15) * 1000 + 1800
     : slide.type === 'story'
       ? 4200 + recap.story.length * 1800
       : slide.type === 'end'
@@ -161,17 +172,62 @@ export default function RecapScreen() {
     elapsed.current = 0;
   }, [index]);
   useEffect(() => {
-    if (index === 0 && narration && story !== narration) {
+    if (index === 0 && narration && story?.id !== narration.id) {
       setStory(narration);
       // Que dé tiempo a leer el título de la crónica en la portada.
       elapsed.current = Math.min(elapsed.current, 1500);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index, narration]);
-  // Si la narradora sigue escribiendo, la portada espera (como mucho 25 s).
-  const waiting = slide.type === 'cover' && writing && !narration && elapsed.current < 25_000;
+
+  // La voz: un solo audio con toda la crónica; cada escena es un tramo.
+  const voice = story?.audioUrl && story.sceneTimes?.length ? story : null;
+  const player = narratorAudio();
   useEffect(() => {
-    if (line) return; // la frase de la narradora decide cuándo pasar
+    if (!player || !voice?.audioUrl) return;
+    player.src = voice.audioUrl;
+    player.load();
+  }, [player, voice?.audioUrl]);
+  useEffect(() => () => stopNarrator(), []);
+  const times = voice?.sceneTimes ?? [];
+  const sceneStart = scene !== undefined ? (times[scene] ?? 0) : 0;
+  const sceneEnd =
+    scene !== undefined
+      ? (times[scene + 1] ?? voice?.audioDuration ?? player?.duration ?? sceneStart + 8)
+      : 0;
+  const voiced = !!(voice && player && scene !== undefined);
+  // Colocar la voz en el tramo de esta escena y que hable (o calle en pausa).
+  useEffect(() => {
+    if (!player) return;
+    if (!voiced) {
+      player.pause();
+      return;
+    }
+    if (player.currentTime < sceneStart - 0.4 || player.currentTime > sceneEnd - 0.1) {
+      player.currentTime = sceneStart;
+    }
+    if (paused) player.pause();
+    else player.play().catch(() => {});
+  }, [player, voiced, index, paused, sceneStart, sceneEnd]);
+  useEffect(() => {
+    if (player) player.muted = !voiceOn;
+  }, [player, voiceOn]);
+  const now = voiced ? player!.currentTime : 0;
+  const said = voiced ? Math.max(0, Math.min(1, (now - sceneStart) / (sceneEnd - sceneStart))) : 0;
+  // Cuando la voz llega al final de su tramo, pasa a la siguiente foto.
+  useEffect(() => {
+    if (!voiced || paused || index >= slides.length - 1) return;
+    const last = scene === times.length - 1;
+    if (last ? player!.ended : now >= sceneEnd - 0.05) setIndex((i) => i + 1);
+  });
+
+  // Si la narradora sigue escribiendo o poniendo voz, la portada espera (hasta 30 s).
+  const waiting =
+    slide.type === 'cover' &&
+    ((writing && !narration) || (voicing && !narration?.audioUrl)) &&
+    elapsed.current < 30_000;
+  useEffect(() => {
+    if (line) return; // la narradora decide cuándo pasar
     if (elapsed.current >= duration && !waiting && index < slides.length - 1)
       setIndex((i) => i + 1);
   });
@@ -182,7 +238,7 @@ export default function RecapScreen() {
   const audio = usePreview(song?.preview, true);
   // La voz en primer plano: la música baja mientras habla la narradora.
   useEffect(() => {
-    audio.volume(line && voiceOn ? 0.18 : 0.85);
+    audio.volume(voiced && voiceOn ? 0.14 : 0.85);
   });
   const [muted, setMuted] = useState(false);
   const started = useRef(false);
@@ -194,7 +250,7 @@ export default function RecapScreen() {
   });
 
   const close = () => {
-    stopSpeech();
+    stopNarrator();
     if (audio.playing) audio.toggle();
     router.back();
   };
@@ -208,6 +264,7 @@ export default function RecapScreen() {
   const pressStart = useRef(0);
   const touched = useRef(false);
   const t = elapsed.current;
+  const barFill = voiced ? said : t / duration;
   const first = (id: string) => user(id).name.split(' ')[0];
 
   return (
@@ -220,7 +277,7 @@ export default function RecapScreen() {
               style={[
                 styles.barFill,
                 {
-                  width: `${i < index ? 100 : i > index ? 0 : Math.min(100, (t / duration) * 100)}%`,
+                  width: `${i < index ? 100 : i > index ? 0 : Math.min(100, barFill * 100)}%`,
                 },
               ]}
             />
@@ -232,7 +289,7 @@ export default function RecapScreen() {
           {group(groupId)?.name} · {recap.range}
         </Text>
         <View style={{ flexDirection: 'row', gap: 6 }}>
-          {speechSupported && !!story && (
+          {!!voice && (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={voiceOn ? 'Silenciar a la narradora' : 'Oír a la narradora'}
@@ -270,7 +327,7 @@ export default function RecapScreen() {
         onPressIn={() => {
           if (!touched.current) {
             touched.current = true;
-            unlockSpeech();
+            primeNarrator();
           }
           pressStart.current = Date.now();
           setPaused(true);
@@ -364,7 +421,7 @@ export default function RecapScreen() {
             <Subtitle
               key={`${index}-${line}`}
               text={line}
-              voice={voiceOn}
+              progress={voiced ? said : undefined}
               paused={paused}
               onDone={() => go(1)}
               bottom={insets.bottom + 22}
@@ -372,7 +429,12 @@ export default function RecapScreen() {
           )}
 
           {slide.type === 'stats' && (
-            <View style={[styles.center, { gap: 18, paddingHorizontal: 24 }]}>
+            <View
+              style={[
+                styles.center,
+                { gap: 18, paddingHorizontal: 24 },
+                !!line && { paddingBottom: 170 },
+              ]}>
               <Text style={styles.kicker}>
                 {recap.kind === 'week' ? 'La semana en números' : 'El mes en números'}
               </Text>
@@ -421,7 +483,7 @@ export default function RecapScreen() {
           )}
 
           {slide.type === 'end' && (
-            <View style={[styles.center, { gap: 18 }]}>
+            <View style={[styles.center, { gap: 18 }, !!line && { paddingBottom: 170 }]}>
               <Sticker emoji="🍍" size={84} rotate={-8} delay={200} />
               <Text style={styles.big}>
                 {recap.ongoing ? 'Y la semana sigue…' : 'Hasta la próxima'}
@@ -439,7 +501,7 @@ export default function RecapScreen() {
                   accessibilityRole="button"
                   disabled={writing}
                   onPress={async () => {
-                    unlockSpeech();
+                    primeNarrator();
                     await write(true);
                     setIndex(1);
                   }}

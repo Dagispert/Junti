@@ -7,7 +7,7 @@ import { Hand, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import type { Moment } from '@/data/types';
 import { buildRecap } from '@/lib/recap';
-import { unlockSpeech } from '@/lib/speech';
+import { primeNarrator } from '@/lib/narrator';
 
 import { PressScale } from './motion';
 import { Photo } from './ui';
@@ -43,7 +43,12 @@ export function RecapCard({
   const count = recap.moments.length;
   useEffect(() => {
     if (!narrating) return;
-    narrate({ groupId, kind, from, to: recap.to, label: recap.range }).catch(() => {});
+    const args = { groupId, kind, from, to: recap.to, label: recap.range };
+    narrate(args)
+      .then((r) => {
+        if (r.narration && !r.narration.audioUrl) return narrate({ ...args, action: 'voice' });
+      })
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [narrating, groupId, kind, from, count]);
 
@@ -58,7 +63,7 @@ export function RecapCard({
       accessibilityRole="button"
       accessibilityLabel={`Ver el resumen: ${recap.title}, ${recap.range}`}
       onPress={() => {
-        unlockSpeech();
+        primeNarrator();
         router.push({ pathname: '/recap', params: { groupId, kind, from: String(from) } });
       }}>
       <View style={styles.cards}>
