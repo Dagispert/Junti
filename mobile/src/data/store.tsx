@@ -1,7 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
 import { createContext, use, useEffect, useState, type ReactNode } from 'react';
 
-import { MEDIA_BUCKET, supabase } from '@/lib/supabase';
+import { AVATAR_BUCKET, MEDIA_BUCKET, supabase } from '@/lib/supabase';
 
 import { dailyPrompts } from './library';
 import type { Group, Moment, Proposal, User } from './types';
@@ -41,6 +41,18 @@ type Store = {
   addComment: (momentId: string, text: string) => Promise<void>;
   dismissProposal: (proposalId: string, state: 'snoozed' | 'skipped') => Promise<void>;
   addChallenge: (groupId: string, title: string, body: string) => Promise<void>;
+  setAvatar: (imageUri: string) => Promise<void>;
+  /** Borra mis archivos y mi cuenta. No se puede deshacer. */
+  deleteAccount: () => Promise<void>;
+  updateGroup: (groupId: string, name: string, description: string) => Promise<void>;
+  /** Mi preferencia: cuántas propuestas por semana me gustaría recibir. */
+  voteFrequency: (groupId: string, perWeek: number) => Promise<void>;
+  /** Solo administradores: fija los días con propuesta (1 = lunes … 7 = domingo). */
+  setCadence: (groupId: string, days: number[]) => Promise<void>;
+  setMemberRole: (groupId: string, userId: string, role: 'admin' | 'member') => Promise<void>;
+  removeMember: (groupId: string, userId: string) => Promise<void>;
+  leaveGroup: (groupId: string, removeMoments: boolean) => Promise<void>;
+  reportMoment: (momentId: string) => Promise<void>;
 };
 
 const StoreContext = createContext<Store | null>(null);
@@ -77,11 +89,15 @@ async function load(me: string): Promise<Data> {
   const [memberships, groupRows, profiles, momentRows, proposalRows, states] = await Promise.all([
     supabase
       .from('memberships')
-      .select('group_id, user_id, role')
+      .select('group_id, user_id, role, frequency_vote')
       .eq('status', 'active')
       .then(check),
-    supabase.from('groups').select('id, name, description, color').order('created_at').then(check),
-    supabase.from('profiles').select('id, name, home_city, timezone').then(check),
+    supabase
+      .from('groups')
+      .select('id, name, description, color, cadence_days')
+      .order('created_at')
+      .then(check),
+    supabase.from('profiles').select('id, name, home_city, timezone, avatar_path').then(check),
     supabase
       .from('moments')
       .select(
@@ -100,9 +116,20 @@ async function load(me: string): Promise<Data> {
     supabase.from('proposal_states').select('proposal_id, state').eq('user_id', me).then(check),
   ]);
 
+  // Fotos de perfil: también privadas, con dirección temporal firmada.
+  const avatarPaths = (profiles ?? []).map((p) => p.avatar_path).filter(Boolean) as string[];
+  const avatars: Record<string, string> = {};
+  if (avatarPaths.length) {
+    const { data } = await supabase.storage.from(AVATAR_BUCKET).createSignedUrls(avatarPaths, 3600);
+    for (const item of data ?? [])
+      if (item.path && item.signedUrl) avatars[item.path] = item.signedUrl;
+  }
+
   const users: Record<string, User> = {};
   for (const p of profiles ?? []) {
     users[p.id] = {
+      avatarUri: p.avatar_path ? avatars[p.avatar_path] : undefined,
+      avatarPath: p.avatar_path ?? undefined,
       id: p.id,
       name: p.name,
       city: p.home_city ?? '',
@@ -123,6 +150,11 @@ async function load(me: string): Promise<Data> {
         color: g.color,
         memberIds: members.map((m) => m.user_id),
         isAdmin: members.some((m) => m.user_id === me && m.role === 'admin'),
+        adminIds: members.filter((m) => m.role === 'admin').map((m) => m.user_id),
+        cadenceDays: g.cadence_days ?? [],
+        votes: Object.fromEntries(
+          members.filter((m) => m.frequency_vote).map((m) => [m.user_id, m.frequency_vote]),
+        ),
       };
     });
 
@@ -182,8 +214,11 @@ async function load(me: string): Promise<Data> {
  */
 async function ensureTodayPrompts(data: Data): Promise<boolean> {
   const midnight = new Date().setHours(0, 0, 0, 0);
+  // Día de la semana, de 1 (lunes) a 7 (domingo): solo hay propuesta los días que toca.
+  const weekday = new Date().getDay() || 7;
   const missing = data.groups.filter(
     (g) =>
+      g.cadenceDays.includes(weekday) &&
       !data.proposals.some(
         (p) => p.groupId === g.id && p.kind === 'prompt' && p.startsAt >= midnight,
       ),
@@ -384,6 +419,85 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }),
       );
       await refresh();
+    },
+
+    setAvatar: async (imageUri) => {
+      const bytes = await (await fetch(imageUri)).arrayBuffer();
+      const path = `${me}/${Date.now()}.jpg`;
+      const upload = await supabase.storage
+        .from(AVATAR_BUCKET)
+        .upload(path, bytes, { contentType: 'image/jpeg' });
+      if (upload.error) throw new Error(upload.error.message);
+      const previous = data.users[me]?.avatarPath;
+      check(await supabase.from('profiles').update({ avatar_path: path }).eq('id', me));
+      if (previous) await supabase.storage.from(AVATAR_BUCKET).remove([previous]);
+      await refresh();
+    },
+    deleteAccount: async () => {
+      // Primero mis archivos (la base de datos no puede borrarlos), luego la cuenta.
+      for (const g of data.groups) {
+        const folder = `${g.id}/${me}`;
+        const { data: files } = await supabase.storage
+          .from(MEDIA_BUCKET)
+          .list(folder, { limit: 1000 });
+        if (files?.length) {
+          await supabase.storage.from(MEDIA_BUCKET).remove(files.map((f) => `${folder}/${f.name}`));
+        }
+      }
+      const { data: mine } = await supabase.storage.from(AVATAR_BUCKET).list(me);
+      if (mine?.length) {
+        await supabase.storage.from(AVATAR_BUCKET).remove(mine.map((f) => `${me}/${f.name}`));
+      }
+      check(await supabase.rpc('delete_my_account'));
+      await supabase.auth.signOut();
+    },
+
+    updateGroup: async (groupId, name, description) => {
+      check(
+        await supabase
+          .from('groups')
+          .update({ name, description: description || null })
+          .eq('id', groupId),
+      );
+      await refresh();
+    },
+    voteFrequency: async (groupId, perWeek) => {
+      check(
+        await supabase
+          .from('memberships')
+          .update({ frequency_vote: perWeek })
+          .match({ group_id: groupId, user_id: me }),
+      );
+      await refresh();
+    },
+    setCadence: async (groupId, days) => {
+      check(await supabase.from('groups').update({ cadence_days: days }).eq('id', groupId));
+      await refresh();
+    },
+    setMemberRole: async (groupId, userId, role) => {
+      check(
+        await supabase
+          .from('memberships')
+          .update({ role })
+          .match({ group_id: groupId, user_id: userId }),
+      );
+      await refresh();
+    },
+    removeMember: async (groupId, userId) => {
+      check(
+        await supabase
+          .from('memberships')
+          .update({ status: 'removed', left_at: new Date().toISOString() })
+          .match({ group_id: groupId, user_id: userId }),
+      );
+      await refresh();
+    },
+    leaveGroup: async (groupId, removeMoments) => {
+      check(await supabase.rpc('leave_group', { g: groupId, remove_moments: removeMoments }));
+      await refresh();
+    },
+    reportMoment: async (momentId) => {
+      check(await supabase.from('reports').insert({ moment_id: momentId, reason: 'inapropiado' }));
     },
   };
 

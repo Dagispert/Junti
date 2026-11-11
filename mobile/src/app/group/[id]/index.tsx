@@ -31,7 +31,11 @@ export default function Today() {
     <Screen header={<GroupHeader group={group} />}>
       {proposal && (
         <Card style={styles.proposal}>
-          <Tag>Propuesta de hoy</Tag>
+          <Tag>
+            {proposal.startsAt >= new Date().setHours(0, 0, 0, 0)
+              ? 'Propuesta de hoy'
+              : 'Última propuesta'}
+          </Tag>
           <Text style={[styles.question, { color: theme.text }]}>{proposal.title}</Text>
           <View style={styles.actions}>
             <Button

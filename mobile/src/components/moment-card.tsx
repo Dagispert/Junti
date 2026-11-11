@@ -14,10 +14,12 @@ const VISIBLE_COMMENTS = 2;
 
 export function MomentCard({ moment }: { moment: Moment }) {
   const theme = useTheme();
-  const { me, user, proposals, toggleReaction, addComment, deleteMoment } = useStore();
+  const { me, user, proposals, toggleReaction, addComment, deleteMoment, reportMoment } =
+    useStore();
   const [draft, setDraft] = useState('');
   const [expanded, setExpanded] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [reported, setReported] = useState<'' | 'ask' | 'sent'>('');
 
   const author = user(moment.authorId);
   const proposal = proposals.find((p) => p.id === moment.proposalId);
@@ -122,6 +124,27 @@ export function MomentCard({ moment }: { moment: Moment }) {
             returnKeyType="send"
             style={[styles.input, { color: theme.text, backgroundColor: theme.soft }]}
           />
+          {moment.authorId !== me && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Denunciar este momento"
+              disabled={reported === 'sent'}
+              onPress={() =>
+                reported === 'ask'
+                  ? reportMoment(moment.id)
+                      .then(() => setReported('sent'))
+                      .catch(() => setReported(''))
+                  : setReported('ask')
+              }>
+              <Text style={{ fontSize: 13, color: reported ? theme.text : theme.textSecondary }}>
+                {reported === 'sent'
+                  ? 'Denunciado'
+                  : reported === 'ask'
+                    ? '¿Denunciar?'
+                    : 'Denunciar'}
+              </Text>
+            </Pressable>
+          )}
           {moment.authorId === me && (
             <Pressable
               accessibilityRole="button"

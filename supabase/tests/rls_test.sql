@@ -80,8 +80,24 @@ select pg_temp.expect((select count(*) = 0 from reactions), 'al eliminar un mome
 reset role;
 \echo TODAS LAS PRUEBAS DE PRIVACIDAD PASAN
 
--- Borrar una cuenta que creó un grupo y una invitación no debe fallar.
-delete from auth.users where id = '00000000-0000-0000-0000-00000000000a';
-select pg_temp.expect((select count(*) = 1 and bool_and(created_by is null) from groups), 'al borrar la cuenta de quien creó el grupo, el grupo se conserva');
-select pg_temp.expect((select count(*) = 0 from moments), 'al borrar una cuenta desaparecen sus momentos');
-\echo BORRADO DE CUENTAS CORRECTO
+-- ── Salidas ordenadas y borrado de cuenta desde la app ──
+set role authenticated;
+-- Bea vuelve a entrar; Ana (única administradora) sale retirando sus momentos.
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
+select join_group('codigo-secreto');
+insert into moments (group_id, text, author_tz) values ('10000000-0000-0000-0000-000000000001', 'De Bea', 'UTC');
+select pg_temp.fails($$select leave_group_internal('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000a', true)$$, 'la función interna no se puede llamar desde la app');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
+insert into moments (group_id, text, author_tz) values ('10000000-0000-0000-0000-000000000001', 'De Ana', 'UTC');
+select leave_group('10000000-0000-0000-0000-000000000001', true);
+select pg_temp.expect((select count(*) = 0 from groups where id = '10000000-0000-0000-0000-000000000001' and is_member(id)), 'quien sale deja de pertenecer');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
+select pg_temp.expect((select role = 'admin' from memberships where user_id = auth.uid()), 'al salir la única administradora, hereda quien queda');
+select pg_temp.expect((select count(*) = 1 and bool_and(text = 'De Bea') from moments), 'quien sale puede retirar sus momentos; los de los demás siguen');
+-- Bea borra su cuenta: era la última, así que el grupo desaparece.
+select delete_my_account();
+reset role;
+select pg_temp.expect((select count(*) = 0 from auth.users where id = '00000000-0000-0000-0000-00000000000b'), 'la cuenta se borra desde la app');
+select pg_temp.expect((select count(*) = 0 from groups), 'un grupo que se queda sin nadie se elimina');
+select pg_temp.expect((select count(*) = 0 from moments), 'con la cuenta desaparecen sus momentos');
+\echo SALIDAS Y BORRADO DESDE LA APP CORRECTOS

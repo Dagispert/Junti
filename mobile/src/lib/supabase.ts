@@ -22,3 +22,4 @@ export const supabase = createClient(url, key, {
 });
 
 export const MEDIA_BUCKET = 'media';
+export const AVATAR_BUCKET = 'avatars';

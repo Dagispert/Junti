@@ -5,6 +5,7 @@ Esquema de PostgreSQL para [Supabase](https://supabase.com), con las reglas de p
 - `migrations/0001_esquema_inicial.sql`: tablas del MVP, funciones y políticas.
 - `migrations/0002_almacen_de_fotos.sql`: almacén privado de fotos y sus permisos.
 - `migrations/0003_borrado_de_cuentas.sql`: permite borrar cuentas que crearon grupos o invitaciones.
+- `migrations/0004_ajustes_y_salidas.sql`: fotos de perfil, salir de un grupo de forma ordenada, borrar la cuenta propia y volver a un grupo del que se salió.
 - `tests/`: pruebas que comprueban esas reglas (un ajeno no ve nada, nadie edita lo de otro, nadie ve quién omitió una propuesta, quien sale deja de ver el contenido…).
 
 Las migraciones se aplican a mano, en orden, desde el SQL Editor de Supabase.
@@ -21,5 +22,4 @@ DATABASE_URL=postgres://usuario@localhost:5432/junti_test supabase/tests/run.sh
 
 ## Pendiente
 
-- Impedir que un grupo se quede sin administrador cuando el único que hay lo abandona.
 - Purga definitiva de lo eliminado (`deleted_at`) pasado el plazo de conservación.

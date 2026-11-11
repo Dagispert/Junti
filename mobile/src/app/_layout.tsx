@@ -36,6 +36,8 @@ function Gate() {
       <Stack.Screen name="publish" options={{ presentation: 'modal' }} />
       <Stack.Screen name="new-group" options={{ presentation: 'modal' }} />
       <Stack.Screen name="join" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="group-settings" options={{ presentation: 'modal' }} />
     </Stack>
   );
 }

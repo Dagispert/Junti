@@ -7,6 +7,9 @@ export type User = {
   /** Zona horaria IANA, p. ej. "America/Mexico_City". */
   tz: string;
   color: string;
+  /** Foto de perfil: dirección temporal firmada y su ruta en el almacén. */
+  avatarUri?: string;
+  avatarPath?: string;
 };
 
 export type Group = {
@@ -17,6 +20,11 @@ export type Group = {
   memberIds: string[];
   /** Si soy administrador de este grupo. */
   isAdmin: boolean;
+  adminIds: string[];
+  /** Días de la semana con propuesta: 1 = lunes … 7 = domingo. */
+  cadenceDays: number[];
+  /** Preferencia de cada integrante: propuestas por semana. */
+  votes: Record<string, number>;
 };
 
 /** Una propuesta del día ("prompt") o un reto ("challenge"): mismo objeto, distinta duración. */

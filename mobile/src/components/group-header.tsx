@@ -1,4 +1,4 @@
-import { Link } from 'expo-router';
+import { Link, router } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 
@@ -36,7 +36,17 @@ export function GroupHeader({ group }: { group: Group }) {
         <Link href="/" style={{ color: theme.textSecondary, fontSize: 14 }}>
           ‹ Mis grupos
         </Link>
-        <Button compact variant="quiet" label="Invitar" onPress={invite} />
+        <View style={{ flexDirection: 'row' }}>
+          <Button
+            compact
+            variant="quiet"
+            label="Ajustes"
+            onPress={() =>
+              router.push({ pathname: '/group-settings', params: { groupId: group.id } })
+            }
+          />
+          <Button compact variant="quiet" label="Invitar" onPress={invite} />
+        </View>
       </View>
       <Title>{group.name}</Title>
       {!!code && (

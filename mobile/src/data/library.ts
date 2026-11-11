@@ -33,3 +33,12 @@ export const challengeLibrary: { title: string; body: string }[] = [
   { title: 'Algo que nos recuerde a la infancia', body: 'Búscalo y enséñalo.' },
   { title: 'Una canción que te recuerde al grupo', body: 'Cuéntanos por qué.' },
 ];
+
+/** Frecuencias que se pueden votar y los días de la semana que suponen (1 = lunes … 7 = domingo). */
+export const frequencies: { perWeek: number; label: string; days: number[] }[] = [
+  { perWeek: 1, label: 'Una vez por semana', days: [3] },
+  { perWeek: 2, label: 'Dos veces por semana', days: [2, 5] },
+  { perWeek: 3, label: 'Tres veces por semana', days: [1, 3, 5] },
+  { perWeek: 5, label: 'De lunes a viernes', days: [1, 2, 3, 4, 5] },
+  { perWeek: 7, label: 'Todos los días', days: [1, 2, 3, 4, 5, 6, 7] },
+];

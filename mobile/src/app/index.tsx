@@ -1,7 +1,17 @@
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { AvatarRow, Button, Card, Lead, Photo, Scrim, Screen, Title } from '@/components/ui';
+import {
+  Avatar,
+  AvatarRow,
+  Button,
+  Card,
+  Lead,
+  Photo,
+  Scrim,
+  Screen,
+  Title,
+} from '@/components/ui';
 import { Radius, Spacing, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import { relative } from '@/lib/time';
@@ -9,17 +19,20 @@ import { relative } from '@/lib/time';
 /** Nivel 0: los grupos a los que pertenezco. */
 export default function MyGroups() {
   const theme = useTheme();
-  const { me, user, groups, moments, proposals, dismissed, signOut } = useStore();
+  const { me, user, groups, moments, proposals, dismissed } = useStore();
 
   return (
     <Screen
       header={
         <View style={styles.header}>
           <Title>Junti</Title>
-          <Pressable accessibilityRole="button" onPress={signOut}>
-            <Text style={{ color: theme.textSecondary, fontSize: 14 }}>
-              {user(me).name} · Salir
-            </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Tu perfil"
+            onPress={() => router.push('/settings')}
+            style={styles.me}>
+            <Text style={{ color: theme.textSecondary, fontSize: 14 }}>{user(me).name}</Text>
+            <Avatar userId={me} size={34} />
           </Pressable>
         </View>
       }>
@@ -121,11 +134,12 @@ export default function MyGroups() {
 const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     justifyContent: 'space-between',
     paddingTop: Spacing.three,
     paddingBottom: Spacing.two,
   },
+  me: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   deck: { position: 'absolute', height: 60, borderRadius: Radius.frame },
   deckNear: { left: 16, right: 16, bottom: -12, opacity: 0.9 },
   deckFar: { left: 34, right: 34, bottom: -24, opacity: 0.7 },

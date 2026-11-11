@@ -97,7 +97,17 @@ export function Avatar({ userId, size = 32 }: { userId: string; size?: number })
         styles.avatar,
         { width: size, height: size, borderRadius: size / 2, backgroundColor: user.color },
       ]}>
-      <Text style={{ color: '#fff', fontWeight: '600', fontSize: size * 0.4 }}>{user.name[0]}</Text>
+      {user.avatarUri ? (
+        <Image
+          source={{ uri: user.avatarUri }}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+        />
+      ) : (
+        <Text style={{ color: '#fff', fontWeight: '600', fontSize: size * 0.4 }}>
+          {user.name[0]}
+        </Text>
+      )}
     </View>
   );
 }
@@ -255,7 +265,7 @@ export function Field({ label, style, ...props }: TextInputProps & { label: stri
       <TextInput
         accessibilityLabel={label}
         placeholderTextColor={theme.textSecondary}
-        style={[styles.field, { color: theme.text, backgroundColor: theme.card }, style]}
+        style={[styles.field, { color: theme.text, backgroundColor: theme.soft }, style]}
         {...props}
       />
     </View>
@@ -281,7 +291,7 @@ const styles = StyleSheet.create({
   lead: { fontSize: 19, lineHeight: 27, letterSpacing: -0.2 },
   tag: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   tagText: { fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase' },
-  avatar: { alignItems: 'center', justifyContent: 'center' },
+  avatar: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   photo: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   scrim: { position: 'absolute', left: 0, right: 0 },
   fanFrame: { position: 'absolute', padding: 7 },
