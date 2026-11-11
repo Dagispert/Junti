@@ -1,4 +1,5 @@
 import { Image } from 'expo-image';
+import { useEffect } from 'react';
 import { router } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -27,7 +28,7 @@ export function RecapCard({
   hint?: string;
 }) {
   const theme = useTheme();
-  const { moments, user, proposals, songs } = useStore();
+  const { moments, user, proposals, songs, group, narrate } = useStore();
   const recap = buildRecap(
     kind,
     from,
@@ -36,6 +37,16 @@ export function RecapCard({
     proposals,
     songs,
   );
+  // Con la narradora activada, la crónica se va escribiendo en cuanto se ve la
+  // tarjeta: al abrir el resumen ya está lista.
+  const narrating = !!group(groupId)?.narrativeEnabled && recap.moments.length > 0;
+  const count = recap.moments.length;
+  useEffect(() => {
+    if (!narrating) return;
+    narrate({ groupId, kind, from, to: recap.to, label: recap.range }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [narrating, groupId, kind, from, count]);
+
   if (!recap.moments.length) return null;
   const photos = recap.picks.filter((m) => m.imageUri || m.videoUri);
   const shown: Moment[] = photos.slice(0, 3);

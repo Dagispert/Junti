@@ -97,6 +97,54 @@ type Store = {
   deleteEvent: (eventId: string) => Promise<void>;
 };
 
+/** Pide la crónica de un periodo a la función «narrate» del servidor. */
+async function requestNarration({
+  groupId,
+  kind,
+  from,
+  to,
+  label,
+  force,
+}: {
+  groupId: string;
+  kind: 'week' | 'month';
+  from: number;
+  to: number;
+  label: string;
+  force?: boolean;
+}): Promise<{ narration: Narration | null; reason?: string }> {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const d = new Date(from);
+  const { data, error } = await supabase.functions.invoke('narrate', {
+    body: {
+      groupId,
+      kind,
+      from: new Date(from).toISOString(),
+      to: new Date(to).toISOString(),
+      periodStart: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+      label,
+      force: !!force,
+    },
+  });
+  if (error) {
+    // El servidor explica el motivo en el cuerpo de la respuesta.
+    const detail = await (error as { context?: Response }).context?.json?.().catch(() => null);
+    throw new Error(detail?.error ?? error.message);
+  }
+  const row = data?.narration as
+    | (Omit<Narration, 'scenes'> & { scenes?: { moment_id: string | null; text: string }[] })
+    | null;
+  return {
+    reason: data?.reason,
+    narration: row && {
+      ...row,
+      scenes: (row.scenes ?? []).map((e) => ({ momentId: e.moment_id, text: e.text })),
+    },
+  };
+}
+
+const inFlight = new Map<string, Promise<{ narration: Narration | null; reason?: string }>>();
+
 const StoreContext = createContext<Store | null>(null);
 
 const PALETTE = ['#D9663F', '#4E8D7C', '#5B7DB1', '#B8648F', '#C9A227', '#7A6FB0', '#3F8FA8'];
@@ -772,35 +820,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       );
       await refresh();
     },
-    narrate: async ({ groupId, kind, from, to, label, force }) => {
-      const pad = (n: number) => String(n).padStart(2, '0');
-      const d = new Date(from);
-      const { data, error } = await supabase.functions.invoke('narrate', {
-        body: {
-          groupId,
-          kind,
-          from: new Date(from).toISOString(),
-          to: new Date(to).toISOString(),
-          periodStart: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
-          label,
-          force: !!force,
-        },
-      });
-      if (error) {
-        // El servidor explica el motivo en el cuerpo de la respuesta.
-        const detail = await (error as { context?: Response }).context?.json?.().catch(() => null);
-        throw new Error(detail?.error ?? error.message);
-      }
-      const row = data?.narration as
-        | (Omit<Narration, 'scenes'> & { scenes?: { moment_id: string | null; text: string }[] })
-        | null;
-      return {
-        reason: data?.reason,
-        narration: row && {
-          ...row,
-          scenes: (row.scenes ?? []).map((e) => ({ momentId: e.moment_id, text: e.text })),
-        },
-      };
+    narrate: ({ groupId, kind, from, to, label, force }) => {
+      // Si ya se está pidiendo la misma crónica (p. ej. preparándola de antemano), se espera a esa.
+      const key = `${groupId}:${kind}:${from}`;
+      const running = force ? undefined : inFlight.get(key);
+      if (running) return running;
+      const job = requestNarration({ groupId, kind, from, to, label, force }).finally(() =>
+        inFlight.delete(key),
+      );
+      if (!force) inFlight.set(key, job);
+      return job;
     },
     addSong: async (groupId, song) => {
       check(

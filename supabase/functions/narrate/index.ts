@@ -158,7 +158,7 @@ Deno.serve(async (req) => {
       return reply(200, { narration: existing, reason: 'limit' });
     }
 
-    const prompt = await describePeriod(groupId, group.name, kind!, from, to, body.label, moments);
+    const prompt = await describePeriod(groupId, group.name, kind!, from, to, body.label, moments, optedOut);
     const limit = kind === 'week' ? 150 : 220;
     const system = SYSTEM.replace('LIMITE', String(limit)).replace('ESCENAS', kind === 'week' ? '7' : '10') + `\n\nEstilo: ${STYLES[style] ?? STYLES.emotivo}`;
     const { text, model } = await gemini(system, prompt);
@@ -217,6 +217,7 @@ async function describePeriod(
   to: number,
   label: string | undefined,
   moments: MomentRow[],
+  optedOut: Set<string>,
 ): Promise<string> {
   const ids = moments.map((m) => m.id);
   const proposalIds = [...new Set(moments.map((m) => m.proposal_id).filter(Boolean))];
@@ -244,6 +245,9 @@ async function describePeriod(
       .eq('group_id', groupId),
   ]);
 
+  // Quien no quiere participar tampoco aparece por sus comentarios ni canciones.
+  comments.data = (comments.data ?? []).filter((c) => !optedOut.has(c.user_id));
+  songs.data = (songs.data ?? []).filter((x) => !optedOut.has(x.added_by));
   const people = new Set<string>(moments.map((m) => m.author_id));
   for (const c of comments.data ?? []) people.add(c.user_id);
   for (const s of songs.data ?? []) people.add(s.added_by);
