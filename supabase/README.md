@@ -10,6 +10,7 @@ Esquema de PostgreSQL para [Supabase](https://supabase.com), con las reglas de p
 - `migrations/0006_ciudades.sql`: coordenadas (a nivel de ciudad) de la residencia, para el mapa.
 - `migrations/0007_canciones.sql`: la banda sonora del grupo (referencias a canciones del catálogo de iTunes, no archivos de audio).
 - `migrations/0008_calendario.sql`: calendario del grupo (cumpleaños y aniversarios anuales, viajes, reencuentros, celebraciones) y los recordatorios: el mismo día y, para lo esperado, una semana antes y la víspera.
+- `migrations/0009_video_y_voz.sql`: tipo y forma de onda de los archivos; límite de 50 MB por archivo y solo imágenes, vídeo y audio en el almacén.
 - `functions/send-proposals/`: programa del servidor que envía esos avisos y los recordatorios del calendario. Genera sus propias claves la primera vez.
 - `programar_avisos.sql`: lo ejecuta cada 15 minutos. Se lanza una vez, a mano, tras desplegar la función.
 - `tests/`: pruebas que comprueban esas reglas (un ajeno no ve nada, nadie edita lo de otro, nadie ve quién omitió una propuesta, quien sale deja de ver el contenido…).

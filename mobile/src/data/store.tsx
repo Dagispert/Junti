@@ -2,6 +2,7 @@ import type { Session } from '@supabase/supabase-js';
 import { createContext, use, useEffect, useState, type ReactNode } from 'react';
 
 import type { Place } from '@/lib/geo';
+import { extensionFor } from '@/lib/media';
 import { disablePush } from '@/lib/push';
 import { AVATAR_BUCKET, MEDIA_BUCKET, supabase } from '@/lib/supabase';
 
@@ -40,6 +41,16 @@ type Store = {
     text?: string;
     imageUri?: string;
     proposalId?: string;
+    /** Foto o vídeo, con su tipo, duración y portada (en los vídeos). */
+    media?: {
+      uri: string;
+      kind: 'photo' | 'video';
+      mime?: string;
+      duration?: number;
+      poster?: string;
+    };
+    /** Nota de voz grabada. */
+    voice?: { uri: string; mime: string; duration: number; waveform: number[] };
     /** Lugar elegido voluntariamente (a nivel de ciudad). */
     place?: Place;
   }) => Promise<void>;
@@ -137,7 +148,7 @@ async function load(me: string): Promise<Data> {
         .select(
           'id, group_id, author_id, text, created_at, author_tz, proposal_id, place_name, lat, lng, ' +
             'reactions(emoji, user_id), comments(id, user_id, text, created_at, deleted_at), ' +
-            'moment_media(position, media_assets(storage_path))',
+            'moment_media(position, media_assets(storage_path, kind, thumb_path, duration_s, waveform))',
         )
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
@@ -218,25 +229,60 @@ async function load(me: string): Promise<Data> {
     });
 
   // Las fotos están en un almacén privado: se piden direcciones temporales firmadas.
-  const pathOf = (row: any): string | undefined =>
-    [...(row.moment_media ?? [])].sort((a, b) => a.position - b.position)[0]?.media_assets
-      ?.storage_path;
-  const paths = [...new Set((momentRows ?? []).map(pathOf).filter(Boolean))] as string[];
+  // Archivos de cada momento: lo visual (foto o vídeo, con su portada) y la voz.
+  type Asset = {
+    storage_path: string;
+    kind: 'photo' | 'video' | 'audio';
+    thumb_path?: string;
+    duration_s?: number;
+    waveform?: number[];
+  };
+  const assetsOf = (row: any): Asset[] =>
+    [...(row.moment_media ?? [])]
+      .sort((a, b) => a.position - b.position)
+      .map((mm) => mm.media_assets)
+      .filter(Boolean);
+  const paths = [
+    ...new Set(
+      (momentRows ?? [])
+        .flatMap((row) => assetsOf(row).flatMap((a) => [a.storage_path, a.thumb_path]))
+        .filter(Boolean),
+    ),
+  ] as string[];
   const signed: Record<string, string> = {};
-  if (paths.length) {
-    const { data } = await supabase.storage.from(MEDIA_BUCKET).createSignedUrls(paths, 3600);
+  for (let k = 0; k < paths.length; k += 100) {
+    const { data } = await supabase.storage
+      .from(MEDIA_BUCKET)
+      .createSignedUrls(paths.slice(k, k + 100), 3600);
     for (const item of data ?? [])
       if (item.path && item.signedUrl) signed[item.path] = item.signedUrl;
   }
 
   const moments: Moment[] = (momentRows ?? []).map((row) => {
-    const path = pathOf(row);
+    const assets = assetsOf(row);
+    const photo = assets.find((a) => a.kind === 'photo');
+    const video = assets.find((a) => a.kind === 'video');
+    const voice = assets.find((a) => a.kind === 'audio');
     return {
       id: row.id,
       groupId: row.group_id,
       authorId: row.author_id,
       text: row.text ?? undefined,
-      imageUri: path ? signed[path] : undefined,
+      // En los vídeos, «imageUri» es su portada: así sirven igual en carretes, polaroids y mapa.
+      imageUri: photo
+        ? signed[photo.storage_path]
+        : video?.thumb_path
+          ? signed[video.thumb_path]
+          : undefined,
+      videoUri: video ? signed[video.storage_path] : undefined,
+      videoDuration: video?.duration_s ?? undefined,
+      voice: voice
+        ? {
+            uri: signed[voice.storage_path],
+            duration: Number(voice.duration_s ?? 0),
+            waveform: voice.waveform ?? [],
+          }
+        : undefined,
       createdAt: Date.parse(row.created_at),
       authorTz: row.author_tz,
       proposalId: row.proposal_id ?? undefined,
@@ -454,23 +500,72 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return row!.code;
     },
 
-    addMoment: async ({ groupId, text, imageUri, proposalId, place }) => {
-      let assetId: string | undefined;
-      if (imageUri) {
-        const bytes = await (await fetch(imageUri)).arrayBuffer();
-        const path = `${groupId}/${me}/${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
+    addMoment: async ({ groupId, text, imageUri, media, voice, proposalId, place }) => {
+      const visual = media ?? (imageUri ? { uri: imageUri, kind: 'photo' as const } : undefined);
+      const stamp = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const put = async (uri: string, name: string, mime: string) => {
+        const blob = await (await fetch(uri)).blob();
+        const path = `${groupId}/${me}/${name}`;
         const upload = await supabase.storage
           .from(MEDIA_BUCKET)
-          .upload(path, bytes, { contentType: 'image/jpeg' });
-        if (upload.error) throw new Error(upload.error.message);
+          .upload(path, blob, { contentType: mime });
+        if (upload.error) {
+          throw new Error(
+            /exceeded|too large|size/i.test(upload.error.message)
+              ? 'El archivo es demasiado grande (máximo 50 MB). Prueba con un vídeo más corto.'
+              : upload.error.message,
+          );
+        }
+        return { path, bytes: blob.size };
+      };
+      const assetIds: string[] = [];
+      if (visual) {
+        const mime = visual.mime ?? (visual.kind === 'video' ? 'video/mp4' : 'image/jpeg');
+        const file = await put(
+          visual.uri,
+          `${stamp}.${extensionFor(mime, visual.kind === 'video' ? 'mp4' : 'jpg')}`,
+          mime,
+        );
+        const thumb = visual.poster
+          ? await put(visual.poster, `${stamp}-portada.jpg`, 'image/jpeg')
+          : undefined;
         const asset = check(
           await supabase
             .from('media_assets')
-            .insert({ kind: 'photo', storage_path: path, bytes: bytes.byteLength })
+            .insert({
+              kind: visual.kind,
+              storage_path: file.path,
+              thumb_path: thumb?.path ?? null,
+              bytes: file.bytes,
+              mime,
+              duration_s: visual.duration ?? null,
+            })
             .select('id')
             .single(),
         );
-        assetId = asset!.id;
+        assetIds.push(asset!.id);
+      }
+      if (voice) {
+        const file = await put(
+          voice.uri,
+          `${stamp}-voz.${extensionFor(voice.mime, 'webm')}`,
+          voice.mime,
+        );
+        const asset = check(
+          await supabase
+            .from('media_assets')
+            .insert({
+              kind: 'audio',
+              storage_path: file.path,
+              bytes: file.bytes,
+              mime: voice.mime,
+              duration_s: Math.round(voice.duration * 10) / 10,
+              waveform: voice.waveform,
+            })
+            .select('id')
+            .single(),
+        );
+        assetIds.push(asset!.id);
       }
       const moment = check(
         await supabase
@@ -487,11 +582,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           .select('id')
           .single(),
       );
-      if (assetId) {
+      if (assetIds.length) {
         check(
-          await supabase
-            .from('moment_media')
-            .insert({ moment_id: moment!.id, media_asset_id: assetId }),
+          await supabase.from('moment_media').insert(
+            assetIds.map((id, position) => ({
+              moment_id: moment!.id,
+              media_asset_id: id,
+              position,
+            })),
+          ),
         );
       }
       if (proposalId) {

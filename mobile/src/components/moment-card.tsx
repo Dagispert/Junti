@@ -7,6 +7,7 @@ import { useStore } from '@/data/store';
 import type { Moment } from '@/data/types';
 import { clockIn, relative } from '@/lib/time';
 
+import { VideoMoment, VoiceNote } from './media-players';
 import { SkyBadge } from './sky-badge';
 import { Avatar, Card, Photo, Scrim } from './ui';
 
@@ -43,38 +44,49 @@ export function MomentCard({ moment }: { moment: Moment }) {
 
   return (
     <Card>
-      {moment.imageUri ? (
+      {moment.imageUri || moment.videoUri ? (
         <View style={styles.photoWrap}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Ver en grande"
-            onPress={() => router.push({ pathname: '/moment/[id]', params: { id: moment.id } })}
-            style={StyleSheet.absoluteFill}>
-            <Photo moment={moment} style={StyleSheet.absoluteFill} />
-          </Pressable>
+          {moment.videoUri ? (
+            <VideoMoment moment={moment} style={StyleSheet.absoluteFill} />
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Ver en grande"
+              onPress={() => router.push({ pathname: '/moment/[id]', params: { id: moment.id } })}
+              style={StyleSheet.absoluteFill}>
+              <Photo moment={moment} style={StyleSheet.absoluteFill} />
+            </Pressable>
+          )}
           <Scrim edge="top" height="32%" />
-          <Text style={styles.overName}>{author.name}</Text>
+          <Text pointerEvents="none" style={styles.overName}>
+            {author.name}
+          </Text>
           {/* El cielo que tenía cuando lo compartió. */}
-          <View style={styles.overMeta}>
+          <View pointerEvents="none" style={styles.overMeta}>
             <SkyBadge tz={moment.authorTz} at={moment.createdAt} size={16} />
             <Text style={styles.overMetaText}>{where}</Text>
           </View>
           {(!!moment.text || !!proposal) && (
             <>
               <Scrim edge="bottom" />
-              <View style={styles.caption}>
+              <View pointerEvents="none" style={styles.caption}>
                 {proposal && <Text style={styles.overProposal}>{proposal.title}</Text>}
                 {!!moment.text && <Text style={styles.overText}>{moment.text}</Text>}
               </View>
             </>
           )}
         </View>
-      ) : (
+      ) : moment.text || proposal ? (
         <View style={[styles.textPanel, { backgroundColor: theme.soft }]}>
           {proposal && (
             <Text style={{ color: theme.textSecondary, fontSize: 14 }}>{proposal.title}</Text>
           )}
           <Text style={[styles.bigText, { color: theme.text }]}>{moment.text}</Text>
+        </View>
+      ) : null}
+      {moment.voice && (
+        <View style={{ paddingHorizontal: 4, paddingTop: moment.imageUri || moment.text ? 12 : 4 }}>
+          <VoiceNote voice={moment.voice} />
         </View>
       )}
 

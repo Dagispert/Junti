@@ -56,6 +56,11 @@ export type Moment = {
   text?: string;
   /** URL firmada y temporal de la foto, si la hay. */
   imageUri?: string;
+  /** Vídeo (entonces «imageUri» es su portada) y su duración en segundos. */
+  videoUri?: string;
+  videoDuration?: number;
+  /** Nota de voz: audio, duración en segundos y forma de onda (0–100). */
+  voice?: { uri: string; duration: number; waveform: number[] };
   createdAt: number;
   /** Zona horaria del autor cuando lo publicó. */
   authorTz: string;

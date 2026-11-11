@@ -424,7 +424,8 @@ function makeArc(a: GlobePerson, b: GlobePerson, i: number): ArcObj | null {
   const va = toVec(a.lat, a.lng).normalize();
   const vb = toVec(b.lat, b.lng).normalize();
   const angle = va.angleTo(vb);
-  if (angle < 0.01) return null;
+  // Mismo sitio o justo en las antípodas: no hay un arco único que dibujar.
+  if (!Number.isFinite(angle) || angle < 0.01 || angle > Math.PI - 0.01) return null;
   const pts: THREE.Vector3[] = [];
   for (let k = 0; k <= 48; k++) {
     const t = k / 48;
@@ -437,6 +438,7 @@ function makeArc(a: GlobePerson, b: GlobePerson, i: number): ArcObj | null {
     v.multiplyScalar(R * (1.01 + Math.sin(Math.PI * t) * (0.06 + angle * 0.12)));
     pts.push(v);
   }
+  if (pts.some((p) => !Number.isFinite(p.x + p.y + p.z))) return null;
   const curve = new THREE.CatmullRomCurve3(pts);
   const tube = new THREE.Mesh(
     new THREE.TubeGeometry(curve, 96, 0.0032, 6, false),
@@ -799,7 +801,13 @@ export function GlobeMap({
         g.setDrawRange(0, Math.floor((g.index?.count ?? 0) * grow));
         const k = ((t * 0.28 + a.offset) % 1.25) / 1;
         a.comet.visible = peopleVisible && grow >= 1 && k <= 1;
-        if (a.comet.visible) a.comet.position.copy(a.curve.getPointAt(Math.min(1, k)));
+        if (a.comet.visible) {
+          try {
+            a.comet.position.copy(a.curve.getPointAt(Math.min(1, Math.max(0, k))));
+          } catch {
+            a.comet.visible = false;
+          }
+        }
       });
 
       // Chinchetas: se proyectan sobre la pantalla y se ocultan al pasar por detrás.

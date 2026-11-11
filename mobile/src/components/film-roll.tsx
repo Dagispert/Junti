@@ -95,7 +95,9 @@ export function FilmRoll({
                     ) : (
                       <View style={[styles.frame, styles.paper]}>
                         <Text numberOfLines={5} style={styles.paperText}>
-                          {m.text}
+                          {m.voice ? '🎙 ' : ''}
+                          {m.text ??
+                            (m.voice ? `Nota de voz · ${Math.round(m.voice.duration)} s` : '')}
                         </Text>
                       </View>
                     )}

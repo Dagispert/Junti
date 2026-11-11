@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { ZoomIn } from 'react-native-reanimated';
 
+import { VideoMoment, VoiceNote } from '@/components/media-players';
 import { Sticker, StickyNote } from '@/components/scrapbook';
 import { SkyBadge } from '@/components/sky-badge';
 import { Photo, Screen } from '@/components/ui';
@@ -55,7 +56,13 @@ export default function MomentView() {
         </View>
       }>
       <Animated.View entering={ZoomIn.springify().damping(15)} style={styles.frame}>
-        <Photo moment={moment} style={styles.photo} />
+        {moment.videoUri ? (
+          <View style={[styles.photo, { overflow: 'hidden' }]}>
+            <VideoMoment moment={moment} style={StyleSheet.absoluteFill} />
+          </View>
+        ) : (
+          <Photo moment={moment} style={styles.photo} />
+        )}
         {(moment.text || proposal) && moment.imageUri ? (
           <StickyNote rotate={5} width={150} delay={350} style={styles.note}>
             {moment.text ?? proposal?.title}
@@ -73,6 +80,11 @@ export default function MomentView() {
         ))}
       </Animated.View>
 
+      {moment.voice && (
+        <View style={{ marginTop: 26 }}>
+          <VoiceNote voice={moment.voice} />
+        </View>
+      )}
       {proposal && (
         <Text style={[styles.prompt, { color: theme.textSecondary }]}>
           Respondía a «{proposal.title}»

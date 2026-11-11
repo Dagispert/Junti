@@ -12,6 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { InlineVideo, VoiceNote } from '@/components/media-players';
 import { PolaroidPile, Scribble, Sticker, StickyNote } from '@/components/scrapbook';
 import { SkyBadge } from '@/components/sky-badge';
 import { Avatar, Photo } from '@/components/ui';
@@ -327,9 +328,20 @@ function MomentSlide({
       {moment.imageUri ? (
         <Animated.View entering={ZoomIn.springify().damping(16)} style={styles.frame}>
           <View style={styles.photoBox}>
-            <Animated.View style={[StyleSheet.absoluteFill, ken]}>
-              <Photo moment={moment} style={StyleSheet.absoluteFill} />
-            </Animated.View>
+            {moment.videoUri ? (
+              // En la historia, el vídeo se mueve solo, en silencio y en bucle.
+              <InlineVideo
+                uri={moment.videoUri}
+                muted
+                loop
+                controls={false}
+                style={StyleSheet.absoluteFill}
+              />
+            ) : (
+              <Animated.View style={[StyleSheet.absoluteFill, ken]}>
+                <Photo moment={moment} style={StyleSheet.absoluteFill} />
+              </Animated.View>
+            )}
           </View>
           {!!moment.text && (
             <StickyNote
@@ -370,6 +382,11 @@ function MomentSlide({
           </View>
         </View>
       </Animated.View>
+      {moment.voice && (
+        <View style={{ alignSelf: 'stretch' }}>
+          <VoiceNote voice={moment.voice} />
+        </View>
+      )}
       {loved &&
         moment.comments.slice(-2).map((c) => (
           <Scribble key={c.id} size={22} color={INK}>

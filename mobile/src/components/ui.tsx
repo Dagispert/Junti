@@ -133,7 +133,16 @@ export function AvatarRow({ userIds, size = 28 }: { userIds: string[]; size?: nu
 }
 
 /** La foto de un momento; si es solo texto, un panel gris con sus palabras. */
-export function Photo({ moment, style }: { moment: Moment; style?: StyleProp<ViewStyle> }) {
+export function Photo({
+  moment,
+  style,
+  badge = true,
+}: {
+  moment: Moment;
+  style?: StyleProp<ViewStyle>;
+  /** Mostrar ▶ en los vídeos (desactivado donde ya hay un botón grande). */
+  badge?: boolean;
+}) {
   const theme = useTheme();
   if (moment.imageUri) {
     return (
@@ -144,14 +153,32 @@ export function Photo({ moment, style }: { moment: Moment; style?: StyleProp<Vie
           contentFit="cover"
           transition={200}
         />
+        {badge && moment.videoUri && (
+          <View style={styles.playBadge}>
+            <Text style={{ color: '#1D1F22', fontSize: 10, marginLeft: 1 }}>▶</Text>
+          </View>
+        )}
+      </View>
+    );
+  }
+  if (moment.videoUri) {
+    // Vídeo sin portada (por ejemplo, subido desde el móvil nativo).
+    return (
+      <View style={[styles.photo, { backgroundColor: '#2B2E33' }, style]}>
+        <Text style={{ color: '#fff', fontSize: 22 }}>▶</Text>
       </View>
     );
   }
   return (
     <View style={[styles.photo, { backgroundColor: theme.soft, padding: Spacing.two }, style]}>
-      <Text numberOfLines={4} style={{ color: theme.text, fontSize: 13, textAlign: 'center' }}>
-        {moment.text}
-      </Text>
+      {moment.voice && !moment.text ? (
+        <Text style={{ fontSize: 26 }}>🎙</Text>
+      ) : (
+        <Text numberOfLines={4} style={{ color: theme.text, fontSize: 13, textAlign: 'center' }}>
+          {moment.voice ? '🎙 ' : ''}
+          {moment.text}
+        </Text>
+      )}
     </View>
   );
 }
@@ -293,6 +320,17 @@ const styles = StyleSheet.create({
   tagText: { fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase' },
   avatar: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   photo: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  playBadge: {
+    position: 'absolute',
+    right: 6,
+    top: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   scrim: { position: 'absolute', left: 0, right: 0 },
   fanFrame: { position: 'absolute', padding: 7 },
   button: {
