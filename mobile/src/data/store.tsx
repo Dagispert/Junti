@@ -6,7 +6,7 @@ import { disablePush } from '@/lib/push';
 import { AVATAR_BUCKET, MEDIA_BUCKET, supabase } from '@/lib/supabase';
 
 import { dailyPrompts } from './library';
-import type { Group, Moment, Proposal, User } from './types';
+import type { Group, Moment, Proposal, Song, User } from './types';
 
 // Estado de la app, respaldado por Supabase. Todo lo que se lee aquí ya viene
 // filtrado por las políticas de la base de datos: solo los grupos a los que pertenezco.
@@ -21,6 +21,7 @@ type Store = {
   proposals: Proposal[];
   /** Propuestas que he omitido o pospuesto. Privado: nadie más lo ve. */
   dismissed: string[];
+  songs: Song[];
   user: (id: string) => User;
   group: (id: string) => Group | undefined;
   refresh: () => Promise<void>;
@@ -60,6 +61,11 @@ type Store = {
   /** Silencia los avisos de un grupo hasta una fecha, o los reactiva con null. */
   setMuted: (groupId: string, until: number | null) => Promise<void>;
   reportMoment: (momentId: string) => Promise<void>;
+  addSong: (
+    groupId: string,
+    song: Omit<Song, 'id' | 'groupId' | 'addedBy' | 'createdAt'>,
+  ) => Promise<void>;
+  removeSong: (songId: string) => Promise<void>;
 };
 
 const StoreContext = createContext<Store | null>(null);
@@ -89,44 +95,53 @@ type Data = {
   moments: Moment[];
   proposals: Proposal[];
   dismissed: string[];
+  songs: Song[];
 };
-const EMPTY: Data = { users: {}, groups: [], moments: [], proposals: [], dismissed: [] };
+const EMPTY: Data = { users: {}, groups: [], moments: [], proposals: [], dismissed: [], songs: [] };
 
 async function load(me: string): Promise<Data> {
-  const [memberships, groupRows, profiles, momentRows, proposalRows, states] = await Promise.all([
-    supabase
-      .from('memberships')
-      .select('group_id, user_id, role, frequency_vote, preferred_hour, muted_until')
-      .eq('status', 'active')
-      .then(check),
-    supabase
-      .from('groups')
-      .select('id, name, description, color, cadence_days')
-      .order('created_at')
-      .then(check),
-    supabase
-      .from('profiles')
-      .select(
-        'id, name, home_city, home_country, home_lat, home_lng, home_visible, timezone, avatar_path',
-      )
-      .then(check),
-    supabase
-      .from('moments')
-      .select(
-        'id, group_id, author_id, text, created_at, author_tz, proposal_id, ' +
-          'reactions(emoji, user_id), comments(id, user_id, text, created_at, deleted_at), ' +
-          'moment_media(position, media_assets(storage_path))',
-      )
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false })
-      .limit(300)
-      .then(check) as PromiseLike<any[]>,
-    supabase
-      .from('proposals')
-      .select('id, group_id, kind, title, body, starts_at, ends_at')
-      .then(check),
-    supabase.from('proposal_states').select('proposal_id, state').eq('user_id', me).then(check),
-  ]);
+  const [memberships, groupRows, profiles, momentRows, proposalRows, states, songRows] =
+    await Promise.all([
+      supabase
+        .from('memberships')
+        .select('group_id, user_id, role, frequency_vote, preferred_hour, muted_until')
+        .eq('status', 'active')
+        .then(check),
+      supabase
+        .from('groups')
+        .select('id, name, description, color, cadence_days')
+        .order('created_at')
+        .then(check),
+      supabase
+        .from('profiles')
+        .select(
+          'id, name, home_city, home_country, home_lat, home_lng, home_visible, timezone, avatar_path',
+        )
+        .then(check),
+      supabase
+        .from('moments')
+        .select(
+          'id, group_id, author_id, text, created_at, author_tz, proposal_id, ' +
+            'reactions(emoji, user_id), comments(id, user_id, text, created_at, deleted_at), ' +
+            'moment_media(position, media_assets(storage_path))',
+        )
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .limit(300)
+        .then(check) as PromiseLike<any[]>,
+      supabase
+        .from('proposals')
+        .select('id, group_id, kind, title, body, starts_at, ends_at')
+        .then(check),
+      supabase.from('proposal_states').select('proposal_id, state').eq('user_id', me).then(check),
+      supabase
+        .from('songs')
+        .select(
+          'id, group_id, added_by, title, artist, artwork_url, preview_url, external_url, note, created_at',
+        )
+        .order('created_at', { ascending: false })
+        .then(check),
+    ]);
 
   // Fotos de perfil: también privadas, con dirección temporal firmada.
   const avatarPaths = (profiles ?? []).map((p) => p.avatar_path).filter(Boolean) as string[];
@@ -227,7 +242,27 @@ async function load(me: string): Promise<Data> {
     endsAt: p.ends_at ? Date.parse(p.ends_at) : undefined,
   }));
 
-  return { users, groups, moments, proposals, dismissed: (states ?? []).map((s) => s.proposal_id) };
+  const songs: Song[] = (songRows ?? []).map((s) => ({
+    id: s.id,
+    groupId: s.group_id,
+    addedBy: s.added_by,
+    title: s.title,
+    artist: s.artist,
+    artwork: s.artwork_url ?? undefined,
+    preview: s.preview_url ?? undefined,
+    link: s.external_url ?? undefined,
+    note: s.note ?? undefined,
+    createdAt: Date.parse(s.created_at),
+  }));
+
+  return {
+    users,
+    groups,
+    moments,
+    proposals,
+    dismissed: (states ?? []).map((s) => s.proposal_id),
+    songs,
+  };
 }
 
 /**
@@ -318,6 +353,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     moments: data.moments,
     proposals: data.proposals,
     dismissed: data.dismissed,
+    songs: data.songs,
     user: (id) => data.users[id] ?? { id, ...FORMER_MEMBER },
     group: (id) => data.groups.find((g) => g.id === id),
     refresh,
@@ -555,6 +591,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           .update({ muted_until: until ? new Date(until).toISOString() : null })
           .match({ group_id: groupId, user_id: me }),
       );
+      await refresh();
+    },
+    addSong: async (groupId, song) => {
+      check(
+        await supabase.from('songs').insert({
+          group_id: groupId,
+          title: song.title,
+          artist: song.artist,
+          artwork_url: song.artwork ?? null,
+          preview_url: song.preview ?? null,
+          external_url: song.link ?? null,
+          note: song.note || null,
+        }),
+      );
+      await refresh();
+    },
+    removeSong: async (songId) => {
+      check(await supabase.from('songs').delete().eq('id', songId));
       await refresh();
     },
     reportMoment: async (momentId) => {

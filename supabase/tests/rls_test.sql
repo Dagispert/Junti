@@ -178,3 +178,14 @@ insert into proposals (group_id, kind, title, day)
   on conflict (group_id, day) do nothing;
 select pg_temp.expect((select count(*) = 0 from proposals where title = 'duplicada'), 'la app no puede duplicar la propuesta de un día');
 \echo AVISOS CORRECTOS
+
+-- ── Canciones del grupo ──
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000d1';
+insert into songs (group_id, title, artist, note) values ('10000000-0000-0000-0000-0000000000aa', 'Sailing', 'Christopher Cross', 'La del viaje');
+select pg_temp.expect((select count(*) = 1 from songs), 'un miembro añade y ve una canción del grupo');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000c';
+select pg_temp.expect((select count(*) = 0 from songs), 'alguien ajeno no ve las canciones del grupo');
+select pg_temp.fails($$insert into songs (group_id, title, artist) values ('10000000-0000-0000-0000-0000000000aa', 'x', 'y')$$, 'alguien ajeno no puede añadir canciones');
+reset role;
+\echo CANCIONES CORRECTAS

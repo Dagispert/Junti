@@ -8,6 +8,7 @@ Esquema de PostgreSQL para [Supabase](https://supabase.com), con las reglas de p
 - `migrations/0004_ajustes_y_salidas.sql`: fotos de perfil, salir de un grupo de forma ordenada, borrar la cuenta propia y volver a un grupo del que se salió.
 - `migrations/0005_avisos.sql`: dispositivos suscritos a avisos, una propuesta por grupo y día, biblioteca inicial de propuestas y la función que decide a quién le toca recibirla (por hora local, frecuencia del grupo, silencios y tope diario).
 - `migrations/0006_ciudades.sql`: coordenadas (a nivel de ciudad) de la residencia, para el mapa.
+- `migrations/0007_canciones.sql`: la banda sonora del grupo (referencias a canciones del catálogo de iTunes, no archivos de audio).
 - `functions/send-proposals/`: programa del servidor que envía esos avisos. Genera sus propias claves la primera vez.
 - `programar_avisos.sql`: lo ejecuta cada 15 minutos. Se lanza una vez, a mano, tras desplegar la función.
 - `tests/`: pruebas que comprueban esas reglas (un ajeno no ve nada, nadie edita lo de otro, nadie ve quién omitió una propuesta, quien sale deja de ver el contenido…).

@@ -64,3 +64,17 @@ export type Moment = {
   reactions: Reaction[];
   comments: Comment[];
 };
+
+/** Una canción de la banda sonora del grupo (referencia al catálogo, no el archivo). */
+export type Song = {
+  id: string;
+  groupId: string;
+  addedBy: string;
+  title: string;
+  artist: string;
+  artwork?: string;
+  preview?: string;
+  link?: string;
+  note?: string;
+  createdAt: number;
+};

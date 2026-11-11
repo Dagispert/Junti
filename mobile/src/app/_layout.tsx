@@ -1,3 +1,4 @@
+import { Caveat_600SemiBold, Caveat_700Bold, useFonts } from '@expo-google-fonts/caveat';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
@@ -11,6 +12,7 @@ import { setupInstallable } from '@/lib/push';
 
 export default function RootLayout() {
   const dark = useColorScheme() === 'dark';
+  useFonts({ Caveat_600SemiBold, Caveat_700Bold });
   useEffect(setupInstallable, []);
   return (
     <ThemeProvider value={dark ? DarkTheme : DefaultTheme}>
@@ -45,6 +47,8 @@ function Gate() {
         <Stack.Screen name="join" options={{ presentation: 'modal' }} />
         <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
         <Stack.Screen name="group-settings" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="add-song" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="moment/[id]" options={{ presentation: 'modal' }} />
       </Stack>
       {intro && <IntroCinematic onDone={endIntro} />}
     </View>

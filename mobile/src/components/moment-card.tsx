@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -43,7 +44,13 @@ export function MomentCard({ moment }: { moment: Moment }) {
     <Card>
       {moment.imageUri ? (
         <View style={styles.photoWrap}>
-          <Photo moment={moment} style={StyleSheet.absoluteFill} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Ver en grande"
+            onPress={() => router.push({ pathname: '/moment/[id]', params: { id: moment.id } })}
+            style={StyleSheet.absoluteFill}>
+            <Photo moment={moment} style={StyleSheet.absoluteFill} />
+          </Pressable>
           <Scrim edge="top" height="32%" />
           <Text style={styles.overName}>{author.name}</Text>
           {/* El cielo que tenía cuando lo compartió. */}

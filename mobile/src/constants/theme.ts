@@ -41,6 +41,10 @@ export const Fonts = Platform.select({
   default: { sans: 'normal', mono: 'monospace' },
 });
 
+/** Letra manuscrita para notas, pies de foto y pegatinas (Caveat, licencia OFL). */
+export const Hand = 'Caveat_600SemiBold';
+export const HandBold = 'Caveat_700Bold';
+
 export const Spacing = { half: 2, one: 4, two: 8, three: 16, four: 24, five: 32 } as const;
 /** frame: marco exterior de las tarjetas · inner: la foto que va dentro · pill: botones. */
 export const Radius = { small: 12, medium: 18, inner: 24, frame: 34, pill: 999 } as const;
