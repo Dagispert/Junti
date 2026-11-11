@@ -137,9 +137,6 @@ export default function RecapScreen() {
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const slide = slides[index];
-  useEffect(() => {
-    if (index === 0 && narration) setStory(narration);
-  }, [index, narration]);
   // Las diapositivas con una frase de la narradora avanzan cuando ella termina.
   const line = 'line' in slide ? slide.line : undefined;
   const [voiceOn, setVoiceOn] = useState(speechSupported);
@@ -162,6 +159,14 @@ export default function RecapScreen() {
   useEffect(() => {
     elapsed.current = 0;
   }, [index]);
+  useEffect(() => {
+    if (index === 0 && narration && story !== narration) {
+      setStory(narration);
+      // Que dé tiempo a leer el título de la crónica en la portada.
+      elapsed.current = Math.min(elapsed.current, 1500);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index, narration]);
   // Si la narradora sigue escribiendo, la portada espera (como mucho 25 s).
   const waiting = slide.type === 'cover' && writing && !narration && elapsed.current < 25_000;
   useEffect(() => {
