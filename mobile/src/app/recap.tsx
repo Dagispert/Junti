@@ -238,7 +238,7 @@ export default function RecapScreen() {
   const audio = usePreview(song?.preview, true);
   // La voz en primer plano: la música baja mientras habla la narradora.
   useEffect(() => {
-    audio.volume(voiced && voiceOn ? 0.14 : 0.85);
+    audio.volume(voiced && voiceOn && !paused ? 0.05 : 0.85);
   });
   const [muted, setMuted] = useState(false);
   const started = useRef(false);
