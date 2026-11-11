@@ -183,7 +183,10 @@ Deno.serve(async (req) => {
     const message = error instanceof Error ? error.message : String(error);
     console.error(message);
     if (message.startsWith('busy')) {
-      return reply(503, { error: 'La narradora está descansando. Prueba de nuevo en un rato.' });
+      return reply(503, {
+        error: 'La narradora está descansando. Prueba de nuevo en un rato.',
+        detail: message.slice(0, 600),
+      });
     }
     return reply(500, { error: message });
   }
@@ -324,7 +327,7 @@ async function describePeriod(
   return out.join('\n');
 }
 
-/** Pide el texto a Gemini. Si el modelo configurado no existe, busca uno «flash» disponible. */
+/** Pide el texto a Gemini, buscando un modelo «flash» disponible con cupo gratuito. */
 async function gemini(system: string, prompt: string): Promise<{ text: string; model: string }> {
   const key = Deno.env.get('GEMINI_API_KEY');
   if (!key) throw new Error('Falta la clave GEMINI_API_KEY en los secretos de Supabase');
@@ -344,31 +347,60 @@ async function gemini(system: string, prompt: string): Promise<{ text: string; m
       }),
     });
 
-  let model = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash';
-  let res = await call(model);
-  if (res.status === 404) {
-    const list = await fetch(`${base}/models?pageSize=200`, { headers: { 'x-goog-api-key': key } });
-    const { models } = (await list.json()) as {
-      models?: { name: string; supportedGenerationMethods?: string[] }[];
-    };
-    const candidates = (models ?? [])
-      .filter((m) => m.supportedGenerationMethods?.includes('generateContent'))
-      .map((m) => m.name.replace(/^models\//, ''))
-      .filter((n) => /flash/.test(n) && !/lite|image|tts|audio|live|preview|exp/.test(n))
-      .sort()
-      .reverse();
-    if (!candidates.length) throw new Error('No hay ningún modelo de Gemini disponible');
-    model = candidates[0];
-    res = await call(model);
-  }
-  if (res.status === 429 || res.status === 503) throw new Error(`busy ${res.status}`);
-  const data = await res.json();
-  if (!res.ok) throw new Error(`Gemini ${res.status}: ${data?.error?.message ?? 'error'}`);
+  // Orden de prueba: el configurado, el último que funcionó y luego los «flash»
+  // que ofrezca la cuenta. Se salta los que no tienen cupo gratuito (límite 0).
+  const { data: saved } = await supabase
+    .from('app_config')
+    .select('value')
+    .eq('key', 'gemini_model')
+    .maybeSingle();
+  const tried: string[] = [];
+  const queue = [Deno.env.get('GEMINI_MODEL'), saved?.value as string | undefined].filter(
+    (m): m is string => !!m,
+  );
+  let listed = false;
+  let busy = '';
+  while (tried.length < 8) {
+    if (!queue.length && !listed) {
+      listed = true;
+      const list = await fetch(`${base}/models?pageSize=1000`, { headers: { 'x-goog-api-key': key } });
+      const { models } = (await list.json().catch(() => ({}))) as {
+        models?: { name: string; supportedGenerationMethods?: string[] }[];
+      };
+      const names = (models ?? [])
+        .filter((m) => m.supportedGenerationMethods?.includes('generateContent'))
+        .map((m) => m.name.replace(/^models\//, ''))
+        .filter((n) => /flash/.test(n) && !/image|tts|audio|live|exp|embed/.test(n));
+      // Primero las versiones estables y «normales»; luego «lite» y las de prueba.
+      const rank = (n: string) => (/preview/.test(n) ? 2 : 0) + (/lite/.test(n) ? 1 : 0);
+      names.sort((a, b) => rank(a) - rank(b) || b.localeCompare(a, 'en', { numeric: true }));
+      console.log('Modelos disponibles:', names.join(', '));
+      queue.push(...names.filter((n) => !tried.includes(n)));
+    }
+    const model = queue.shift();
+    if (!model) break;
+    if (tried.includes(model)) continue;
+    tried.push(model);
+    const res = await call(model);
+    const data = await res.json().catch(() => ({}));
+    const message: string = data?.error?.message ?? '';
+    if (res.status === 404 || (res.status === 429 && /limit: 0\b/.test(message))) continue;
+    if (res.status === 400 && /not supported|JSON mode/i.test(message)) continue;
+    if (res.status === 429 || res.status === 503) {
+      busy = `busy ${res.status} ${model}: ${message}`;
+      continue;
+    }
+    if (!res.ok) throw new Error(`Gemini ${res.status} ${model}: ${message || 'error'}`);
+    if (saved?.value !== model) {
+      await supabase.from('app_config').upsert({ key: 'gemini_model', value: model });
+    }
   const text = (data?.candidates?.[0]?.content?.parts ?? [])
     .filter((p: { thought?: boolean }) => !p.thought)
     .map((p: { text?: string }) => p.text ?? '')
     .join('');
-  return { text, model };
+    return { text, model };
+  }
+  throw new Error(busy || `busy: ningún modelo de Gemini con cupo gratuito (probados: ${tried.join(', ')})`);
 }
 
 function parse(text: string): { title: string; body: string } | null {
