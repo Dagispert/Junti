@@ -4,6 +4,7 @@ import Animated, { FadeInLeft, ZoomIn } from 'react-native-reanimated';
 
 import { Hand, HandBold } from '@/constants/theme';
 import { useStore } from '@/data/store';
+import { monthStart } from '@/lib/recap';
 import type { Moment } from '@/data/types';
 
 import { Sticker, StickyNote } from './scrapbook';
@@ -19,10 +20,13 @@ export function FilmRoll({
   moments,
   label,
   index = 0,
+  groupId,
 }: {
   moments: Moment[];
   label: string;
   index?: number;
+  /** Si se pasa, el título lleva un botón para ver el resumen del mes. */
+  groupId?: string;
 }) {
   const { user } = useStore();
   const ordered = [...moments].sort((a, b) => a.createdAt - b.createdAt);
@@ -42,9 +46,24 @@ export function FilmRoll({
     <View style={{ gap: 4 }}>
       <View style={styles.titleRow}>
         <Text style={styles.month}>{label}</Text>
-        <Text style={styles.count}>
-          {moments.length} {moments.length === 1 ? 'foto' : 'fotos'}
-        </Text>
+        {groupId ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Ver el resumen de ${label}`}
+            onPress={() =>
+              router.push({
+                pathname: '/recap',
+                params: { groupId, kind: 'month', from: String(monthStart(moments[0].createdAt)) },
+              })
+            }
+            style={styles.recapBtn}>
+            <Text style={styles.recapText}>▶ Resumen del mes</Text>
+          </Pressable>
+        ) : (
+          <Text style={styles.count}>
+            {moments.length} {moments.length === 1 ? 'foto' : 'fotos'}
+          </Text>
+        )}
       </View>
       <ScrollView
         horizontal
@@ -159,6 +178,14 @@ const styles = StyleSheet.create({
   },
   month: { fontFamily: HandBold, fontSize: 30, color: '#C2477A' },
   count: { fontFamily: Hand, fontSize: 20, color: '#8B9096' },
+  recapBtn: {
+    backgroundColor: '#1F2124',
+    paddingHorizontal: 12,
+    height: 32,
+    borderRadius: 999,
+    justifyContent: 'center',
+  },
+  recapText: { color: '#fff', fontSize: 13, fontWeight: '500' },
   strip: {
     height: STRIP_H,
     backgroundColor: FILM,

@@ -48,6 +48,10 @@ function Gate() {
         <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
         <Stack.Screen name="group-settings" options={{ presentation: 'modal' }} />
         <Stack.Screen name="add-song" options={{ presentation: 'modal' }} />
+        <Stack.Screen
+          name="recap"
+          options={{ presentation: 'fullScreenModal', animation: 'fade' }}
+        />
         <Stack.Screen name="moment/[id]" options={{ presentation: 'modal' }} />
       </Stack>
       {intro && <IntroCinematic onDone={endIntro} />}

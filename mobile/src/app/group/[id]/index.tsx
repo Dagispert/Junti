@@ -4,10 +4,13 @@ import { StyleSheet, Text, View } from 'react-native';
 import { ConnectionCard } from '@/components/connection-card';
 import { GroupHeader } from '@/components/group-header';
 import { MomentCard } from '@/components/moment-card';
+import { OnThisDay } from '@/components/on-this-day';
+import { RecapCard } from '@/components/recap-card';
 import { Appear } from '@/components/motion';
 import { Button, Card, Lead, Screen, Tag } from '@/components/ui';
 import { Spacing, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
+import { featuredWeek, weekStart } from '@/lib/recap';
 
 /** Hoy: la propuesta vigente y los momentos recientes del grupo. */
 export default function Today() {
@@ -18,6 +21,12 @@ export default function Today() {
   if (!group) return <Missing />;
 
   const feed = moments.filter((m) => m.groupId === id);
+  // Lunes y martes: el resumen de la semana que acaba de terminar, si tuvo vida.
+  const lastWeek = weekStart(Date.now()) - 7 * 86_400_000;
+  const lastWeekReady =
+    new Date().getDay() >= 1 && new Date().getDay() <= 2 && featuredWeek(feed) === lastWeek
+      ? lastWeek
+      : null;
   // La propuesta más reciente, si no la he respondido ni apartado.
   const latest = proposals
     .filter((p) => p.groupId === id && p.kind === 'prompt')
@@ -63,6 +72,15 @@ export default function Today() {
             />
           </View>
         </Card>
+      )}
+      <OnThisDay groupId={group.id} />
+      {lastWeekReady != null && (
+        <RecapCard
+          groupId={group.id}
+          kind="week"
+          from={lastWeekReady}
+          hint="¡Ya está vuestro resumen!"
+        />
       )}
       {feed.length === 0 && (
         <Lead strong="Aquí aparecerán los momentos del grupo.">

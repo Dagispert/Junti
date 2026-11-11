@@ -2,6 +2,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { FilmRoll } from '@/components/film-roll';
+import { RecapCard } from '@/components/recap-card';
 import { GroupHeader } from '@/components/group-header';
 import { PolaroidPile, Scribble } from '@/components/scrapbook';
 import { Soundtrack } from '@/components/soundtrack';
@@ -9,6 +10,7 @@ import { Lead, Screen } from '@/components/ui';
 import { Spacing, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import type { Moment } from '@/data/types';
+import { featuredWeek } from '@/lib/recap';
 import { monthOf } from '@/lib/time';
 
 import { Missing } from './index';
@@ -34,6 +36,7 @@ export default function Memory() {
   const who = [...new Set(week.map((m) => user(m.authorId).name.split(' ')[0]))];
   const whoText =
     who.length > 1 ? `${who.slice(0, -1).join(', ')} y ${who[who.length - 1]}` : who[0];
+  const featured = featuredWeek(all);
   const pile = (week.length >= 3 ? week : all).filter((m) => m.imageUri).slice(0, 7);
 
   return (
@@ -60,10 +63,12 @@ export default function Memory() {
         </View>
       )}
 
+      {featured != null && <RecapCard groupId={group.id} kind="week" from={featured} />}
+
       <Soundtrack groupId={group.id} />
 
       {months.map((m, i) => (
-        <FilmRoll key={m.key} moments={m.items} label={m.label} index={i} />
+        <FilmRoll key={m.key} moments={m.items} label={m.label} index={i} groupId={group.id} />
       ))}
     </Screen>
   );
