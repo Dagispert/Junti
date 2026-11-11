@@ -5,6 +5,9 @@ name: Publicar versión web
 
 on:
   workflow_dispatch:
+  push:
+    branches: [claude/shared-memory-connection-app-m3lfsd]
+    paths: ['mobile/**', '.github/workflows/web.yml']
 
 permissions:
   contents: read
