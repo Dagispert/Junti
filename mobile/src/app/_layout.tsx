@@ -48,6 +48,7 @@ function Gate() {
         <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
         <Stack.Screen name="group-settings" options={{ presentation: 'modal' }} />
         <Stack.Screen name="add-song" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="event" options={{ presentation: 'modal' }} />
         <Stack.Screen
           name="recap"
           options={{ presentation: 'fullScreenModal', animation: 'fade' }}

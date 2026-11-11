@@ -1,8 +1,8 @@
 // Junti · envío de la propuesta del día
 //
 // Se ejecuta cada 15 minutos (ver supabase/programar_avisos.sql). Pregunta a la
-// base de datos a quién le toca recibir la propuesta ahora y envía un aviso a
-// cada uno de sus dispositivos. Toda la lógica de «a quién y cuándo» está en la
+// base de datos a quién le toca recibir la propuesta del día o un recordatorio
+// del calendario, y envía un aviso a cada uno de sus dispositivos. Toda la lógica de «a quién y cuándo» está en la
 // función SQL claim_due_notifications(); aquí solo se envía.
 //
 // Llamarla de más no hace daño: la base de datos apunta cada aviso y no lo repite.
@@ -60,17 +60,24 @@ async function vapidKeys(): Promise<{ publicKey: string; privateKey: string }> {
 Deno.serve(async () => {
   try {
     const keys = await vapidKeys();
-    const { data: due, error } = await supabase.rpc('claim_due_notifications');
+    const { data: proposals, error } = await supabase.rpc('claim_due_notifications');
     if (error) throw error;
+    // Recordatorios del calendario (cumpleaños, viajes, reencuentros…).
+    const { data: reminders, error: remindersError } = await supabase.rpc('claim_event_reminders');
+    if (remindersError) console.error('recordatorios', remindersError.message);
+    const due = [
+      ...(proposals ?? []).map((n: any) => ({ ...n, body: n.p_title })),
+      ...(reminders ?? []).map((n: any) => ({ ...n, p_id: null })),
+    ];
 
     let sent = 0;
     let gone = 0;
     let failed = 0;
-    for (const n of due ?? []) {
+    for (const n of due) {
       try {
         await webpush.sendNotification(
           { endpoint: n.sub_endpoint, keys: { p256dh: n.sub_p256dh, auth: n.sub_auth } },
-          JSON.stringify({ title: n.g_name, body: n.p_title, groupId: n.g_id, proposalId: n.p_id }),
+          JSON.stringify({ title: n.g_name, body: n.body, groupId: n.g_id, proposalId: n.p_id }),
           { vapidDetails: { subject: SUBJECT, ...keys }, TTL: 6 * 60 * 60 },
         );
         sent++;

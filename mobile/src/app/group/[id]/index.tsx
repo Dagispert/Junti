@@ -5,6 +5,7 @@ import { ConnectionCard } from '@/components/connection-card';
 import { GroupHeader } from '@/components/group-header';
 import { MomentCard } from '@/components/moment-card';
 import { OnThisDay } from '@/components/on-this-day';
+import { UpcomingCard } from '@/components/upcoming-card';
 import { RecapCard } from '@/components/recap-card';
 import { Appear } from '@/components/motion';
 import { Button, Card, Lead, Screen, Tag } from '@/components/ui';
@@ -73,6 +74,7 @@ export default function Today() {
           </View>
         </Card>
       )}
+      <UpcomingCard groupId={group.id} />
       <OnThisDay groupId={group.id} />
       {lastWeekReady != null && (
         <RecapCard

@@ -46,7 +46,7 @@ export default function RecapScreen() {
     kind: 'week' | 'month';
     from: string;
   }>();
-  const { moments, user, proposals, songs, group } = useStore();
+  const { moments, user, proposals, songs, group, events } = useStore();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
@@ -59,6 +59,7 @@ export default function RecapScreen() {
         user,
         proposals,
         songs.filter((s) => s.groupId === groupId),
+        events.filter((e) => e.groupId === groupId),
       ),
     // Se calcula una vez al abrir: la historia no cambia mientras se ve.
     // eslint-disable-next-line react-hooks/exhaustive-deps

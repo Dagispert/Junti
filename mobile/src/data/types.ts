@@ -78,3 +78,20 @@ export type Song = {
   note?: string;
   createdAt: number;
 };
+
+export type EventKind = 'birthday' | 'anniversary' | 'trip' | 'reunion' | 'celebration' | 'other';
+
+/** Un evento del calendario del grupo. Las fechas van como «AAAA-MM-DD». */
+export type GroupEvent = {
+  id: string;
+  groupId: string;
+  createdBy?: string;
+  kind: EventKind;
+  title: string;
+  description?: string;
+  place?: string;
+  startsOn: string;
+  endsOn?: string;
+  yearly: boolean;
+  personId?: string;
+};

@@ -1,4 +1,6 @@
-import type { Moment, Proposal, Song, User } from '@/data/types';
+import type { GroupEvent, Moment, Proposal, Song, User } from '@/data/types';
+
+import { happensOn, KINDS } from './calendar';
 
 import { distanceKm } from './geo';
 
@@ -94,6 +96,7 @@ export function buildRecap(
   user: (id: string) => User,
   proposals: Proposal[],
   songs: Song[],
+  events: GroupEvent[] = [],
 ): Recap {
   const to = kind === 'week' ? from + 7 * DAY : nextMonth(from);
   const moments = all
@@ -141,6 +144,16 @@ export function buildRecap(
         far > 1500
           ? `Desde ${join(cities)}, con océanos de por medio, seguisteis asomándoos a la vida de los demás.`
           : `Desde ${join(cities)}, cada uno en su sitio y todos un poco más cerca.`,
+      );
+    }
+    // Lo que había apuntado en el calendario durante el periodo.
+    const marked = events.filter((e) => {
+      for (let t = from; t < to; t += DAY) if (happensOn(e, new Date(t))) return true;
+      return false;
+    });
+    if (marked.length) {
+      story.push(
+        `En el calendario: ${join(marked.map((e) => `${KINDS[e.kind].emoji} ${e.title}`))}.`,
       );
     }
     if (periodSongs.length) {

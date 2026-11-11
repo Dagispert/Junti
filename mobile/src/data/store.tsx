@@ -6,7 +6,7 @@ import { disablePush } from '@/lib/push';
 import { AVATAR_BUCKET, MEDIA_BUCKET, supabase } from '@/lib/supabase';
 
 import { dailyPrompts } from './library';
-import type { Group, Moment, Proposal, Song, User } from './types';
+import type { Group, GroupEvent, Moment, Proposal, Song, User } from './types';
 
 // Estado de la app, respaldado por Supabase. Todo lo que se lee aquí ya viene
 // filtrado por las políticas de la base de datos: solo los grupos a los que pertenezco.
@@ -22,6 +22,7 @@ type Store = {
   /** Propuestas que he omitido o pospuesto. Privado: nadie más lo ve. */
   dismissed: string[];
   songs: Song[];
+  events: GroupEvent[];
   user: (id: string) => User;
   group: (id: string) => Group | undefined;
   refresh: () => Promise<void>;
@@ -66,6 +67,8 @@ type Store = {
     song: Omit<Song, 'id' | 'groupId' | 'addedBy' | 'createdAt'>,
   ) => Promise<void>;
   removeSong: (songId: string) => Promise<void>;
+  saveEvent: (event: Omit<GroupEvent, 'id' | 'createdBy'> & { id?: string }) => Promise<void>;
+  deleteEvent: (eventId: string) => Promise<void>;
 };
 
 const StoreContext = createContext<Store | null>(null);
@@ -96,11 +99,20 @@ type Data = {
   proposals: Proposal[];
   dismissed: string[];
   songs: Song[];
+  events: GroupEvent[];
 };
-const EMPTY: Data = { users: {}, groups: [], moments: [], proposals: [], dismissed: [], songs: [] };
+const EMPTY: Data = {
+  users: {},
+  groups: [],
+  moments: [],
+  proposals: [],
+  dismissed: [],
+  songs: [],
+  events: [],
+};
 
 async function load(me: string): Promise<Data> {
-  const [memberships, groupRows, profiles, momentRows, proposalRows, states, songRows] =
+  const [memberships, groupRows, profiles, momentRows, proposalRows, states, songRows, eventRows] =
     await Promise.all([
       supabase
         .from('memberships')
@@ -140,6 +152,13 @@ async function load(me: string): Promise<Data> {
           'id, group_id, added_by, title, artist, artwork_url, preview_url, external_url, note, created_at',
         )
         .order('created_at', { ascending: false })
+        .then(check),
+      supabase
+        .from('events')
+        .select(
+          'id, group_id, created_by, kind, title, description, place, starts_on, ends_on, yearly, person_id',
+        )
+        .order('starts_on')
         .then(check),
     ]);
 
@@ -255,6 +274,20 @@ async function load(me: string): Promise<Data> {
     createdAt: Date.parse(s.created_at),
   }));
 
+  const events: GroupEvent[] = (eventRows ?? []).map((e) => ({
+    id: e.id,
+    groupId: e.group_id,
+    createdBy: e.created_by ?? undefined,
+    kind: e.kind,
+    title: e.title,
+    description: e.description ?? undefined,
+    place: e.place ?? undefined,
+    startsOn: e.starts_on,
+    endsOn: e.ends_on ?? undefined,
+    yearly: e.yearly,
+    personId: e.person_id ?? undefined,
+  }));
+
   return {
     users,
     groups,
@@ -262,6 +295,7 @@ async function load(me: string): Promise<Data> {
     proposals,
     dismissed: (states ?? []).map((s) => s.proposal_id),
     songs,
+    events,
   };
 }
 
@@ -354,6 +388,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     proposals: data.proposals,
     dismissed: data.dismissed,
     songs: data.songs,
+    events: data.events,
     user: (id) => data.users[id] ?? { id, ...FORMER_MEMBER },
     group: (id) => data.groups.find((g) => g.id === id),
     refresh,
@@ -609,6 +644,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     removeSong: async (songId) => {
       check(await supabase.from('songs').delete().eq('id', songId));
+      await refresh();
+    },
+    saveEvent: async ({ id, ...e }) => {
+      const row = {
+        group_id: e.groupId,
+        kind: e.kind,
+        title: e.title,
+        description: e.description || null,
+        place: e.place || null,
+        starts_on: e.startsOn,
+        ends_on: e.endsOn || null,
+        yearly: e.yearly,
+        person_id: e.personId || null,
+      };
+      check(
+        id
+          ? await supabase.from('events').update(row).eq('id', id)
+          : await supabase.from('events').insert(row),
+      );
+      await refresh();
+    },
+    deleteEvent: async (eventId) => {
+      check(await supabase.from('events').delete().eq('id', eventId));
       await refresh();
     },
     reportMoment: async (momentId) => {

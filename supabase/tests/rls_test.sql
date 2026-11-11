@@ -189,3 +189,35 @@ select pg_temp.expect((select count(*) = 0 from songs), 'alguien ajeno no ve las
 select pg_temp.fails($$insert into songs (group_id, title, artist) values ('10000000-0000-0000-0000-0000000000aa', 'x', 'y')$$, 'alguien ajeno no puede añadir canciones');
 reset role;
 \echo CANCIONES CORRECTAS
+
+-- ── Calendario ──
+-- (usuarios del bloque de avisos: d1 está en el grupo «Avisos», el ajeno «c» no)
+update groups set cadence_days = '{1,2,3,4,5,6,7}' where id = '10000000-0000-0000-0000-0000000000aa';
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000d1';
+insert into events (group_id, kind, title, starts_on, yearly, person_id) values
+  ('10000000-0000-0000-0000-0000000000aa', 'birthday', 'Cumpleaños de Aún no', (now() at time zone 'Europe/Madrid')::date - interval '30 years', true, '00000000-0000-0000-0000-0000000000d2'),
+  ('10000000-0000-0000-0000-0000000000aa', 'reunion', 'Reencuentro en Madrid', (now() at time zone 'Europe/Madrid')::date + 7, false, null),
+  ('10000000-0000-0000-0000-0000000000aa', 'other', 'Dentro de tres días', (now() at time zone 'Europe/Madrid')::date + 3, false, null);
+select pg_temp.expect((select count(*) = 3 from events), 'un miembro crea eventos del grupo');
+select pg_temp.fails($$insert into events (group_id, kind, title, starts_on, person_id) values ('10000000-0000-0000-0000-0000000000aa', 'birthday', 'x', now()::date, '00000000-0000-0000-0000-00000000000c')$$, 'no se puede crear el cumpleaños de alguien que no es del grupo');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000c';
+select pg_temp.expect((select count(*) = 0 from events), 'alguien ajeno no ve el calendario del grupo');
+reset role;
+update memberships set preferred_hour = 0, muted_until = null where group_id = '10000000-0000-0000-0000-0000000000aa';
+set role service_role;
+create temp table recordatorios as select * from claim_event_reminders();
+reset role;
+select pg_temp.expect(
+  (select count(*) from recordatorios where body like '🎂 Hoy es el cumpleaños de Aún no%') >= 1
+  or extract(hour from now() at time zone 'Europe/Madrid') < 0,
+  'aviso de cumpleaños el mismo día a los demás');
+select pg_temp.expect((select count(*) from recordatorios where body = '⏳ Falta una semana: Reencuentro en Madrid') >= 1, 'aviso una semana antes de un reencuentro');
+select pg_temp.expect((select count(*) = 0 from recordatorios where body like '%tres días%'), 'no se avisa en días sin recordatorio');
+set role service_role;
+select pg_temp.expect((select count(*) = 0 from claim_event_reminders()), 'los recordatorios no se repiten');
+reset role;
+select pg_temp.expect(
+  event_occurrence(row(null, null, null, 'birthday', 'x', null, null, '2000-02-29', null, true, null, now())::events, '2027-01-10') = '2027-02-28',
+  'quien nació el 29 de febrero lo celebra el 28 en años no bisiestos');
+\echo CALENDARIO CORRECTO

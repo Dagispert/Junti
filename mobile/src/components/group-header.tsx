@@ -39,6 +39,12 @@ export function GroupHeader({ group }: { group: Group }) {
           <Button
             compact
             variant="quiet"
+            label="Calendario"
+            onPress={() => router.push({ pathname: '/calendar', params: { groupId: group.id } })}
+          />
+          <Button
+            compact
+            variant="quiet"
             label="Ajustes"
             onPress={() =>
               router.push({ pathname: '/group-settings', params: { groupId: group.id } })
