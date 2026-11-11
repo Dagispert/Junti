@@ -35,6 +35,7 @@ Para verla en el navegador del ordenador: `npx expo start --web`.
 - `src/data/store.tsx`: todo lo que la app lee y escribe en Supabase.
 - `src/data/library.ts`: propuestas del día y retos sugeridos.
 - `src/lib/supabase.ts`: conexión con el proyecto.
+- `src/components/globe-map.web.tsx`: el planeta en 3D (three.js) con países, árboles, nubes, casitas, chinchetas con foto y arcos. Se pinta a partir de `public/world-110m.json` (Natural Earth, dominio público); no usa ningún servicio de mapas. En la app nativa se usa de momento el mapa de puntos (`globe-map.tsx`).
 - `src/components/world-map.tsx`, `sky-badge.tsx`, `cinematics.tsx`: el mapa de luces con el día y la noche reales, el cielo de cada persona y las animaciones de entrada y de envío.
 - `src/lib/geo.ts`: buscador de ciudades (Open-Meteo, gratuito y sin clave; solo recibe el texto que se escribe), distancias, husos horarios y posición del sol.
 - `src/data/world-dots.ts`: la tierra firme en una cuadrícula de 1°, generada a partir de Natural Earth (dominio público).

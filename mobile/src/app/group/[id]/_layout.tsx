@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Radius, useTheme } from '@/constants/theme';
 
-/** Nivel 1: el espacio de un grupo. Hoy · Retos · (+) · Memoria. El Mapa llega en la Fase 2. */
+/** Nivel 1: el espacio de un grupo. Hoy · Mapa · Retos · Memoria · (+). */
 export default function GroupLayout() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
@@ -26,6 +26,9 @@ export default function GroupLayout() {
           }}>
           <TabTrigger name="hoy" href={`/group/${id}`} asChild>
             <TabButton>Hoy</TabButton>
+          </TabTrigger>
+          <TabTrigger name="mapa" href={`/group/${id}/mapa`} asChild>
+            <TabButton>Mapa</TabButton>
           </TabTrigger>
           <TabTrigger name="retos" href={`/group/${id}/retos`} asChild>
             <TabButton>Retos</TabButton>
@@ -74,7 +77,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     borderRadius: Radius.pill,
   },
-  tab: { height: 48, paddingHorizontal: 18, borderRadius: Radius.pill, justifyContent: 'center' },
+  tab: { height: 48, paddingHorizontal: 13, borderRadius: Radius.pill, justifyContent: 'center' },
   plus: {
     width: 48,
     height: 48,

@@ -1,15 +1,22 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Spacing, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import type { Group } from '@/data/types';
 import { distanceKm, formatKm, utcOffsetMinutes } from '@/lib/geo';
 
-import { WorldMap, type MapPerson } from './world-map';
+import { GlobeMap, type GlobePerson } from './globe-map';
+import type { MapPerson } from './world-map';
 
 /** Las personas del grupo con ciudad en el mapa. */
 export function useGroupPeople(group: Group | undefined): MapPerson[] {
-  const { me, user } = useStore();
+  return useGlobePeople(group);
+}
+
+/** Igual, con la foto de cada una para su chincheta (perfil o, si no, su última foto aquí). */
+export function useGlobePeople(group: Group | undefined): GlobePerson[] {
+  const { me, user, moments } = useStore();
   return (group?.memberIds ?? [])
     .map((id) => user(id))
     .filter((u) => u.lat != null && u.lng != null)
@@ -20,6 +27,12 @@ export function useGroupPeople(group: Group | undefined): MapPerson[] {
       lng: u.lng!,
       tz: u.tz,
       isMe: u.id === me,
+      city: u.city,
+      country: u.country,
+      color: u.color,
+      photo:
+        u.avatarUri ??
+        moments.find((m) => m.groupId === group?.id && m.authorId === u.id && m.imageUri)?.imageUri,
     }));
 }
 
@@ -30,7 +43,7 @@ export function useGroupPeople(group: Group | undefined): MapPerson[] {
 export function ConnectionCard({ group }: { group: Group }) {
   const theme = useTheme();
   const { me, user } = useStore();
-  const people = useGroupPeople(group);
+  const people = useGlobePeople(group);
 
   let far: { a: MapPerson; b: MapPerson; km: number } | undefined;
   for (let i = 0; i < people.length; i++)
@@ -44,7 +57,17 @@ export function ConnectionCard({ group }: { group: Group }) {
 
   return (
     <View style={{ gap: Spacing.two }}>
-      <WorldMap people={people} height={230} />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Abrir el mapa del grupo"
+        onPress={() => router.navigate(`/group/${group.id}/mapa`)}>
+        <View style={styles.globe}>
+          <GlobeMap people={people} height={260} interactive={false} rounded />
+          <View style={styles.open}>
+            <Text style={styles.openText}>Abrir el mapa</Text>
+          </View>
+        </View>
+      </Pressable>
       <Text style={[styles.line, { color: theme.textSecondary }]}>
         {far && far.km >= 30 ? (
           <>
@@ -78,5 +101,21 @@ function city(p: MapPerson, user: (id: string) => { city: string }) {
 }
 
 const styles = StyleSheet.create({
+  globe: {
+    height: 260,
+    borderRadius: 26,
+    overflow: 'hidden',
+    boxShadow: '0 18px 40px rgba(20, 22, 26, 0.14)',
+  },
+  open: {
+    position: 'absolute',
+    right: 12,
+    bottom: 12,
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  openText: { color: '#1D1F22', fontSize: 13, fontWeight: '600' },
   line: { fontSize: 15, lineHeight: 21, paddingHorizontal: 4 },
 });
