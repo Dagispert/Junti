@@ -1,9 +1,11 @@
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { SendCinematic } from '@/components/cinematics';
+import { useGroupPeople } from '@/components/connection-card';
 import { Button, Card, Notice, Screen, Tag, Title } from '@/components/ui';
 import { Radius, Spacing, useTheme } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
@@ -23,7 +25,18 @@ export default function Publish() {
 
   const group = groupById(groupId);
   const proposal = proposals.find((p) => p.id === proposalId);
+  const people = useGroupPeople(group);
+  const [sent, setSent] = useState(false);
+  const leave = useCallback(() => router.back(), []);
   if (!group) return null;
+
+  if (sent) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#070A14' }}>
+        <SendCinematic people={people} groupName={group.name} onDone={leave} />
+      </View>
+    );
+  }
 
   const pick = async (source: 'camera' | 'library') => {
     setNotice('');
@@ -61,7 +74,7 @@ export default function Publish() {
         imageUri,
         text: text.trim() || undefined,
       });
-      router.back();
+      setSent(true);
     } catch (error) {
       setNotice(errorText(error));
       setBusy(false);

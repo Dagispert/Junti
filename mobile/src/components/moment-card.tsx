@@ -6,6 +6,7 @@ import { useStore } from '@/data/store';
 import type { Moment } from '@/data/types';
 import { clockIn, relative } from '@/lib/time';
 
+import { SkyBadge } from './sky-badge';
 import { Avatar, Card, Photo, Scrim } from './ui';
 
 const QUICK_REACTIONS = ['❤️', '😂', '😮'];
@@ -45,7 +46,11 @@ export function MomentCard({ moment }: { moment: Moment }) {
           <Photo moment={moment} style={StyleSheet.absoluteFill} />
           <Scrim edge="top" height="32%" />
           <Text style={styles.overName}>{author.name}</Text>
-          <Text style={styles.overMeta}>{where}</Text>
+          {/* El cielo que tenía cuando lo compartió. */}
+          <View style={styles.overMeta}>
+            <SkyBadge tz={moment.authorTz} at={moment.createdAt} size={16} />
+            <Text style={styles.overMetaText}>{where}</Text>
+          </View>
           {(!!moment.text || !!proposal) && (
             <>
               <Scrim edge="bottom" />
@@ -181,10 +186,12 @@ const styles = StyleSheet.create({
     top: 58,
     left: 16,
     right: 16,
-    textAlign: 'center',
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: 14,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
   },
+  overMetaText: { color: 'rgba(255,255,255,0.88)', fontSize: 14 },
   caption: { position: 'absolute', left: 20, right: 20, bottom: 20, gap: 4 },
   overProposal: { color: 'rgba(255,255,255,0.75)', fontSize: 13 },
   overText: { color: '#fff', fontSize: 18, lineHeight: 24, fontWeight: '500', letterSpacing: -0.2 },

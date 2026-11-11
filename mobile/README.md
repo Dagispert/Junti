@@ -35,6 +35,9 @@ Para verla en el navegador del ordenador: `npx expo start --web`.
 - `src/data/store.tsx`: todo lo que la app lee y escribe en Supabase.
 - `src/data/library.ts`: propuestas del día y retos sugeridos.
 - `src/lib/supabase.ts`: conexión con el proyecto.
+- `src/components/world-map.tsx`, `sky-badge.tsx`, `cinematics.tsx`: el mapa de luces con el día y la noche reales, el cielo de cada persona y las animaciones de entrada y de envío.
+- `src/lib/geo.ts`: buscador de ciudades (Open-Meteo, gratuito y sin clave; solo recibe el texto que se escribe), distancias, husos horarios y posición del sol.
+- `src/data/world-dots.ts`: la tierra firme en una cuadrícula de 1°, generada a partir de Natural Earth (dominio público).
 - `src/lib/push.ts`, `public/sw.js`, `public/manifest.json`: avisos y "añadir a pantalla de inicio" en la versión web.
 - `src/components/`: tarjeta de momento, cabecera de grupo y piezas básicas.
 - `src/constants/theme.ts`: colores (claro y oscuro), espaciado y tipografías.

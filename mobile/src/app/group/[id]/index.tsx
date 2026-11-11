@@ -1,8 +1,10 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { ConnectionCard } from '@/components/connection-card';
 import { GroupHeader } from '@/components/group-header';
 import { MomentCard } from '@/components/moment-card';
+import { Appear } from '@/components/motion';
 import { Button, Card, Lead, Screen, Tag } from '@/components/ui';
 import { Spacing, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
@@ -29,6 +31,7 @@ export default function Today() {
 
   return (
     <Screen header={<GroupHeader group={group} />}>
+      <ConnectionCard group={group} />
       {proposal && (
         <Card style={styles.proposal}>
           <Tag>
@@ -66,8 +69,10 @@ export default function Today() {
           Comparte el primero con el botón «+» e invita a los demás con «Invitar».
         </Lead>
       )}
-      {feed.map((moment) => (
-        <MomentCard key={moment.id} moment={moment} />
+      {feed.map((moment, i) => (
+        <Appear key={moment.id} index={i + 1}>
+          <MomentCard moment={moment} />
+        </Appear>
       ))}
     </Screen>
   );

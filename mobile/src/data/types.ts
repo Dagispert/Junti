@@ -7,6 +7,10 @@ export type User = {
   /** Zona horaria IANA, p. ej. "America/Mexico_City". */
   tz: string;
   color: string;
+  /** País y coordenadas (a nivel de ciudad) de su residencia, si la ha elegido. */
+  country?: string;
+  lat?: number;
+  lng?: number;
   /** Foto de perfil: dirección temporal firmada y su ruta en el almacén. */
   avatarUri?: string;
   avatarPath?: string;

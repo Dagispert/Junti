@@ -4,9 +4,11 @@ import { useEffect, useState } from 'react';
 import { Image as RNImage, StyleSheet, View } from 'react-native';
 
 import { AvatarCropper } from '@/components/avatar-cropper';
+import { CityPicker } from '@/components/city-picker';
 import { Avatar, Button, Card, Field, Lead, Notice, Screen, Tag, Title } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
+import type { Place } from '@/lib/geo';
 import { disablePush, enablePush, pushState, type PushState } from '@/lib/push';
 
 /** Ajustes personales: cómo me ven los demás, cerrar sesión y borrar la cuenta. */
@@ -14,7 +16,12 @@ export default function Settings() {
   const { me, user, saveProfile, setAvatar, signOut, deleteAccount } = useStore();
   const profile = user(me);
   const [name, setName] = useState(profile.name);
-  const [city, setCity] = useState(profile.city);
+  const current: Place | null =
+    profile.lat != null && profile.lng != null
+      ? { name: profile.city, country: profile.country, lat: profile.lat, lng: profile.lng }
+      : null;
+  const [place, setPlace] = useState<Place | null>(current);
+  const placeChanged = (place?.name ?? '') !== (current?.name ?? '') || place?.lat !== current?.lat;
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -101,16 +108,18 @@ export default function Settings() {
           />
         </View>
         <Field label="Nombre" value={name} onChangeText={setName} />
-        <Field
-          label="Ciudad (opcional)"
-          value={city}
-          onChangeText={setCity}
-          placeholder="Solo la ven las personas de tus grupos"
-        />
+        <CityPicker value={place} onChange={setPlace} />
+        {!current && !!profile.city && !placeChanged && (
+          <Notice>
+            Tenías puesta «{profile.city}». Búscala en la lista para aparecer en el mapa.
+          </Notice>
+        )}
         <Button
           label="Guardar"
-          disabled={busy || !name.trim() || (name === profile.name && city === profile.city)}
-          onPress={() => run(() => saveProfile(name.trim(), city.trim()), 'Guardado.')}
+          disabled={busy || !name.trim() || (name === profile.name && !placeChanged)}
+          onPress={() =>
+            run(() => saveProfile(name.trim(), placeChanged ? place : undefined), 'Guardado.')
+          }
         />
       </Card>
       <Notice>{notice}</Notice>

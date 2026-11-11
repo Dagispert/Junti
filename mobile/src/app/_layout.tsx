@@ -1,9 +1,10 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, useColorScheme, View } from 'react-native';
 
 import { AuthScreen, ProfileSetup } from '@/components/auth-screen';
+import { IntroCinematic } from '@/components/cinematics';
 import { useTheme } from '@/constants/theme';
 import { StoreProvider, useStore } from '@/data/store';
 import { setupInstallable } from '@/lib/push';
@@ -24,6 +25,8 @@ export default function RootLayout() {
 /** Sin sesión no se llega a ninguna pantalla de la app. */
 function Gate() {
   const { status } = useStore();
+  const [intro, setIntro] = useState(true);
+  const endIntro = useCallback(() => setIntro(false), []);
   const theme = useTheme();
   if (status === 'loading') {
     return (
@@ -35,12 +38,15 @@ function Gate() {
   if (status === 'signedOut') return <AuthScreen />;
   if (status === 'needsProfile') return <ProfileSetup />;
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="publish" options={{ presentation: 'modal' }} />
-      <Stack.Screen name="new-group" options={{ presentation: 'modal' }} />
-      <Stack.Screen name="join" options={{ presentation: 'modal' }} />
-      <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
-      <Stack.Screen name="group-settings" options={{ presentation: 'modal' }} />
-    </Stack>
+    <View style={{ flex: 1 }}>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="publish" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="new-group" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="join" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="group-settings" options={{ presentation: 'modal' }} />
+      </Stack>
+      {intro && <IntroCinematic onDone={endIntro} />}
+    </View>
   );
 }

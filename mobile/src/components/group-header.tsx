@@ -1,18 +1,17 @@
-import { Link, router } from 'expo-router';
+import { router } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Share, StyleSheet, Text, View } from 'react-native';
 
 import { Radius, Spacing, useTheme } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
 import type { Group } from '@/data/types';
-import { clockIn } from '@/lib/time';
 
-import { Avatar, Button, Notice, Tag, Title } from './ui';
+import { Button, Notice, Tag, Title } from './ui';
 
 /** Cabecera del grupo: nombre, invitación y la hora local de cada integrante. */
 export function GroupHeader({ group }: { group: Group }) {
   const theme = useTheme();
-  const { user, createInvite } = useStore();
+  const { createInvite } = useStore();
   const [code, setCode] = useState('');
   const [notice, setNotice] = useState('');
 
@@ -33,9 +32,9 @@ export function GroupHeader({ group }: { group: Group }) {
   return (
     <View style={styles.header}>
       <View style={styles.top}>
-        <Link href="/" style={{ color: theme.textSecondary, fontSize: 14 }}>
-          ‹ Mis grupos
-        </Link>
+        <Pressable accessibilityRole="button" onPress={() => router.dismissTo('/')}>
+          <Text style={{ color: theme.textSecondary, fontSize: 14 }}>‹ Mis grupos</Text>
+        </Pressable>
         <View style={{ flexDirection: 'row' }}>
           <Button
             compact
@@ -58,28 +57,6 @@ export function GroupHeader({ group }: { group: Group }) {
         </View>
       )}
       <Notice>{notice}</Notice>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.members}>
-        {group.memberIds.map((id) => {
-          const member = user(id);
-          return (
-            <View key={id} style={[styles.member, { backgroundColor: theme.card }]}>
-              <Avatar userId={id} size={30} />
-              <View>
-                <Text style={{ color: theme.text, fontSize: 13, fontWeight: '500' }}>
-                  {member.name}
-                </Text>
-                <Text style={{ color: theme.textSecondary, fontSize: 12 }}>
-                  {clockIn(member.tz)}
-                  {member.city ? ` · ${member.city}` : ''}
-                </Text>
-              </View>
-            </View>
-          );
-        })}
-      </ScrollView>
     </View>
   );
 }
@@ -89,13 +66,4 @@ const styles = StyleSheet.create({
   top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   code: { borderRadius: Radius.inner, padding: Spacing.three, gap: Spacing.two },
   codeText: { fontSize: 24, fontWeight: '500', letterSpacing: 2 },
-  members: { gap: Spacing.two },
-  member: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-    padding: 6,
-    paddingRight: 14,
-    borderRadius: Radius.pill,
-  },
 });

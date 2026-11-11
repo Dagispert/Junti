@@ -1,6 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
 import { createContext, use, useEffect, useState, type ReactNode } from 'react';
 
+import type { Place } from '@/lib/geo';
 import { disablePush } from '@/lib/push';
 import { AVATAR_BUCKET, MEDIA_BUCKET, supabase } from '@/lib/supabase';
 
@@ -27,7 +28,8 @@ type Store = {
   /** Devuelve false si hay que confirmar el correo antes de poder entrar. */
   signUp: (email: string, password: string) => Promise<boolean>;
   signOut: () => Promise<void>;
-  saveProfile: (name: string, city: string) => Promise<void>;
+  /** place: la ciudad elegida en el buscador; null la quita; sin pasarla, no cambia. */
+  saveProfile: (name: string, place?: Place | null) => Promise<void>;
   createGroup: (name: string, description: string) => Promise<string>;
   joinGroup: (code: string) => Promise<string>;
   createInvite: (groupId: string) => Promise<string>;
@@ -102,7 +104,12 @@ async function load(me: string): Promise<Data> {
       .select('id, name, description, color, cadence_days')
       .order('created_at')
       .then(check),
-    supabase.from('profiles').select('id, name, home_city, timezone, avatar_path').then(check),
+    supabase
+      .from('profiles')
+      .select(
+        'id, name, home_city, home_country, home_lat, home_lng, home_visible, timezone, avatar_path',
+      )
+      .then(check),
     supabase
       .from('moments')
       .select(
@@ -137,7 +144,15 @@ async function load(me: string): Promise<Data> {
       avatarPath: p.avatar_path ?? undefined,
       id: p.id,
       name: p.name,
-      city: p.home_city ?? '',
+      // Quien decide no mostrar su ciudad no aparece en el mapa de los demás.
+      ...(p.home_visible || p.id === me
+        ? {
+            city: p.home_city ?? '',
+            country: p.home_country ?? undefined,
+            lat: p.home_lat ?? undefined,
+            lng: p.home_lng ?? undefined,
+          }
+        : { city: '' }),
       tz: p.timezone,
       color: colorFor(p.id),
     };
@@ -321,11 +336,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       await disablePush().catch(() => {});
       await supabase.auth.signOut();
     },
-    saveProfile: async (name, city) => {
+    saveProfile: async (name, place) => {
+      const where =
+        place === undefined
+          ? {}
+          : {
+              home_city: place?.name ?? null,
+              home_country: place?.country ?? null,
+              home_lat: place?.lat ?? null,
+              home_lng: place?.lng ?? null,
+            };
       check(
-        await supabase
-          .from('profiles')
-          .upsert({ id: me, name, home_city: city || null, timezone: deviceTz() }),
+        await supabase.from('profiles').upsert({ id: me, name, timezone: deviceTz(), ...where }),
       );
       await refresh();
     },

@@ -4,6 +4,9 @@ import { View } from 'react-native';
 import { Spacing } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
 
+import type { Place } from '@/lib/geo';
+
+import { CityPicker } from './city-picker';
 import { Button, Field, Lead, Notice, Screen, Title } from './ui';
 
 /** Entrar o crear cuenta con correo y contraseña. */
@@ -77,14 +80,14 @@ export function AuthScreen() {
 export function ProfileSetup() {
   const { saveProfile, signOut } = useStore();
   const [name, setName] = useState('');
-  const [city, setCity] = useState('');
+  const [place, setPlace] = useState<Place | null>(null);
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
     setBusy(true);
     try {
-      await saveProfile(name.trim(), city.trim());
+      await saveProfile(name.trim(), place);
     } catch (error) {
       setNotice(errorText(error));
     }
@@ -98,12 +101,7 @@ export function ProfileSetup() {
         <Lead strong="Así te verán las personas de tus grupos.">Nadie más.</Lead>
       </View>
       <Field label="Nombre" value={name} onChangeText={setName} autoComplete="name" />
-      <Field
-        label="Ciudad (opcional)"
-        value={city}
-        onChangeText={setCity}
-        placeholder="Para que sepan desde dónde compartes"
-      />
+      <CityPicker value={place} onChange={setPlace} />
       <Notice>{notice}</Notice>
       <Button label="Continuar" disabled={busy || !name.trim()} onPress={submit} />
       <Button variant="quiet" label="Salir" onPress={signOut} />

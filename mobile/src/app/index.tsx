@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { Appear, PressScale } from '@/components/motion';
 import {
   Avatar,
   AvatarRow,
@@ -44,7 +45,7 @@ export default function MyGroups() {
         </View>
       )}
 
-      {groups.map((group) => {
+      {groups.map((group, gi) => {
         // (el margen inferior deja sitio a las tarjetas que asoman por debajo)
         const recent = moments.filter((m) => m.groupId === group.id);
         const last = recent[0];
@@ -58,68 +59,66 @@ export default function MyGroups() {
         const people = `${group.memberIds.length} ${group.memberIds.length === 1 ? 'persona' : 'personas'}`;
 
         return (
-          <Pressable
-            key={group.id}
-            accessibilityRole="button"
-            onPress={open}
-            style={{ marginBottom: 20 }}>
-            {/* Dos tarjetas asomando por debajo: el grupo como una baraja de momentos. */}
-            <View
-              style={[
-                styles.deck,
-                styles.deckFar,
-                { backgroundColor: theme.card, boxShadow: theme.shadow },
-              ]}
-            />
-            <View
-              style={[
-                styles.deck,
-                styles.deckNear,
-                { backgroundColor: theme.card, boxShadow: theme.shadow },
-              ]}
-            />
-            <Card>
-              {cover ? (
-                <View style={styles.cover}>
-                  <Photo moment={cover} style={StyleSheet.absoluteFill} />
-                  <Scrim edge="top" height="40%" />
-                  <Text style={[styles.groupName, { color: '#fff' }]}>{group.name}</Text>
-                  <Text style={[styles.groupMeta, { color: 'rgba(255,255,255,0.85)' }]}>
-                    {people}
-                  </Text>
+          <Appear key={group.id} index={gi} style={{ marginBottom: 20 }}>
+            <PressScale accessibilityRole="button" onPress={open}>
+              {/* Dos tarjetas asomando por debajo: el grupo como una baraja de momentos. */}
+              <View
+                style={[
+                  styles.deck,
+                  styles.deckFar,
+                  { backgroundColor: theme.card, boxShadow: theme.shadow },
+                ]}
+              />
+              <View
+                style={[
+                  styles.deck,
+                  styles.deckNear,
+                  { backgroundColor: theme.card, boxShadow: theme.shadow },
+                ]}
+              />
+              <Card>
+                {cover ? (
+                  <View style={styles.cover}>
+                    <Photo moment={cover} style={StyleSheet.absoluteFill} />
+                    <Scrim edge="top" height="40%" />
+                    <Text style={[styles.groupName, { color: '#fff' }]}>{group.name}</Text>
+                    <Text style={[styles.groupMeta, { color: 'rgba(255,255,255,0.85)' }]}>
+                      {people}
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={[styles.cover, styles.coverEmpty, { backgroundColor: theme.soft }]}>
+                    <Text style={[styles.groupName, { color: theme.text }]}>{group.name}</Text>
+                    <Text style={[styles.groupMeta, { color: theme.textSecondary }]}>{people}</Text>
+                  </View>
+                )}
+                <View style={styles.footer}>
+                  <AvatarRow userIds={group.memberIds} size={34} />
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      numberOfLines={1}
+                      style={{ color: theme.text, fontSize: 15, fontWeight: '500' }}>
+                      {last ? user(last.authorId).name : 'Sin momentos aún'}
+                    </Text>
+                    <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
+                      {last ? relative(last.createdAt) : 'Estrena el grupo'}
+                    </Text>
+                  </View>
+                  <Button compact label="Entrar" onPress={open} />
                 </View>
-              ) : (
-                <View style={[styles.cover, styles.coverEmpty, { backgroundColor: theme.soft }]}>
-                  <Text style={[styles.groupName, { color: theme.text }]}>{group.name}</Text>
-                  <Text style={[styles.groupMeta, { color: theme.textSecondary }]}>{people}</Text>
-                </View>
-              )}
-              <View style={styles.footer}>
-                <AvatarRow userIds={group.memberIds} size={34} />
-                <View style={{ flex: 1 }}>
-                  <Text
-                    numberOfLines={1}
-                    style={{ color: theme.text, fontSize: 15, fontWeight: '500' }}>
-                    {last ? user(last.authorId).name : 'Sin momentos aún'}
-                  </Text>
-                  <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
-                    {last ? relative(last.createdAt) : 'Estrena el grupo'}
-                  </Text>
-                </View>
-                <Button compact label="Entrar" onPress={open} />
-              </View>
-              {pending && !answered && (
-                <View style={styles.pending}>
-                  <View style={[styles.dot, { backgroundColor: theme.text }]} />
-                  <Text
-                    numberOfLines={1}
-                    style={{ color: theme.textSecondary, fontSize: 14, flex: 1 }}>
-                    {pending.title}
-                  </Text>
-                </View>
-              )}
-            </Card>
-          </Pressable>
+                {pending && !answered && (
+                  <View style={styles.pending}>
+                    <View style={[styles.dot, { backgroundColor: theme.text }]} />
+                    <Text
+                      numberOfLines={1}
+                      style={{ color: theme.textSecondary, fontSize: 14, flex: 1 }}>
+                      {pending.title}
+                    </Text>
+                  </View>
+                )}
+              </Card>
+            </PressScale>
+          </Appear>
         );
       })}
 
