@@ -93,7 +93,8 @@ export default function RecapScreen() {
         setNarration(result.narration);
         if (force) setStory(result.narration);
       }
-      if (result.reason === 'limit') setNarrationNote('Ya no quedan más versiones para este resumen.');
+      if (result.reason === 'limit')
+        setNarrationNote('Ya no quedan más versiones para este resumen.');
     } catch (error) {
       setNarrationNote(error instanceof Error ? error.message : String(error));
     }
@@ -288,8 +289,15 @@ export default function RecapScreen() {
                   size={Math.min(width - 40, 340)}
                 />
               )}
-              <Animated.Text entering={FadeInDown.delay(700).duration(700)} style={styles.big}>
-                {recap.title}
+              <Animated.Text
+                key={story?.title ?? 'título'}
+                entering={FadeInDown.delay(700).duration(700)}
+                style={
+                  story?.title
+                    ? [styles.narrationTitle, { fontSize: 40, lineHeight: 44 }]
+                    : styles.big
+                }>
+                {story?.title || recap.title}
               </Animated.Text>
               <Animated.Text entering={FadeInDown.delay(950).duration(700)} style={styles.sub}>
                 {recap.range}
@@ -302,8 +310,7 @@ export default function RecapScreen() {
               )}
               {narration ? (
                 <Animated.Text entering={FadeIn.delay(1800)} style={styles.narrator}>
-                  ✨ «{narration.title || recap.title}», narrado en estilo{' '}
-                  {styleOf(narration.style).label.toLowerCase()}
+                  ✨ Narrado en estilo {styleOf(narration.style).label.toLowerCase()}
                 </Animated.Text>
               ) : (
                 writing && (
@@ -443,7 +450,11 @@ export default function RecapScreen() {
                 </Pressable>
               )}
               {!!narrationNote && (
-                <Text style={[styles.sub, { fontSize: 14, textAlign: 'center', paddingHorizontal: 30 }]}>
+                <Text
+                  style={[
+                    styles.sub,
+                    { fontSize: 14, textAlign: 'center', paddingHorizontal: 30 },
+                  ]}>
                   {narrationNote}
                 </Text>
               )}
@@ -481,7 +492,11 @@ function MomentSlide({
 
   return (
     <View
-      style={[styles.center, { paddingHorizontal: 22, gap: 16 }, narrated && { paddingBottom: 170 }]}>
+      style={[
+        styles.center,
+        { paddingHorizontal: 22, gap: 16 },
+        narrated && { paddingBottom: 170 },
+      ]}>
       {loved && <Text style={[styles.kicker, { marginBottom: 18 }]}>Lo que más os llegó</Text>}
       {moment.imageUri || moment.videoUri ? (
         <Animated.View entering={ZoomIn.springify().damping(16)} style={styles.frame}>
@@ -596,8 +611,15 @@ const styles = StyleSheet.create({
   sub: { color: 'rgba(42,39,36,0.6)', fontSize: 18 },
   music: { fontFamily: Hand, fontSize: 20, color: '#C2477A', marginTop: 8 },
   kicker: { fontFamily: HandBold, fontSize: 30, color: '#C2477A' },
-  narrator: { fontFamily: Hand, fontSize: 20, color: '#C2477A', textAlign: 'center' },
+  narrator: {
+    fontFamily: Hand,
+    fontSize: 20,
+    color: '#C2477A',
+    textAlign: 'center',
+    paddingHorizontal: 28,
+  },
   narrationTitle: {
+    paddingHorizontal: 24,
     fontFamily: HandBold,
     fontSize: 34,
     lineHeight: 38,
