@@ -21,6 +21,10 @@ export type Group = {
   /** Si soy administrador de este grupo. */
   isAdmin: boolean;
   adminIds: string[];
+  /** Mi hora preferida (0–23, local) para recibir la propuesta de este grupo. */
+  myHour: number;
+  /** Si tengo silenciado este grupo, hasta cuándo. */
+  mutedUntil?: number;
   /** Días de la semana con propuesta: 1 = lunes … 7 = domingo. */
   cadenceDays: number[];
   /** Preferencia de cada integrante: propuestas por semana. */

@@ -35,6 +35,7 @@ Para verla en el navegador del ordenador: `npx expo start --web`.
 - `src/data/store.tsx`: todo lo que la app lee y escribe en Supabase.
 - `src/data/library.ts`: propuestas del día y retos sugeridos.
 - `src/lib/supabase.ts`: conexión con el proyecto.
+- `src/lib/push.ts`, `public/sw.js`, `public/manifest.json`: avisos y "añadir a pantalla de inicio" en la versión web.
 - `src/components/`: tarjeta de momento, cabecera de grupo y piezas básicas.
 - `src/constants/theme.ts`: colores (claro y oscuro), espaciado y tipografías.
 

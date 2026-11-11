@@ -1,6 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
 import { createContext, use, useEffect, useState, type ReactNode } from 'react';
 
+import { disablePush } from '@/lib/push';
 import { AVATAR_BUCKET, MEDIA_BUCKET, supabase } from '@/lib/supabase';
 
 import { dailyPrompts } from './library';
@@ -52,6 +53,10 @@ type Store = {
   setMemberRole: (groupId: string, userId: string, role: 'admin' | 'member') => Promise<void>;
   removeMember: (groupId: string, userId: string) => Promise<void>;
   leaveGroup: (groupId: string, removeMoments: boolean) => Promise<void>;
+  /** A partir de qué hora (0–23, en mi hora local) quiero recibir la propuesta de este grupo. */
+  setPreferredHour: (groupId: string, hour: number) => Promise<void>;
+  /** Silencia los avisos de un grupo hasta una fecha, o los reactiva con null. */
+  setMuted: (groupId: string, until: number | null) => Promise<void>;
   reportMoment: (momentId: string) => Promise<void>;
 };
 
@@ -89,7 +94,7 @@ async function load(me: string): Promise<Data> {
   const [memberships, groupRows, profiles, momentRows, proposalRows, states] = await Promise.all([
     supabase
       .from('memberships')
-      .select('group_id, user_id, role, frequency_vote')
+      .select('group_id, user_id, role, frequency_vote, preferred_hour, muted_until')
       .eq('status', 'active')
       .then(check),
     supabase
@@ -150,6 +155,9 @@ async function load(me: string): Promise<Data> {
         color: g.color,
         memberIds: members.map((m) => m.user_id),
         isAdmin: members.some((m) => m.user_id === me && m.role === 'admin'),
+        myHour: members.find((m) => m.user_id === me)?.preferred_hour ?? 19,
+        mutedUntil:
+          Date.parse(members.find((m) => m.user_id === me)?.muted_until ?? '') || undefined,
         adminIds: members.filter((m) => m.role === 'admin').map((m) => m.user_id),
         cadenceDays: g.cadence_days ?? [],
         votes: Object.fromEntries(
@@ -225,12 +233,18 @@ async function ensureTodayPrompts(data: Data): Promise<boolean> {
   );
   if (!missing.length) return false;
   const day = Math.floor(Date.now() / 86_400_000);
-  const { error } = await supabase.from('proposals').insert(
+  // Fecha local (AAAA-MM-DD): la base de datos admite una sola propuesta por grupo y día,
+  // así que si el servidor u otra persona ya la creó, esta inserción se ignora.
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const { error } = await supabase.from('proposals').upsert(
     missing.map((g) => ({
       group_id: g.id,
       kind: 'prompt' as const,
+      day: today,
       title: dailyPrompts[(day + g.id.charCodeAt(0)) % dailyPrompts.length],
     })),
+    { onConflict: 'group_id,day', ignoreDuplicates: true },
   );
   return !error;
 }
@@ -253,6 +267,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (await ensureTodayPrompts(next)) next = await load(userId);
     setData(next);
     setHasProfile(userId in next.users);
+    // Si viajo o me mudo, mi hora local cambia: las propuestas deben seguirme.
+    const mine = next.users[userId];
+    if (mine && mine.tz !== deviceTz()) {
+      await supabase.from('profiles').update({ timezone: deviceTz() }).eq('id', userId);
+    }
   };
 
   useEffect(() => {
@@ -298,6 +317,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return !!data.session;
     },
     signOut: async () => {
+      // Este dispositivo deja de recibir avisos de esta cuenta.
+      await disablePush().catch(() => {});
       await supabase.auth.signOut();
     },
     saveProfile: async (name, city) => {
@@ -494,6 +515,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     leaveGroup: async (groupId, removeMoments) => {
       check(await supabase.rpc('leave_group', { g: groupId, remove_moments: removeMoments }));
+      await refresh();
+    },
+    setPreferredHour: async (groupId, hour) => {
+      check(
+        await supabase
+          .from('memberships')
+          .update({ preferred_hour: hour })
+          .match({ group_id: groupId, user_id: me }),
+      );
+      await refresh();
+    },
+    setMuted: async (groupId, until) => {
+      check(
+        await supabase
+          .from('memberships')
+          .update({ muted_until: until ? new Date(until).toISOString() : null })
+          .match({ group_id: groupId, user_id: me }),
+      );
       await refresh();
     },
     reportMoment: async (momentId) => {

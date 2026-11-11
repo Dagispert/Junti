@@ -101,3 +101,80 @@ select pg_temp.expect((select count(*) = 0 from auth.users where id = '00000000-
 select pg_temp.expect((select count(*) = 0 from groups), 'un grupo que se queda sin nadie se elimina');
 select pg_temp.expect((select count(*) = 0 from moments), 'con la cuenta desaparecen sus momentos');
 \echo SALIDAS Y BORRADO DESDE LA APP CORRECTOS
+
+-- ── Avisos: a quién le toca ──
+insert into auth.users (id) values
+  ('00000000-0000-0000-0000-0000000000d1'), ('00000000-0000-0000-0000-0000000000d2'),
+  ('00000000-0000-0000-0000-0000000000d3'), ('00000000-0000-0000-0000-0000000000d4');
+insert into profiles (id, name, timezone) values
+  ('00000000-0000-0000-0000-0000000000d1', 'Toca', 'Europe/Madrid'),
+  ('00000000-0000-0000-0000-0000000000d2', 'Aún no', 'Europe/Madrid'),
+  ('00000000-0000-0000-0000-0000000000d3', 'Silenciado', 'America/Mexico_City'),
+  ('00000000-0000-0000-0000-0000000000d4', 'Sin dispositivo', 'Europe/Madrid');
+insert into groups (id, name, created_by, cadence_days) values
+  ('10000000-0000-0000-0000-0000000000aa', 'Avisos', '00000000-0000-0000-0000-0000000000d1', '{1,2,3,4,5,6,7}');
+insert into memberships (group_id, user_id) values
+  ('10000000-0000-0000-0000-0000000000aa', '00000000-0000-0000-0000-0000000000d2'),
+  ('10000000-0000-0000-0000-0000000000aa', '00000000-0000-0000-0000-0000000000d3'),
+  ('10000000-0000-0000-0000-0000000000aa', '00000000-0000-0000-0000-0000000000d4');
+-- d1: su hora ya ha llegado. d2: su hora es la siguiente (si no es ya la última del día).
+update memberships set preferred_hour = 0 where user_id = '00000000-0000-0000-0000-0000000000d1';
+update memberships set preferred_hour = 23 where user_id = '00000000-0000-0000-0000-0000000000d2';
+update memberships set preferred_hour = 0, muted_until = now() + interval '1 day' where user_id = '00000000-0000-0000-0000-0000000000d3';
+update memberships set preferred_hour = 0 where user_id = '00000000-0000-0000-0000-0000000000d4';
+insert into push_subscriptions (user_id, endpoint, p256dh, auth) values
+  ('00000000-0000-0000-0000-0000000000d1', 'https://push.example/d1-movil', 'k', 'a'),
+  ('00000000-0000-0000-0000-0000000000d1', 'https://push.example/d1-tablet', 'k', 'a'),
+  ('00000000-0000-0000-0000-0000000000d2', 'https://push.example/d2', 'k', 'a'),
+  ('00000000-0000-0000-0000-0000000000d3', 'https://push.example/d3', 'k', 'a');
+
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000d1';
+select pg_temp.fails($$select * from claim_due_notifications()$$, 'la app no puede pedir la lista de avisos');
+select pg_temp.expect((select count(*) = 2 from push_subscriptions), 'cada persona ve solo sus propios dispositivos');
+reset role;
+
+set role service_role;
+create temp table primera as select * from claim_due_notifications();
+reset role;
+select pg_temp.expect(
+  (select count(*) = 2 and bool_and(sub_endpoint like '%/d1-%') from primera)
+  or extract(hour from now() at time zone 'Europe/Madrid') = 23,
+  'se avisa a quien le ha llegado su hora, en todos sus dispositivos, y a nadie más');
+select pg_temp.expect((select count(distinct p_id) = 1 and bool_and(p_title <> '') from primera), 'se crea una sola propuesta del día, tomada de la biblioteca');
+set role service_role;
+select pg_temp.expect((select count(*) = 0 from claim_due_notifications()), 'pedirla otra vez no repite ningún aviso');
+reset role;
+select pg_temp.expect((select count(*) = 1 from proposals where group_id = '10000000-0000-0000-0000-0000000000aa'), 'no se duplica la propuesta del día');
+
+-- Quien ya respondió antes de su hora no recibe aviso.
+delete from notification_log;
+insert into moments (group_id, author_id, text, author_tz, proposal_id)
+  select group_id, '00000000-0000-0000-0000-0000000000d1', 'ya', 'Europe/Madrid', id from proposals where group_id = '10000000-0000-0000-0000-0000000000aa';
+set role service_role;
+select pg_temp.expect((select count(*) = 0 from claim_due_notifications() where sub_endpoint like '%/d1-%'), 'quien ya respondió no recibe aviso');
+reset role;
+
+-- Tope: como mucho dos grupos al día por persona.
+delete from moments where text = 'ya';
+delete from notification_log;
+insert into groups (id, name, created_by, cadence_days) values
+  ('10000000-0000-0000-0000-0000000000ab', 'Avisos 2', '00000000-0000-0000-0000-0000000000d1', '{1,2,3,4,5,6,7}'),
+  ('10000000-0000-0000-0000-0000000000ac', 'Avisos 3', '00000000-0000-0000-0000-0000000000d1', '{1,2,3,4,5,6,7}');
+update memberships set preferred_hour = 0 where user_id = '00000000-0000-0000-0000-0000000000d1';
+set role service_role;
+select pg_temp.expect((select count(distinct g_id) = 2 from claim_due_notifications() where sub_endpoint like '%/d1-%'), 'como mucho dos propuestas al día por persona');
+reset role;
+
+-- Un grupo cuya frecuencia no incluye hoy no avisa.
+delete from notification_log;
+update groups set cadence_days = array[(extract(isodow from now() at time zone 'Europe/Madrid')::int % 7) + 1]::smallint[];
+set role service_role;
+select pg_temp.expect((select count(*) = 0 from claim_due_notifications()), 'los días que no tocan no hay aviso');
+reset role;
+-- La app también puede crear la propuesta del día; si ya existe, no se duplica.
+insert into proposals (group_id, kind, title, day)
+  select group_id, 'prompt', 'duplicada', day from proposals where day is not null limit 1
+  on conflict (group_id, day) do nothing;
+select pg_temp.expect((select count(*) = 0 from proposals where title = 'duplicada'), 'la app no puede duplicar la propuesta de un día');
+\echo AVISOS CORRECTOS

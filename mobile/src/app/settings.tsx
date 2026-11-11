@@ -1,11 +1,12 @@
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Avatar, Button, Card, Field, Lead, Notice, Screen, Tag, Title } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
+import { disablePush, enablePush, pushState, type PushState } from '@/lib/push';
 
 /** Ajustes personales: cómo me ven los demás, cerrar sesión y borrar la cuenta. */
 export default function Settings() {
@@ -16,6 +17,10 @@ export default function Settings() {
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [push, setPush] = useState<PushState>();
+  useEffect(() => {
+    pushState().then(setPush);
+  }, []);
 
   const run = async (action: () => Promise<void>, done = '') => {
     setNotice('');
@@ -73,6 +78,53 @@ export default function Settings() {
         />
       </Card>
       <Notice>{notice}</Notice>
+
+      <View style={{ gap: Spacing.two }}>
+        <Tag>Avisos</Tag>
+        {push === 'on' && (
+          <>
+            <Lead strong="Este dispositivo recibe la propuesta del día">
+              de tus grupos, a la hora que elijas en los ajustes de cada grupo.
+            </Lead>
+            <Button
+              label="Desactivar avisos aquí"
+              variant="quiet"
+              disabled={busy}
+              onPress={() => run(async () => (await disablePush(), setPush(await pushState())))}
+            />
+          </>
+        )}
+        {push === 'off' && (
+          <>
+            <Lead strong="Recibe la propuesta del día">
+              a tu hora, aunque no tengas la app abierta. Nada más: ni rachas ni recordatorios
+              insistentes.
+            </Lead>
+            <Button
+              label="Activar avisos en este dispositivo"
+              disabled={busy}
+              onPress={() => run(async () => (await enablePush(), setPush(await pushState())))}
+            />
+          </>
+        )}
+        {push === 'needs-install' && (
+          <Lead strong="Para recibir avisos en el iPhone,">
+            añade Junti a la pantalla de inicio: en Safari, pulsa Compartir y luego «Añadir a
+            pantalla de inicio». Ábrela desde ese icono y vuelve aquí.
+          </Lead>
+        )}
+        {push === 'denied' && (
+          <Lead strong="Los avisos están bloqueados">
+            para Junti en este navegador. Puedes permitirlos en los ajustes del navegador o del
+            teléfono.
+          </Lead>
+        )}
+        {push === 'unsupported' && (
+          <Lead strong="Este navegador no admite avisos.">
+            Prueba desde el móvil, con la app añadida a la pantalla de inicio.
+          </Lead>
+        )}
+      </View>
 
       <Button label="Cerrar sesión" variant="quiet" onPress={signOut} />
 

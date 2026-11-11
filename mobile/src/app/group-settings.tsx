@@ -38,6 +38,8 @@ export default function GroupSettings() {
     setBusy(false);
   };
 
+  const muted = !!group.mutedUntil && group.mutedUntil > Date.now();
+
   // Recuento de la votación: cuántas personas prefieren cada frecuencia.
   const tally = frequencies.map((f) => ({
     ...f,
@@ -148,6 +150,51 @@ export default function GroupSettings() {
             aplicarla.
           </Text>
         )}
+      </View>
+
+      <View style={{ gap: Spacing.two }}>
+        <Tag>Tus avisos de este grupo</Tag>
+        <Card style={{ padding: 6 }}>
+          <View style={styles.option}>
+            <Text style={{ flex: 1, color: theme.text, fontSize: 16 }}>
+              Recibir la propuesta a partir de
+            </Text>
+            <Button
+              compact
+              variant="quiet"
+              label="−"
+              disabled={busy}
+              onPress={() => run(() => store.setPreferredHour(group.id, (group.myHour + 23) % 24))}
+            />
+            <Text style={{ color: theme.text, fontSize: 16, fontWeight: '500' }}>
+              {String(group.myHour).padStart(2, '0')}:00
+            </Text>
+            <Button
+              compact
+              variant="quiet"
+              label="+"
+              disabled={busy}
+              onPress={() => run(() => store.setPreferredHour(group.id, (group.myHour + 1) % 24))}
+            />
+          </View>
+          <View style={[styles.option, { borderTopWidth: 1, borderTopColor: theme.soft }]}>
+            <Text style={{ flex: 1, color: theme.text, fontSize: 16 }}>
+              {muted ? 'Silenciado una semana' : 'Avisos activos'}
+            </Text>
+            <Button
+              compact
+              variant="quiet"
+              label={muted ? 'Reactivar' : 'Silenciar una semana'}
+              disabled={busy}
+              onPress={() =>
+                run(() => store.setMuted(group.id, muted ? null : Date.now() + 7 * 86_400_000))
+              }
+            />
+          </View>
+        </Card>
+        <Text style={{ color: theme.textSecondary, fontSize: 14, lineHeight: 20 }}>
+          La hora es la tuya, estés donde estés. Silenciar no lo ve nadie más.
+        </Text>
       </View>
 
       <View style={{ gap: Spacing.two }}>
