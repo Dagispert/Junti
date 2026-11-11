@@ -186,9 +186,9 @@ export default function RecapScreen() {
         <Animated.View key={index} entering={FadeIn.duration(450)} style={styles.slide}>
           {slide.type === 'cover' && (
             <View style={styles.center}>
-              {recap.picks.some((m) => m.imageUri) && (
+              {recap.picks.some((m) => m.imageUri || m.videoUri) && (
                 <PolaroidPile
-                  moments={recap.picks.filter((m) => m.imageUri)}
+                  moments={recap.picks.filter((m) => m.imageUri || m.videoUri)}
                   size={Math.min(width - 40, 340)}
                 />
               )}

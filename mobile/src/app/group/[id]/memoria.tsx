@@ -37,7 +37,7 @@ export default function Memory() {
   const whoText =
     who.length > 1 ? `${who.slice(0, -1).join(', ')} y ${who[who.length - 1]}` : who[0];
   const featured = featuredWeek(all);
-  const pile = (week.length >= 3 ? week : all).filter((m) => m.imageUri).slice(0, 7);
+  const pile = (week.length >= 3 ? week : all).filter((m) => m.imageUri || m.videoUri).slice(0, 7);
 
   return (
     <Screen header={<GroupHeader group={group} />}>

@@ -19,7 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Fonts, MaxContentWidth, Radius, Spacing, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
 
-import { VideoFrame, Waveform } from './media-players';
+import { VideoClip, VideoFrame, Waveform } from './media-players';
 import type { Moment } from '@/data/types';
 
 /** Contenedor de pantalla con scroll, márgenes seguros y ancho máximo. Al tirar hacia abajo, recarga. */
@@ -139,11 +139,14 @@ export function Photo({
   moment,
   style,
   badge = true,
+  animate = true,
 }: {
   moment: Moment;
   style?: StyleProp<ViewStyle>;
   /** Mostrar ▶ en los vídeos (desactivado donde ya hay un botón grande). */
   badge?: boolean;
+  /** Animar los vídeos (clip de 3 s en bucle) en vez de mostrar una imagen fija. */
+  animate?: boolean;
 }) {
   const theme = useTheme();
   if (moment.imageUri) {
@@ -155,6 +158,8 @@ export function Photo({
           contentFit="cover"
           transition={200}
         />
+        {/* En los vídeos, la portada se anima: sus primeros segundos en bucle, como un GIF. */}
+        {moment.videoUri && animate && <VideoClip uri={moment.videoUri} />}
         {badge && moment.videoUri && (
           <View style={styles.playBadge}>
             <Text style={{ color: '#1D1F22', fontSize: 10, marginLeft: 1 }}>▶</Text>
@@ -167,7 +172,7 @@ export function Photo({
     // Vídeo sin portada guardada: se muestra su primer fotograma.
     return (
       <View style={[styles.photo, { backgroundColor: '#2B2E33' }, style]}>
-        <VideoFrame uri={moment.videoUri} />
+        {animate ? <VideoClip uri={moment.videoUri} /> : <VideoFrame uri={moment.videoUri} />}
         {badge && (
           <View style={styles.playBadge}>
             <Text style={{ color: '#1D1F22', fontSize: 10, marginLeft: 1 }}>▶</Text>

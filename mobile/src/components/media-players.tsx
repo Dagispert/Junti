@@ -30,22 +30,44 @@ const Surface = memo(function Surface({ player }: { player: VideoPlayer }) {
   );
 });
 
-/** Reproduce o pausa según el vídeo esté a la vista (en la web). */
+/**
+ * Reproduce o pausa según el vídeo esté a la vista. En la web se comprueba la
+ * posición cada poco (más fiable que IntersectionObserver dentro de listas con
+ * su propio desplazamiento y tarjetas que entran animadas).
+ */
 function useAutoplayWhenVisible(player: VideoPlayer, host: { current: unknown }, enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;
-    const node = host.current as unknown as Element | null;
-    if (Platform.OS !== 'web' || !node || typeof IntersectionObserver === 'undefined') {
+    const node = host.current as Element | null;
+    if (Platform.OS !== 'web' || !node || typeof node.getBoundingClientRect !== 'function') {
       const id = setTimeout(() => player.play(), 50);
       return () => clearTimeout(id);
     }
-    const io = new IntersectionObserver(
-      ([entry]) =>
-        entry.isIntersecting && entry.intersectionRatio > 0.4 ? player.play() : player.pause(),
-      { threshold: [0, 0.4, 0.8] },
-    );
-    io.observe(node);
-    return () => io.disconnect();
+    let shown: boolean | null = null;
+    const check = () => {
+      const r = node.getBoundingClientRect();
+      const h = window.innerHeight;
+      const w = window.innerWidth;
+      const visibleH = Math.min(r.bottom, h) - Math.max(r.top, 0);
+      const visibleW = Math.min(r.right, w) - Math.max(r.left, 0);
+      const on =
+        !document.hidden &&
+        r.width > 0 &&
+        r.height > 0 &&
+        visibleH > r.height * 0.35 &&
+        visibleW > r.width * 0.35;
+      if (on !== shown) {
+        shown = on;
+        if (on) player.play();
+        else player.pause();
+      }
+    };
+    check();
+    const id = setInterval(check, 600);
+    return () => {
+      clearInterval(id);
+      player.pause();
+    };
   }, [player, host, enabled]);
 }
 
@@ -78,6 +100,31 @@ export function InlineVideo({
         nativeControls={controls}
         playsInline
       />
+    </View>
+  );
+}
+
+/**
+ * Clip animado de un vídeo, como un GIF: los primeros segundos en bucle, sin
+ * sonido, y solo mientras está a la vista. Se usa en vez de una portada fija.
+ */
+export function VideoClip({ uri, seconds = 3 }: { uri: string; seconds?: number }) {
+  const host = useRef<any>(null);
+  const player = useVideoPlayer(uri, (p) => {
+    p.muted = true;
+    p.loop = true;
+    p.timeUpdateEventInterval = 0.2;
+  });
+  useEffect(() => {
+    const sub = player.addListener('timeUpdate', ({ currentTime }) => {
+      if (currentTime >= seconds) player.currentTime = 0;
+    });
+    return () => sub.remove();
+  }, [player, seconds]);
+  useAutoplayWhenVisible(player, host, true);
+  return (
+    <View ref={host} pointerEvents="none" style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]}>
+      <Surface player={player} />
     </View>
   );
 }
@@ -133,7 +180,9 @@ export function VideoMoment({ moment, style }: { moment: Moment; style?: StylePr
       accessibilityLabel={sound ? 'Silenciar el vídeo' : 'Activar el sonido del vídeo'}
       onPress={toggle}
       style={[{ overflow: 'hidden', backgroundColor: '#1B1C1E' }, style]}>
-      {moment.imageUri && <Photo moment={moment} style={StyleSheet.absoluteFill} badge={false} />}
+      {moment.imageUri && (
+        <Photo moment={moment} style={StyleSheet.absoluteFill} badge={false} animate={false} />
+      )}
       <Surface player={player} />
       <View pointerEvents="none" style={styles.sound}>
         <Text style={styles.soundText}>{sound ? '🔊' : '🔇'}</Text>

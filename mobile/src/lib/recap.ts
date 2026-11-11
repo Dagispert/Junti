@@ -186,7 +186,7 @@ export function buildRecap(
     story,
     stats: {
       moments: moments.length,
-      photos: moments.filter((m) => m.imageUri).length,
+      photos: moments.filter((m) => m.imageUri || m.videoUri).length,
       reactions: moments.reduce((s, m) => s + m.reactions.length, 0),
       comments: moments.reduce((s, m) => s + m.comments.length, 0),
       people: authors.length,

@@ -36,7 +36,7 @@ export function RecapCard({
     songs,
   );
   if (!recap.moments.length) return null;
-  const photos = recap.picks.filter((m) => m.imageUri);
+  const photos = recap.picks.filter((m) => m.imageUri || m.videoUri);
   const shown: Moment[] = photos.slice(0, 3);
   const rest = recap.moments.length - shown.length;
   const blurred = photos[3] ?? photos[0];
