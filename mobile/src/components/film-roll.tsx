@@ -5,6 +5,7 @@ import Animated, { FadeInLeft, ZoomIn } from 'react-native-reanimated';
 import { Hand, HandBold } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import { monthStart } from '@/lib/recap';
+import { unlockSpeech } from '@/lib/speech';
 import type { Moment } from '@/data/types';
 
 import { Sticker, StickyNote } from './scrapbook';
@@ -50,12 +51,13 @@ export function FilmRoll({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`Ver el resumen de ${label}`}
-            onPress={() =>
+            onPress={() => {
+              unlockSpeech();
               router.push({
                 pathname: '/recap',
                 params: { groupId, kind: 'month', from: String(monthStart(moments[0].createdAt)) },
-              })
-            }
+              });
+            }}
             style={styles.recapBtn}>
             <Text style={styles.recapText}>▶ Resumen del mes</Text>
           </Pressable>

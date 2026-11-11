@@ -44,6 +44,8 @@ export type Group = {
 export type Narration = {
   title: string;
   body: string;
+  /** La crónica por escenas: cada una acompaña a un momento (o a ninguno). */
+  scenes: { momentId: string | null; text: string }[];
   style: string;
   generations: number;
 };

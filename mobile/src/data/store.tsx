@@ -791,7 +791,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const detail = await (error as { context?: Response }).context?.json?.().catch(() => null);
         throw new Error(detail?.error ?? error.message);
       }
-      return data as { narration: Narration | null; reason?: string };
+      const row = data?.narration as
+        | (Omit<Narration, 'scenes'> & { scenes?: { moment_id: string | null; text: string }[] })
+        | null;
+      return {
+        reason: data?.reason,
+        narration: row && {
+          ...row,
+          scenes: (row.scenes ?? []).map((e) => ({ momentId: e.moment_id, text: e.text })),
+        },
+      };
     },
     addSong: async (groupId, song) => {
       check(

@@ -49,7 +49,7 @@ export function spotifyLink(title: string, artist: string): string {
 }
 
 /** Reproductor del fragmento de 30 segundos. Por ahora, solo en la versión web. */
-export function usePreview(url?: string) {
+export function usePreview(url?: string, loop = false) {
   const audio = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [position, setPosition] = useState(0);
@@ -60,6 +60,7 @@ export function usePreview(url?: string) {
     if (!available) return;
     const a = new Audio(url);
     a.preload = 'none';
+    a.loop = loop;
     audio.current = a;
     const time = () => setPosition(a.currentTime);
     const meta = () => setDuration(a.duration || 30);
@@ -76,7 +77,7 @@ export function usePreview(url?: string) {
       setPlaying(false);
       setPosition(0);
     };
-  }, [url, available]);
+  }, [url, available, loop]);
 
   return {
     available,
@@ -88,6 +89,10 @@ export function usePreview(url?: string) {
       if (!a) return;
       if (a.paused) a.play().catch(() => setPlaying(false));
       else a.pause();
+    },
+    /** Volumen de 0 a 1 (para bajar la música mientras habla la narradora). */
+    volume: (v: number) => {
+      if (audio.current) audio.current.volume = Math.max(0, Math.min(1, v));
     },
     restart: () => {
       const a = audio.current;

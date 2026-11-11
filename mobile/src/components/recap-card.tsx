@@ -6,6 +6,7 @@ import { Hand, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import type { Moment } from '@/data/types';
 import { buildRecap } from '@/lib/recap';
+import { unlockSpeech } from '@/lib/speech';
 
 import { PressScale } from './motion';
 import { Photo } from './ui';
@@ -45,9 +46,10 @@ export function RecapCard({
     <PressScale
       accessibilityRole="button"
       accessibilityLabel={`Ver el resumen: ${recap.title}, ${recap.range}`}
-      onPress={() =>
-        router.push({ pathname: '/recap', params: { groupId, kind, from: String(from) } })
-      }>
+      onPress={() => {
+        unlockSpeech();
+        router.push({ pathname: '/recap', params: { groupId, kind, from: String(from) } });
+      }}>
       <View style={styles.cards}>
         {shown.map((m, i) => (
           <View
