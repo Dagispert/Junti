@@ -332,9 +332,10 @@ async function gemini(system: string, prompt: string): Promise<{ text: string; m
   const key = Deno.env.get('GEMINI_API_KEY');
   if (!key) throw new Error('Falta la clave GEMINI_API_KEY en los secretos de Supabase');
   const base = 'https://generativelanguage.googleapis.com/v1beta';
-  const call = (model: string) =>
+  const call = (model: string, ms: number) =>
     fetch(`${base}/models/${model}:generateContent`, {
       method: 'POST',
+      signal: AbortSignal.timeout(ms),
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
@@ -355,6 +356,8 @@ async function gemini(system: string, prompt: string): Promise<{ text: string; m
     .eq('key', 'gemini_model')
     .maybeSingle();
   const tried: string[] = [];
+  const log: string[] = [];
+  const started = Date.now();
   const queue = [Deno.env.get('GEMINI_MODEL'), saved?.value as string | undefined].filter(
     (m): m is string => !!m,
   );
@@ -363,7 +366,10 @@ async function gemini(system: string, prompt: string): Promise<{ text: string; m
   while (tried.length < 8) {
     if (!queue.length && !listed) {
       listed = true;
-      const list = await fetch(`${base}/models?pageSize=1000`, { headers: { 'x-goog-api-key': key } });
+      const list = await fetch(`${base}/models?pageSize=1000`, {
+        headers: { 'x-goog-api-key': key },
+        signal: AbortSignal.timeout(10_000),
+      });
       const { models } = (await list.json().catch(() => ({}))) as {
         models?: { name: string; supportedGenerationMethods?: string[] }[];
       };
@@ -381,9 +387,19 @@ async function gemini(system: string, prompt: string): Promise<{ text: string; m
     if (!model) break;
     if (tried.includes(model)) continue;
     tried.push(model);
-    const res = await call(model);
+    // Supabase corta a los 150 s: cada intento tiene su límite y hay un tope total.
+    const left = 125_000 - (Date.now() - started);
+    if (left < 8_000) break;
+    let res: Response;
+    try {
+      res = await call(model, Math.min(left, tried.length === 1 ? 60_000 : 35_000));
+    } catch {
+      log.push(`${model}: sin respuesta a tiempo`);
+      continue;
+    }
     const data = await res.json().catch(() => ({}));
     const message: string = data?.error?.message ?? '';
+    if (!res.ok) log.push(`${model}: ${res.status} ${message.slice(0, 120)}`);
     if (res.status === 404 || (res.status === 429 && /limit: 0\b/.test(message))) continue;
     if (res.status === 400 && /not supported|JSON mode/i.test(message)) continue;
     if (res.status === 429 || res.status === 503) {
@@ -400,7 +416,8 @@ async function gemini(system: string, prompt: string): Promise<{ text: string; m
     .join('');
     return { text, model };
   }
-  throw new Error(busy || `busy: ningún modelo de Gemini con cupo gratuito (probados: ${tried.join(', ')})`);
+  console.log('Intentos:', log.join(' | '));
+  throw new Error(`busy: ${busy || 'ningún modelo de Gemini disponible'} — ${log.join(' | ')}`);
 }
 
 function parse(text: string): { title: string; body: string } | null {
