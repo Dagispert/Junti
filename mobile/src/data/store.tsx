@@ -39,6 +39,8 @@ type Store = {
   signIn: (email: string, password: string) => Promise<void>;
   /** Devuelve false si hay que confirmar el correo antes de poder entrar. */
   signUp: (email: string, password: string) => Promise<boolean>;
+  /** Entrar sin contraseña: envía un enlace al correo (crea la cuenta si no existe). */
+  sendLoginLink: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   /** place: la ciudad elegida en el buscador; null la quita; sin pasarla, no cambia. */
   saveProfile: (name: string, place?: Place | null) => Promise<void>;
@@ -64,8 +66,12 @@ type Store = {
     place?: Place;
     /** Si es un recuerdo: cuándo pasó. */
     rememberedAt?: number;
+    /** Más fotos, además de la principal. */
+    morePhotos?: string[];
   }) => Promise<void>;
   deleteMoment: (momentId: string) => Promise<void>;
+  /** Cambiar el texto de un momento propio. */
+  editMoment: (momentId: string, text: string) => Promise<void>;
   toggleReaction: (momentId: string, emoji: string) => Promise<void>;
   addComment: (momentId: string, text: string) => Promise<void>;
   dismissProposal: (proposalId: string, state: 'snoozed' | 'skipped') => Promise<void>;
@@ -95,6 +101,8 @@ type Store = {
   leaveGroup: (groupId: string, removeMoments: boolean) => Promise<void>;
   /** A partir de qué hora (0–23, en mi hora local) quiero recibir la propuesta de este grupo. */
   setPreferredHour: (groupId: string, hour: number) => Promise<void>;
+  /** Mis horas de descanso en un grupo (0–23, en mi hora local). */
+  setQuietHours: (groupId: string, from: number, to: number) => Promise<void>;
   /** Silencia los avisos de un grupo hasta una fecha, o los reactiva con null. */
   setMuted: (groupId: string, until: number | null) => Promise<void>;
   /** Solo administradores: activa o apaga la narradora y elige su estilo. */
@@ -243,7 +251,7 @@ async function load(me: string): Promise<Data> {
     supabase
       .from('memberships')
       .select(
-        'group_id, user_id, role, frequency_vote, preferred_hour, muted_until, narrative_opt_out',
+        'group_id, user_id, role, frequency_vote, preferred_hour, muted_until, narrative_opt_out, quiet_from, quiet_to',
       )
       .eq('status', 'active')
       .then(check),
@@ -261,7 +269,7 @@ async function load(me: string): Promise<Data> {
     supabase
       .from('moments')
       .select(
-        'id, group_id, author_id, text, created_at, shared_at, memory, author_tz, proposal_id, place_name, lat, lng, ' +
+        'id, group_id, author_id, text, created_at, shared_at, memory, edited_at, author_tz, proposal_id, place_name, lat, lng, ' +
           'reactions(emoji, user_id), comments(id, user_id, text, created_at, deleted_at), ' +
           'moment_media(position, media_assets(storage_path, kind, thumb_path, duration_s, waveform))',
       )
@@ -343,6 +351,8 @@ async function load(me: string): Promise<Data> {
         memberIds: members.map((m) => m.user_id),
         isAdmin: members.some((m) => m.user_id === me && m.role === 'admin'),
         myHour: members.find((m) => m.user_id === me)?.preferred_hour ?? 19,
+        quietFrom: members.find((m) => m.user_id === me)?.quiet_from ?? 22,
+        quietTo: members.find((m) => m.user_id === me)?.quiet_to ?? 9,
         mutedUntil:
           Date.parse(members.find((m) => m.user_id === me)?.muted_until ?? '') || undefined,
         adminIds: members.filter((m) => m.role === 'admin').map((m) => m.user_id),
@@ -389,6 +399,7 @@ async function load(me: string): Promise<Data> {
   const moments: Moment[] = (momentRows ?? []).map((row) => {
     const assets = assetsOf(row);
     const photo = assets.find((a) => a.kind === 'photo');
+    const allPhotos = assets.filter((a) => a.kind === 'photo').map((a) => signed[a.storage_path]);
     const video = assets.find((a) => a.kind === 'video');
     const voice = assets.find((a) => a.kind === 'audio');
     return {
@@ -402,6 +413,7 @@ async function load(me: string): Promise<Data> {
         : video?.thumb_path
           ? signed[video.thumb_path]
           : undefined,
+      photos: allPhotos.length > 1 ? allPhotos : undefined,
       videoUri: video ? signed[video.storage_path] : undefined,
       videoDuration: video?.duration_s ?? undefined,
       voice: voice
@@ -414,6 +426,7 @@ async function load(me: string): Promise<Data> {
       createdAt: Date.parse(row.created_at),
       sharedAt: Date.parse(row.shared_at ?? row.created_at),
       memory: !!row.memory,
+      edited: !!row.edited_at,
       authorTz: row.author_tz,
       proposalId: row.proposal_id ?? undefined,
       place:
@@ -598,6 +611,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (error) throw new Error(error.message);
       return !!data.session;
     },
+    sendLoginLink: async (email) => {
+      const back =
+        typeof window !== 'undefined' && window.location
+          ? `${window.location.origin}${window.location.pathname.startsWith('/Junti') ? '/Junti/' : '/'}`
+          : 'https://dagispert.github.io/Junti/';
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: back, shouldCreateUser: true },
+      });
+      if (error) throw new Error(error.message);
+    },
     signOut: async () => {
       // Este dispositivo deja de recibir avisos de esta cuenta.
       await disablePush().catch(() => {});
@@ -653,6 +677,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       proposalId,
       place,
       rememberedAt,
+      morePhotos,
     }) => {
       const visual = media ?? (imageUri ? { uri: imageUri, kind: 'photo' as const } : undefined);
       const stamp = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -692,6 +717,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               bytes: file.bytes,
               mime,
               duration_s: visual.duration ?? null,
+            })
+            .select('id')
+            .single(),
+        );
+        assetIds.push(asset!.id);
+      }
+      for (const [i, uri] of (morePhotos ?? []).entries()) {
+        const file = await put(uri, `${stamp}-${i + 2}.jpg`, 'image/jpeg');
+        const asset = check(
+          await supabase
+            .from('media_assets')
+            .insert({
+              kind: 'photo',
+              storage_path: file.path,
+              bytes: file.bytes,
+              mime: 'image/jpeg',
             })
             .select('id')
             .single(),
@@ -756,6 +797,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           .from('proposal_states')
           .upsert({ proposal_id: proposalId, state: 'answered' });
       }
+      await refresh();
+    },
+    editMoment: async (momentId, text) => {
+      check(
+        await supabase
+          .from('moments')
+          .update({ text: text || null, edited_at: new Date().toISOString() })
+          .eq('id', momentId),
+      );
       await refresh();
     },
     deleteMoment: async (momentId) => {
@@ -915,6 +965,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         await supabase
           .from('memberships')
           .update({ preferred_hour: hour })
+          .match({ group_id: groupId, user_id: me }),
+      );
+      await refresh();
+    },
+    setQuietHours: async (groupId, from, to) => {
+      check(
+        await supabase
+          .from('memberships')
+          .update({ quiet_from: from, quiet_to: to })
           .match({ group_id: groupId, user_id: me }),
       );
       await refresh();

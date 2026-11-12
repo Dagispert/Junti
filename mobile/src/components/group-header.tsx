@@ -6,6 +6,7 @@ import { Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { Radius, Spacing, useTheme } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
 import type { Group } from '@/data/types';
+import { copyText, inviteLink } from '@/lib/invite';
 
 import { Icon } from './icon';
 import { Button, Notice, Tag, Title } from './ui';
@@ -16,15 +17,16 @@ export function GroupHeader({ group }: { group: Group }) {
   const { createInvite } = useStore();
   const [code, setCode] = useState('');
   const [notice, setNotice] = useState('');
+  const [copied, setCopied] = useState(false);
 
   const invite = async () => {
     setNotice('');
     try {
       const next = code || (await createInvite(group.id));
       setCode(next);
-      // En el móvil abre el menú de compartir; en web no existe y basta con mostrar el código.
+      // Abre el menú de compartir del móvil; si no lo hay, se ve el enlace para copiarlo.
       await Share.share({
-        message: `Únete a «${group.name}» en Junti con este código: ${next}`,
+        message: `Únete a «${group.name}» en Junti: ${inviteLink(next)}`,
       }).catch(() => {});
     } catch (error) {
       setNotice(errorText(error));
@@ -61,10 +63,20 @@ export function GroupHeader({ group }: { group: Group }) {
       <Title>{group.name}</Title>
       {!!code && (
         <View style={[styles.code, { backgroundColor: theme.card, boxShadow: theme.shadow }]}>
-          <Tag>Código · caduca en 14 días</Tag>
-          <Text selectable style={[styles.codeText, { color: theme.text }]}>
-            {code}
+          <Tag>Invitación · caduca en 14 días</Tag>
+          <Text selectable numberOfLines={2} style={{ color: theme.text, fontSize: 15 }}>
+            {inviteLink(code)}
           </Text>
+          <View style={styles.codeRow}>
+            <Button
+              compact
+              label={copied ? 'Enlace copiado' : 'Copiar enlace'}
+              onPress={async () => setCopied(await copyText(inviteLink(code)))}
+            />
+            <Text selectable style={{ color: theme.textSecondary, fontSize: 15 }}>
+              o el código <Text style={{ color: theme.text, fontWeight: '500' }}>{code}</Text>
+            </Text>
+          </View>
         </View>
       )}
       <Notice>{notice}</Notice>
@@ -76,5 +88,5 @@ const styles = StyleSheet.create({
   header: { paddingTop: Spacing.two, paddingBottom: Spacing.three, gap: Spacing.two },
   top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   code: { borderRadius: Radius.inner, padding: Spacing.three, gap: Spacing.two },
-  codeText: { fontSize: 24, fontWeight: '500', letterSpacing: 2 },
+  codeRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, flexWrap: 'wrap' },
 });

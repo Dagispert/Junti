@@ -29,6 +29,9 @@ export type Group = {
   myHour: number;
   /** Si tengo silenciado este grupo, hasta cuándo. */
   mutedUntil?: number;
+  /** Mis horas de descanso (0–23, locales): de «quietFrom» a «quietTo» no llegan avisos. */
+  quietFrom: number;
+  quietTo: number;
   /** Días de la semana con propuesta: 1 = lunes … 7 = domingo. */
   cadenceDays: number[];
   /** Preferencia de cada integrante: propuestas por semana. */
@@ -77,6 +80,8 @@ export type Moment = {
   text?: string;
   /** URL firmada y temporal de la foto, si la hay. */
   imageUri?: string;
+  /** Todas las fotos del momento, en orden (la primera es «imageUri»). */
+  photos?: string[];
   /** Vídeo (entonces «imageUri» es su portada) y su duración en segundos. */
   videoUri?: string;
   videoDuration?: number;
@@ -88,6 +93,8 @@ export type Moment = {
   sharedAt: number;
   /** Un recuerdo de antes, guardado en su fecha. */
   memory?: boolean;
+  /** Si su autor cambió el texto después de publicarlo. */
+  edited?: boolean;
   /** Zona horaria del autor cuando lo publicó. */
   authorTz: string;
   /** Si responde a una propuesta o reto. */

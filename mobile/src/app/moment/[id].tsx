@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { ZoomIn } from 'react-native-reanimated';
 
 import { Icon } from '@/components/icon';
+import { PhotoCarousel } from '@/components/photo-carousel';
 import { VideoMoment, VoiceNote, Waveform } from '@/components/media-players';
 import { Sticker, StickyNote } from '@/components/scrapbook';
 import { SkyBadge } from '@/components/sky-badge';
@@ -69,6 +70,10 @@ export default function MomentView() {
               { backgroundColor: '#FFF4EC', alignItems: 'center', justifyContent: 'center' },
             ]}>
             <Waveform wave={moment.voice.waveform} height={160} />
+          </View>
+        ) : moment.photos ? (
+          <View style={[styles.photo, { overflow: 'hidden' }]}>
+            <PhotoCarousel photos={moment.photos} />
           </View>
         ) : (
           <Photo moment={moment} style={styles.photo} />

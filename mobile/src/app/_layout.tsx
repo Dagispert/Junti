@@ -1,5 +1,5 @@
 import { Caveat_600SemiBold, Caveat_700Bold, useFonts } from '@expo-google-fonts/caveat';
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import { DarkTheme, DefaultTheme, router, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, useColorScheme, View } from 'react-native';
@@ -8,12 +8,14 @@ import { AuthScreen, ProfileSetup } from '@/components/auth-screen';
 import { IntroCinematic } from '@/components/cinematics';
 import { useTheme } from '@/constants/theme';
 import { StoreProvider, useStore } from '@/data/store';
+import { rememberInvite, takeInvite } from '@/lib/invite';
 import { setupInstallable } from '@/lib/push';
 
 export default function RootLayout() {
   const dark = useColorScheme() === 'dark';
   useFonts({ Caveat_600SemiBold, Caveat_700Bold });
   useEffect(setupInstallable, []);
+  useEffect(rememberInvite, []);
   return (
     <ThemeProvider value={dark ? DarkTheme : DefaultTheme}>
       <StoreProvider>
@@ -30,6 +32,14 @@ function Gate() {
   const [intro, setIntro] = useState(true);
   const endIntro = useCallback(() => setIntro(false), []);
   const theme = useTheme();
+  // Una invitación que llegó por enlace antes de entrar: se abre al estar dentro.
+  useEffect(() => {
+    if (status !== 'ready') return;
+    const code = takeInvite();
+    if (code && !window.location.pathname.endsWith('/join')) {
+      router.push({ pathname: '/join', params: { code } });
+    }
+  }, [status]);
   if (status === 'loading') {
     return (
       <View style={{ flex: 1, justifyContent: 'center', backgroundColor: theme.background }}>

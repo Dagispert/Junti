@@ -17,7 +17,8 @@ export const supabase = createClient(url, key, {
     storage: canPersist ? AsyncStorage : undefined,
     persistSession: canPersist,
     autoRefreshToken: canPersist,
-    detectSessionInUrl: false,
+    // En la web, el enlace del correo («entrar sin contraseña») trae la sesión en la dirección.
+    detectSessionInUrl: Platform.OS === 'web' && typeof window !== 'undefined',
   },
 });
 

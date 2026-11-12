@@ -12,8 +12,8 @@ import { Button, Field, Lead, Notice, Screen, Title } from './ui';
 
 /** Entrar o crear cuenta con correo y contraseña. */
 export function AuthScreen() {
-  const { signIn, signUp } = useStore();
-  const [mode, setMode] = useState<'in' | 'up'>('in');
+  const { signIn, signUp, sendLoginLink } = useStore();
+  const [mode, setMode] = useState<'in' | 'up' | 'link'>('in');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [notice, setNotice] = useState('');
@@ -25,7 +25,12 @@ export function AuthScreen() {
     setNotice('');
     setBusy(true);
     try {
-      if (mode === 'in') await signIn(email.trim(), password);
+      if (mode === 'link') {
+        await sendLoginLink(email.trim());
+        setNotice(
+          'Te hemos enviado un enlace. Ábrelo desde este dispositivo y entrarás directamente.',
+        );
+      } else if (mode === 'in') await signIn(email.trim(), password);
       else if (!(await signUp(email.trim(), password))) {
         setNotice(
           'Te hemos enviado un correo. Ábrelo, confirma tu cuenta y vuelve aquí para entrar.',
@@ -56,20 +61,22 @@ export function AuthScreen() {
         autoComplete="email"
         keyboardType="email-address"
       />
-      <Field
-        label="Contraseña"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-        onSubmitEditing={submit}
-      />
+      {mode !== 'link' && (
+        <Field
+          label="Contraseña"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          onSubmitEditing={submit}
+        />
+      )}
       <Notice>{notice}</Notice>
       <Button
-        label={mode === 'in' ? 'Entrar' : 'Crear cuenta'}
-        disabled={busy || !email.trim() || password.length < 6}
+        label={mode === 'in' ? 'Entrar' : mode === 'up' ? 'Crear cuenta' : 'Enviarme el enlace'}
+        disabled={busy || !email.trim() || (mode !== 'link' && password.length < 6)}
         onPress={submit}
       />
-      {mode === 'up' && (
+      {mode !== 'in' && (
         <Text
           style={{ color: theme.textSecondary, fontSize: 13, lineHeight: 19, textAlign: 'center' }}>
           Al crear tu cuenta aceptas las{' '}
@@ -97,6 +104,16 @@ export function AuthScreen() {
           setMode(mode === 'in' ? 'up' : 'in');
         }}
       />
+      {mode !== 'link' && (
+        <Button
+          variant="quiet"
+          label="Entrar sin contraseña"
+          onPress={() => {
+            setNotice('');
+            setMode('link');
+          }}
+        />
+      )}
     </Screen>
   );
 }

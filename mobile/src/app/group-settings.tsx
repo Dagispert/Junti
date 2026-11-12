@@ -259,6 +259,54 @@ export default function GroupSettings() {
             />
           </View>
           <View style={[styles.option, { borderTopWidth: 1, borderTopColor: theme.soft }]}>
+            <Text style={{ flex: 1, color: theme.text, fontSize: 17 }}>Descanso desde las</Text>
+            <Button
+              compact
+              variant="quiet"
+              label="−"
+              disabled={busy}
+              onPress={() =>
+                run(() => store.setQuietHours(group.id, (group.quietFrom + 23) % 24, group.quietTo))
+              }
+            />
+            <Text style={{ color: theme.text, fontSize: 17, fontWeight: '500' }}>
+              {String(group.quietFrom).padStart(2, '0')}:00
+            </Text>
+            <Button
+              compact
+              variant="quiet"
+              label="+"
+              disabled={busy}
+              onPress={() =>
+                run(() => store.setQuietHours(group.id, (group.quietFrom + 1) % 24, group.quietTo))
+              }
+            />
+          </View>
+          <View style={[styles.option, { borderTopWidth: 1, borderTopColor: theme.soft }]}>
+            <Text style={{ flex: 1, color: theme.text, fontSize: 17 }}>hasta las</Text>
+            <Button
+              compact
+              variant="quiet"
+              label="−"
+              disabled={busy}
+              onPress={() =>
+                run(() => store.setQuietHours(group.id, group.quietFrom, (group.quietTo + 23) % 24))
+              }
+            />
+            <Text style={{ color: theme.text, fontSize: 17, fontWeight: '500' }}>
+              {String(group.quietTo).padStart(2, '0')}:00
+            </Text>
+            <Button
+              compact
+              variant="quiet"
+              label="+"
+              disabled={busy}
+              onPress={() =>
+                run(() => store.setQuietHours(group.id, group.quietFrom, (group.quietTo + 1) % 24))
+              }
+            />
+          </View>
+          <View style={[styles.option, { borderTopWidth: 1, borderTopColor: theme.soft }]}>
             <Text style={{ flex: 1, color: theme.text, fontSize: 17 }}>
               {muted ? 'Silenciado una semana' : 'Avisos activos'}
             </Text>
@@ -274,7 +322,8 @@ export default function GroupSettings() {
           </View>
         </Card>
         <Text style={{ color: theme.textSecondary, fontSize: 15, lineHeight: 20 }}>
-          La hora es la tuya, estés donde estés. Silenciar no lo ve nadie más.
+          La hora es la tuya, estés donde estés. En tus horas de descanso no llega ningún aviso: lo
+          que pase te espera por la mañana. Silenciar no lo ve nadie más.
         </Text>
       </View>
 

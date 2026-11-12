@@ -8,6 +8,7 @@ import type { Moment } from '@/data/types';
 import { clockIn, relative } from '@/lib/time';
 
 import { VideoMoment, VoiceNote } from './media-players';
+import { PhotoCarousel } from './photo-carousel';
 import { SkyBadge } from './sky-badge';
 import { Avatar, Card, Photo, Scrim } from './ui';
 
@@ -17,12 +18,21 @@ const VISIBLE_COMMENTS = 2;
 
 export function MomentCard({ moment }: { moment: Moment }) {
   const theme = useTheme();
-  const { me, user, proposals, toggleReaction, addComment, deleteMoment, reportMoment } =
-    useStore();
+  const {
+    me,
+    user,
+    proposals,
+    toggleReaction,
+    addComment,
+    deleteMoment,
+    editMoment,
+    reportMoment,
+  } = useStore();
   const [draft, setDraft] = useState('');
   const [expanded, setExpanded] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [reported, setReported] = useState<'' | 'ask' | 'sent'>('');
+  const [editing, setEditing] = useState<string | null>(null);
 
   const author = user(moment.authorId);
   const proposal = proposals.find((p) => p.id === moment.proposalId);
@@ -52,6 +62,12 @@ export function MomentCard({ moment }: { moment: Moment }) {
         <View style={styles.photoWrap}>
           {moment.videoUri ? (
             <VideoMoment moment={moment} style={StyleSheet.absoluteFill} />
+          ) : moment.photos ? (
+            <PhotoCarousel
+              photos={moment.photos}
+              dotsBottom={moment.text || proposal ? 96 : 16}
+              onOpen={() => router.push({ pathname: '/moment/[id]', params: { id: moment.id } })}
+            />
           ) : (
             <Pressable
               accessibilityRole="button"
@@ -103,6 +119,7 @@ export function MomentCard({ moment }: { moment: Moment }) {
             {moment.memory
               ? `recuerdo añadido ${relative(moment.sharedAt)}`
               : relative(moment.createdAt)}
+            {moment.edited ? ' · editado' : ''}
           </Text>
         </View>
         <View style={styles.reactions}>
@@ -128,6 +145,38 @@ export function MomentCard({ moment }: { moment: Moment }) {
           })}
         </View>
       </View>
+
+      {editing !== null && (
+        <View style={styles.editBox}>
+          <TextInput
+            value={editing}
+            onChangeText={setEditing}
+            multiline
+            autoFocus
+            maxLength={2000}
+            accessibilityLabel="Texto del momento"
+            style={[styles.editInput, { color: theme.text, backgroundColor: theme.soft }]}
+          />
+          <View style={styles.editActions}>
+            <Pressable accessibilityRole="button" onPress={() => setEditing(null)}>
+              <Text style={{ color: theme.textSecondary, fontSize: 15 }}>Cancelar</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              disabled={!editing.trim() && !moment.imageUri && !moment.videoUri && !moment.voice}
+              onPress={() =>
+                editMoment(moment.id, editing.trim())
+                  .then(() => setEditing(null))
+                  .catch(() => {})
+              }
+              style={[styles.saveBtn, { backgroundColor: theme.accent }]}>
+              <Text style={{ color: theme.onAccent, fontSize: 15, fontWeight: '500' }}>
+                Guardar
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
 
       <View style={styles.thread}>
         {hidden > 0 && (
@@ -174,6 +223,14 @@ export function MomentCard({ moment }: { moment: Moment }) {
                     ? '¿Denunciar?'
                     : 'Denunciar'}
               </Text>
+            </Pressable>
+          )}
+          {moment.authorId === me && editing === null && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Editar el texto"
+              onPress={() => setEditing(moment.text ?? '')}>
+              <Text style={{ fontSize: 13, color: theme.textSecondary }}>Editar</Text>
             </Pressable>
           )}
           {moment.authorId === me && (
@@ -239,6 +296,22 @@ const styles = StyleSheet.create({
     height: 36,
     paddingHorizontal: 12,
     borderRadius: Radius.pill,
+  },
+  editBox: { paddingHorizontal: 8, paddingTop: 12, gap: 8 },
+  editInput: {
+    minHeight: 80,
+    fontSize: 15,
+    lineHeight: 20,
+    borderRadius: Radius.small,
+    padding: 12,
+    textAlignVertical: 'top',
+  },
+  editActions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 16 },
+  saveBtn: {
+    height: 36,
+    paddingHorizontal: 16,
+    borderRadius: Radius.small,
+    justifyContent: 'center',
   },
   thread: { paddingHorizontal: 8, paddingTop: 12, paddingBottom: 8, gap: 8 },
   comment: { fontSize: 15, lineHeight: 20 },
