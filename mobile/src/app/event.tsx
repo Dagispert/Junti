@@ -3,12 +3,12 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { DatePick } from '@/components/date-pick';
+import { Icon } from '@/components/icon';
 import { Avatar, Button, Field, Notice, Screen, Tag, Title } from '@/components/ui';
 import { Radius, Spacing, useTheme } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
 import type { EventKind } from '@/data/types';
 import { fromISO, KINDS, longDate, toISO, today } from '@/lib/calendar';
-
 
 /** Elegir una fecha con flechas de día, mes y año (funciona igual en web y en el móvil). */
 /** Crear o editar un evento del calendario. */
@@ -83,7 +83,7 @@ export default function EventScreen() {
           )}
         </View>
       }>
-      <View style={{ gap: 10 }}>
+      <View style={{ gap: 12 }}>
         <Tag>Calendario de {g?.name}</Tag>
         <Title>{existing ? 'Evento' : 'Nuevo evento'}</Title>
       </View>
@@ -106,8 +106,8 @@ export default function EventScreen() {
                 borderColor: kind === k ? theme.text : 'transparent',
               },
             ]}>
-            <Text style={{ fontSize: 18 }}>{KINDS[k].emoji}</Text>
-            <Text style={{ color: theme.text, fontSize: 14, fontWeight: '500' }}>
+            <Icon icon={KINDS[k].icon} size={18} color={theme.text} />
+            <Text style={{ color: theme.text, fontSize: 15, fontWeight: '500' }}>
               {KINDS[k].label}
             </Text>
           </Pressable>
@@ -130,7 +130,7 @@ export default function EventScreen() {
                   { backgroundColor: personId === pid ? KINDS.birthday.color : theme.card },
                 ]}>
                 <Avatar userId={pid} size={30} />
-                <Text style={{ color: theme.text, fontSize: 14 }}>
+                <Text style={{ color: theme.text, fontSize: 15 }}>
                   {pid === me ? 'Yo' : user(pid).name.split(' ')[0]}
                 </Text>
               </Pressable>
@@ -164,7 +164,7 @@ export default function EventScreen() {
       />
       {(kind === 'trip' || kind === 'reunion' || kind === 'celebration') &&
         (end ? (
-          <View style={{ gap: 6 }}>
+          <View style={{ gap: 8 }}>
             <DatePick label="Hasta" value={end} onChange={canEdit ? setEnd : () => {}} />
             {canEdit && (
               <Button
@@ -201,7 +201,7 @@ export default function EventScreen() {
         editable={canEdit}
         onChangeText={setDescription}
         multiline
-        style={{ height: 90, paddingTop: 14 }}
+        style={{ height: 90, paddingTop: 16 }}
       />
 
       <Notice>{notice}</Notice>
@@ -240,8 +240,8 @@ const styles = StyleSheet.create({
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
+    gap: 8,
+    paddingHorizontal: 16,
     height: 44,
     borderRadius: Radius.pill,
     borderWidth: 1.5,
@@ -251,8 +251,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    padding: 5,
-    paddingRight: 14,
+    padding: 4,
+    paddingRight: 16,
     borderRadius: Radius.pill,
   },
 });

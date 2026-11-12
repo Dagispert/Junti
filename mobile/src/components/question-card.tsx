@@ -6,11 +6,17 @@ import { errorText, useStore } from '@/data/store';
 import type { Question } from '@/data/types';
 import { daysLeft, relative } from '@/lib/time';
 
-import { Avatar, AvatarRow, Card, Notice, Tag } from './ui';
+import { Icon } from './icon';
+import { Avatar, AvatarRow, Card, Notice } from './ui';
+import { ArrowUp, ChartColumn, Check, CircleHelp, MessageCircle, X } from 'lucide-react-native';
 
-const LABEL = { poll: '📊 Encuesta', quiz: '🤔 Quiz', open: '💬 Pregunta' } as const;
-const GOOD = '#2E9E5B';
-const BAD = '#D2553F';
+const LABEL = {
+  poll: { icon: ChartColumn, text: 'Encuesta' },
+  quiz: { icon: CircleHelp, text: 'Quiz' },
+  open: { icon: MessageCircle, text: 'Pregunta' },
+} as const;
+const GOOD = '#16A34A';
+const BAD = '#DC2626';
 
 /**
  * Una pregunta al grupo. Antes de responder, solo la pregunta y sus opciones;
@@ -51,7 +57,12 @@ export function QuestionCard({ question }: { question: Question }) {
   return (
     <Card style={styles.card}>
       <View style={styles.top}>
-        <Tag>{LABEL[question.kind]}</Tag>
+        <View style={styles.kind}>
+          <Icon icon={LABEL[question.kind].icon} size={16} />
+          <Text style={{ color: theme.textSecondary, fontSize: 13, fontWeight: '500' }}>
+            {LABEL[question.kind].text}
+          </Text>
+        </View>
         <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
           {closed
             ? 'Cerrada'
@@ -64,7 +75,7 @@ export function QuestionCard({ question }: { question: Question }) {
       </View>
       <View style={styles.who}>
         <Avatar userId={question.createdBy} size={28} />
-        <Text style={{ color: theme.textSecondary, fontSize: 14 }}>
+        <Text style={{ color: theme.textSecondary, fontSize: 15 }}>
           {isAuthor ? 'Has preguntado' : `${first(question.createdBy)} pregunta`}
         </Text>
       </View>
@@ -82,9 +93,9 @@ export function QuestionCard({ question }: { question: Question }) {
             const tint = !reveal
               ? theme.soft
               : isCorrect
-                ? 'rgba(46,158,91,0.16)'
+                ? 'rgba(22,163,74,0.12)'
                 : wrongPick
-                  ? 'rgba(210,85,63,0.14)'
+                  ? 'rgba(220,38,38,0.1)'
                   : theme.soft;
             return (
               <Pressable
@@ -107,8 +118,9 @@ export function QuestionCard({ question }: { question: Question }) {
                     ]}
                   />
                 )}
+                {isCorrect && reveal && <Icon icon={Check} size={16} color={GOOD} />}
+                {wrongPick && <Icon icon={X} size={16} color={BAD} />}
                 <Text style={[styles.optionText, { color: theme.text }]} numberOfLines={2}>
-                  {isCorrect && reveal ? '✓ ' : wrongPick ? '✗ ' : ''}
                   {option}
                 </Text>
                 {reveal && voters.length > 0 && <AvatarRow userIds={voters} size={22} />}
@@ -132,20 +144,20 @@ export function QuestionCard({ question }: { question: Question }) {
             fontWeight: '600',
           }}>
           {mine.choice === question.correct
-            ? '¡Acertaste! 🎉'
-            : `Era «${question.options?.[question.correct]}» 😄`}
+            ? 'Acertaste'
+            : `Era «${question.options?.[question.correct]}»`}
         </Text>
       )}
 
       {/* Pregunta abierta: responder y leer a los demás. */}
       {question.kind === 'open' && (
-        <View style={{ gap: 10 }}>
+        <View style={{ gap: 12 }}>
           {reveal &&
             question.answers.map((a) => (
               <View key={a.userId} style={styles.reply}>
                 <Avatar userId={a.userId} size={30} />
                 <View style={{ flex: 1 }}>
-                  <Text style={{ color: theme.text, fontSize: 14, fontWeight: '600' }}>
+                  <Text style={{ color: theme.text, fontSize: 15, fontWeight: '600' }}>
                     {a.userId === me ? 'Tú' : first(a.userId)}
                   </Text>
                   <Text style={{ color: theme.text, fontSize: 15, lineHeight: 21 }}>{a.text}</Text>
@@ -173,7 +185,7 @@ export function QuestionCard({ question }: { question: Question }) {
                   styles.send,
                   { backgroundColor: theme.accent, opacity: busy || !draft.trim() ? 0.4 : 1 },
                 ]}>
-                <Text style={{ color: theme.onAccent, fontSize: 16 }}>↑</Text>
+                <Icon icon={ArrowUp} size={18} color={theme.onAccent} />
               </Pressable>
             </View>
           )}
@@ -211,30 +223,31 @@ export function QuestionCard({ question }: { question: Question }) {
 const styles = StyleSheet.create({
   card: { padding: 20, gap: Spacing.two },
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  kind: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   who: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  title: { fontSize: 22, lineHeight: 28, fontWeight: '500', letterSpacing: -0.4 },
+  title: { fontSize: 24, lineHeight: 28, fontWeight: '500', letterSpacing: -0.4 },
   option: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    minHeight: 50,
+    gap: 12,
+    minHeight: 48,
     borderRadius: 16,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     overflow: 'hidden',
     borderWidth: 1.5,
     borderColor: 'transparent',
   },
   bar: { position: 'absolute', left: 0, top: 0, bottom: 0, opacity: 0.8 },
-  optionText: { flex: 1, fontSize: 16, paddingVertical: 12 },
+  optionText: { flex: 1, fontSize: 17, paddingVertical: 12 },
   percent: { fontSize: 13, fontVariant: ['tabular-nums'], minWidth: 36, textAlign: 'right' },
-  reply: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  reply: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
   compose: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 8,
     borderRadius: 20,
-    paddingLeft: 14,
-    padding: 6,
+    paddingLeft: 16,
+    padding: 8,
   },
   input: { flex: 1, fontSize: 15, lineHeight: 21, paddingVertical: 8, maxHeight: 120 },
   send: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },

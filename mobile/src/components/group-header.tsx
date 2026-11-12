@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { ChevronLeft } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, Share, StyleSheet, Text, View } from 'react-native';
 
@@ -6,6 +7,7 @@ import { Radius, Spacing, useTheme } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
 import type { Group } from '@/data/types';
 
+import { Icon } from './icon';
 import { Button, Notice, Tag, Title } from './ui';
 
 /** Cabecera del grupo: nombre, invitación y la hora local de cada integrante. */
@@ -33,7 +35,10 @@ export function GroupHeader({ group }: { group: Group }) {
     <View style={styles.header}>
       <View style={styles.top}>
         <Pressable accessibilityRole="button" onPress={() => router.dismissTo('/')}>
-          <Text style={{ color: theme.textSecondary, fontSize: 14 }}>‹ Mis grupos</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Icon icon={ChevronLeft} size={16} />
+            <Text style={{ color: theme.textSecondary, fontSize: 15 }}>Mis grupos</Text>
+          </View>
         </Pressable>
         <View style={{ flexDirection: 'row' }}>
           <Button

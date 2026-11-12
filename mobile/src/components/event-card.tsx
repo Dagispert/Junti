@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { Icon } from '@/components/icon';
 import { Hand, HandBold, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import type { GroupEvent } from '@/data/types';
@@ -33,7 +34,7 @@ export function EventCard({ event, compact }: { event: GroupEvent; compact?: boo
         onPress={open}
         style={[styles.ticket, { backgroundColor: theme.card }]}>
         <View style={[styles.stub, { backgroundColor: kind.color }]}>
-          <Text style={styles.stubEmoji}>{kind.emoji}</Text>
+          <Icon icon={kind.icon} size={20} color="#1D1F22" />
           <Text style={styles.stubDay}>{fmt(when, { day: 'numeric' })}</Text>
           <Text style={styles.stubMonth}>{fmt(when, { month: 'short' }).replace('.', '')}</Text>
         </View>
@@ -71,10 +72,12 @@ export function EventCard({ event, compact }: { event: GroupEvent; compact?: boo
         {event.kind === 'birthday' && event.personId ? (
           <View>
             <Avatar userId={event.personId} size={44} />
-            <Text style={styles.badgeOver}>{kind.emoji}</Text>
+            <View style={styles.badgeOver}>
+              <Icon icon={kind.icon} size={14} color="#1D1F22" />
+            </View>
           </View>
         ) : (
-          <Text style={{ fontSize: 28 }}>{kind.emoji}</Text>
+          <Icon icon={kind.icon} size={24} color="#1D1F22" />
         )}
       </View>
       <View style={{ flex: 1, gap: 2 }}>
@@ -102,8 +105,7 @@ const styles = StyleSheet.create({
     minHeight: 120,
   },
   stub: { width: 92, alignItems: 'center', justifyContent: 'center', gap: 2 },
-  stubEmoji: { fontSize: 26 },
-  stubDay: { fontSize: 32, fontWeight: '700', color: '#1D1F22', letterSpacing: -1 },
+  stubDay: { fontSize: 34, fontWeight: '600', color: '#1D1F22', letterSpacing: -1 },
   stubMonth: {
     fontSize: 13,
     fontWeight: '600',
@@ -111,17 +113,17 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
-  perforation: { width: 10, justifyContent: 'space-evenly', alignItems: 'center', marginLeft: -5 },
+  perforation: { width: 10, justifyContent: 'space-evenly', alignItems: 'center', marginLeft: -4 },
   hole: { width: 10, height: 10, borderRadius: 5 },
-  ticketBody: { flex: 1, padding: 16, gap: 3, justifyContent: 'center' },
+  ticketBody: { flex: 1, padding: 16, gap: 4, justifyContent: 'center' },
   ticketKind: { fontSize: 11, letterSpacing: 1.4, fontWeight: '600' },
-  title: { fontSize: 18, fontWeight: '600', letterSpacing: -0.3 },
-  count: { fontFamily: HandBold, fontSize: 22, color: '#C2477A' },
+  title: { fontSize: 17, fontWeight: '600' },
+  count: { fontFamily: HandBold, fontSize: 24, color: '#C2477A' },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    padding: 14,
+    padding: 16,
     borderRadius: 22,
     boxShadow: '0 12px 26px rgba(20,22,26,0.10)',
   },
@@ -132,6 +134,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badgeOver: { position: 'absolute', right: -10, bottom: -8, fontSize: 20 },
+  badgeOver: {
+    position: 'absolute',
+    right: -8,
+    bottom: -8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   hand: { fontFamily: Hand },
 });

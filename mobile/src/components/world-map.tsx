@@ -409,9 +409,9 @@ const styles = StyleSheet.create({
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingVertical: 3,
-    paddingLeft: 3,
+    gap: 4,
+    paddingVertical: 4,
+    paddingLeft: 4,
     paddingRight: 8,
     borderRadius: 999,
     backgroundColor: 'rgba(10,14,26,0.72)',

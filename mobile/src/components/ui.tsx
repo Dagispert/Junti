@@ -83,9 +83,7 @@ export function Tag({ children, center }: { children: ReactNode; center?: boolea
   const theme = useTheme();
   return (
     <View style={[styles.tag, { backgroundColor: theme.soft }, center && { alignSelf: 'center' }]}>
-      <Text style={[styles.tagText, { color: theme.textSecondary, fontFamily: Fonts?.mono }]}>
-        {children}
-      </Text>
+      <Text style={[styles.tagText, { color: theme.textSecondary }]}>{children}</Text>
     </View>
   );
 }
@@ -162,7 +160,7 @@ export function Photo({
         {moment.videoUri && animate && <VideoClip uri={moment.videoUri} />}
         {badge && moment.videoUri && (
           <View style={styles.playBadge}>
-            <Text style={{ color: '#1D1F22', fontSize: 10, marginLeft: 1 }}>▶</Text>
+            <Text style={{ color: '#1D1F22', fontSize: 11, marginLeft: 2 }}>▶</Text>
           </View>
         )}
       </View>
@@ -175,7 +173,7 @@ export function Photo({
         {animate ? <VideoClip uri={moment.videoUri} /> : <VideoFrame uri={moment.videoUri} />}
         {badge && (
           <View style={styles.playBadge}>
-            <Text style={{ color: '#1D1F22', fontSize: 10, marginLeft: 1 }}>▶</Text>
+            <Text style={{ color: '#1D1F22', fontSize: 11, marginLeft: 2 }}>▶</Text>
           </View>
         )}
       </View>
@@ -187,7 +185,6 @@ export function Photo({
         <Waveform wave={moment.voice.waveform} height={56} />
       ) : (
         <Text numberOfLines={4} style={{ color: theme.text, fontSize: 13, textAlign: 'center' }}>
-          {moment.voice ? '🎙 ' : ''}
           {moment.text}
         </Text>
       )}
@@ -299,7 +296,7 @@ export function Card({ children, style }: { children: ReactNode; style?: StylePr
 export function Field({ label, style, ...props }: TextInputProps & { label: string }) {
   const theme = useTheme();
   return (
-    <View style={{ gap: 6 }}>
+    <View style={{ gap: 8 }}>
       <Text style={{ color: theme.textSecondary, fontSize: 13 }}>{label}</Text>
       <TextInput
         accessibilityLabel={label}
@@ -315,7 +312,7 @@ export function Field({ label, style, ...props }: TextInputProps & { label: stri
 export function Notice({ children }: { children: ReactNode }) {
   const theme = useTheme();
   if (!children) return null;
-  return <Text style={{ color: theme.text, fontSize: 14, lineHeight: 20 }}>{children}</Text>;
+  return <Text style={{ color: theme.text, fontSize: 15, lineHeight: 20 }}>{children}</Text>;
 }
 
 const styles = StyleSheet.create({
@@ -327,9 +324,9 @@ const styles = StyleSheet.create({
   },
   content: { paddingTop: Spacing.two, paddingBottom: Spacing.five, gap: Spacing.four },
   title: { fontSize: 34, lineHeight: 40, fontWeight: '500', letterSpacing: -0.8 },
-  lead: { fontSize: 19, lineHeight: 27, letterSpacing: -0.2 },
-  tag: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  tagText: { fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase' },
+  lead: { fontSize: 20, lineHeight: 28 },
+  tag: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  tagText: { fontSize: 13, fontWeight: '500' },
   avatar: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   photo: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   playBadge: {
@@ -344,18 +341,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   scrim: { position: 'absolute', left: 0, right: 0 },
-  fanFrame: { position: 'absolute', padding: 7 },
+  fanFrame: { position: 'absolute', padding: 8 },
   button: {
     height: 48,
-    paddingHorizontal: 22,
+    paddingHorizontal: 24,
     borderRadius: Radius.medium,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  buttonCompact: { height: 40, paddingHorizontal: 16, borderRadius: Radius.pill },
-  card: { borderRadius: Radius.frame, padding: 10 },
+  buttonCompact: { height: 40, paddingHorizontal: 16, borderRadius: Radius.small },
+  card: { borderRadius: Radius.frame, padding: 12 },
   field: {
-    fontSize: 16,
+    fontSize: 17,
     height: 52,
     borderRadius: Radius.medium,
     paddingHorizontal: Spacing.three,

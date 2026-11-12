@@ -73,11 +73,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    padding: 6,
+    padding: 8,
     marginTop: 8,
     borderRadius: Radius.pill,
   },
-  tab: { height: 48, paddingHorizontal: 13, borderRadius: Radius.pill, justifyContent: 'center' },
+  tab: { height: 48, paddingHorizontal: 12, borderRadius: Radius.pill, justifyContent: 'center' },
   plus: {
     width: 48,
     height: 48,
@@ -86,5 +86,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  plusText: { fontSize: 26, lineHeight: 30, fontWeight: '300' },
+  plusText: { fontSize: 28, lineHeight: 30, fontWeight: '300' },
 });

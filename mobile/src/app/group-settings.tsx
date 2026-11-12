@@ -79,7 +79,7 @@ export default function GroupSettings() {
               busy || !name.trim() || (name === group.name && description === group.description)
             }
             onPress={() =>
-              run(() => store.updateGroup(group.id, name.trim(), description.trim()), 'Guardado.')
+              run(() => store.updateGroup(group.id, name.trim(), description.trim()), 'Guardado')
             }
           />
         </Card>
@@ -90,7 +90,7 @@ export default function GroupSettings() {
         <Lead strong={current ? `${current.label}.` : 'Frecuencia personalizada.'}>
           Elige cuántas te gustaría recibir; el grupo sigue la opción más votada.
         </Lead>
-        <Card style={{ padding: 6 }}>
+        <Card style={{ padding: 8 }}>
           {tally.map((option, i) => {
             const mine = group.votes[me] === option.perWeek;
             return (
@@ -108,9 +108,9 @@ export default function GroupSettings() {
                     mine && { backgroundColor: theme.accent },
                   ]}
                 />
-                <Text style={{ flex: 1, color: theme.text, fontSize: 16 }}>{option.label}</Text>
+                <Text style={{ flex: 1, color: theme.text, fontSize: 17 }}>{option.label}</Text>
                 {option.count > 0 && (
-                  <Text style={{ color: theme.textSecondary, fontSize: 14 }}>
+                  <Text style={{ color: theme.textSecondary, fontSize: 15 }}>
                     {option.count} {option.count === 1 ? 'voto' : 'votos'}
                   </Text>
                 )}
@@ -123,13 +123,13 @@ export default function GroupSettings() {
             label={`Aplicar la más votada: ${pendingChange.label.toLowerCase()}`}
             disabled={busy}
             onPress={() =>
-              run(() => store.setCadence(group.id, pendingChange.days), 'Frecuencia actualizada.')
+              run(() => store.setCadence(group.id, pendingChange.days), 'Frecuencia actualizada')
             }
           />
         )}
         {group.isAdmin && winners.length > 1 && (
           <View style={{ gap: Spacing.one }}>
-            <Text style={{ color: theme.textSecondary, fontSize: 14 }}>
+            <Text style={{ color: theme.textSecondary, fontSize: 15 }}>
               Hay empate. Como administras el grupo, decides tú:
             </Text>
             {winners.map((w) => (
@@ -139,14 +139,14 @@ export default function GroupSettings() {
                 label={w.label}
                 disabled={busy}
                 onPress={() =>
-                  run(() => store.setCadence(group.id, w.days), 'Frecuencia actualizada.')
+                  run(() => store.setCadence(group.id, w.days), 'Frecuencia actualizada')
                 }
               />
             ))}
           </View>
         )}
         {!group.isAdmin && pendingChange && (
-          <Text style={{ color: theme.textSecondary, fontSize: 14 }}>
+          <Text style={{ color: theme.textSecondary, fontSize: 15 }}>
             La más votada es «{pendingChange.label.toLowerCase()}». Quien administra el grupo puede
             aplicarla.
           </Text>
@@ -155,7 +155,7 @@ export default function GroupSettings() {
 
       <View style={{ gap: Spacing.two }}>
         <Tag>Narradora</Tag>
-        <Lead strong={group.narrativeEnabled ? '✨ Activada.' : 'Apagada.'}>
+        <Lead strong={group.narrativeEnabled ? 'Activada.' : 'Apagada.'}>
           Escribe con IA la crónica de cada semana y cada mes a partir de lo que compartís.
         </Lead>
         {group.isAdmin && (
@@ -166,14 +166,14 @@ export default function GroupSettings() {
             onPress={() =>
               run(
                 () => store.setNarrative(group.id, !group.narrativeEnabled, group.narrativeStyle),
-                group.narrativeEnabled ? 'Narradora apagada.' : 'Narradora activada.',
+                group.narrativeEnabled ? 'Narradora apagada' : 'Narradora activada',
               )
             }
           />
         )}
         {group.narrativeEnabled && (
           <>
-            <Text style={{ color: theme.textSecondary, fontSize: 14 }}>
+            <Text style={{ color: theme.textSecondary, fontSize: 15 }}>
               {group.isAdmin ? 'Elige su estilo:' : 'Estilo elegido por el grupo:'}
             </Text>
             <View style={styles.styles}>
@@ -193,18 +193,17 @@ export default function GroupSettings() {
                       on && { backgroundColor: theme.soft },
                       !group.isAdmin && !on && { opacity: 0.45 },
                     ]}>
-                    <Text style={{ fontSize: 20 }}>{option.emoji}</Text>
                     <Text style={{ color: theme.text, fontSize: 15, fontWeight: '500' }}>
                       {option.label}
                     </Text>
-                    <Text style={{ color: theme.textSecondary, fontSize: 12 }}>{option.hint}</Text>
+                    <Text style={{ color: theme.textSecondary, fontSize: 13 }}>{option.hint}</Text>
                   </Pressable>
                 );
               })}
             </View>
-            <Card style={{ padding: 6 }}>
+            <Card style={{ padding: 8 }}>
               <View style={styles.option}>
-                <Text style={{ flex: 1, color: theme.text, fontSize: 16 }}>
+                <Text style={{ flex: 1, color: theme.text, fontSize: 17 }}>
                   {group.myNarrativeOptOut
                     ? 'Tus momentos no se usan'
                     : 'Tus momentos forman parte de la crónica'}
@@ -223,7 +222,7 @@ export default function GroupSettings() {
           </>
         )}
         {!group.isAdmin && !group.narrativeEnabled && (
-          <Text style={{ color: theme.textSecondary, fontSize: 14 }}>
+          <Text style={{ color: theme.textSecondary, fontSize: 15 }}>
             Quien administra el grupo puede activarla.
           </Text>
         )}
@@ -236,9 +235,9 @@ export default function GroupSettings() {
 
       <View style={{ gap: Spacing.two }}>
         <Tag>Tus avisos de este grupo</Tag>
-        <Card style={{ padding: 6 }}>
+        <Card style={{ padding: 8 }}>
           <View style={styles.option}>
-            <Text style={{ flex: 1, color: theme.text, fontSize: 16 }}>
+            <Text style={{ flex: 1, color: theme.text, fontSize: 17 }}>
               Recibir la propuesta a partir de
             </Text>
             <Button
@@ -248,7 +247,7 @@ export default function GroupSettings() {
               disabled={busy}
               onPress={() => run(() => store.setPreferredHour(group.id, (group.myHour + 23) % 24))}
             />
-            <Text style={{ color: theme.text, fontSize: 16, fontWeight: '500' }}>
+            <Text style={{ color: theme.text, fontSize: 17, fontWeight: '500' }}>
               {String(group.myHour).padStart(2, '0')}:00
             </Text>
             <Button
@@ -260,7 +259,7 @@ export default function GroupSettings() {
             />
           </View>
           <View style={[styles.option, { borderTopWidth: 1, borderTopColor: theme.soft }]}>
-            <Text style={{ flex: 1, color: theme.text, fontSize: 16 }}>
+            <Text style={{ flex: 1, color: theme.text, fontSize: 17 }}>
               {muted ? 'Silenciado una semana' : 'Avisos activos'}
             </Text>
             <Button
@@ -274,14 +273,14 @@ export default function GroupSettings() {
             />
           </View>
         </Card>
-        <Text style={{ color: theme.textSecondary, fontSize: 14, lineHeight: 20 }}>
+        <Text style={{ color: theme.textSecondary, fontSize: 15, lineHeight: 20 }}>
           La hora es la tuya, estés donde estés. Silenciar no lo ve nadie más.
         </Text>
       </View>
 
       <View style={{ gap: Spacing.two }}>
         <Tag>Integrantes</Tag>
-        <Card style={{ padding: 6 }}>
+        <Card style={{ padding: 8 }}>
           {group.memberIds.map((id, i) => {
             const member = store.user(id);
             const admin = group.adminIds.includes(id);
@@ -291,7 +290,7 @@ export default function GroupSettings() {
                 style={[styles.option, i > 0 && { borderTopWidth: 1, borderTopColor: theme.soft }]}>
                 <Avatar userId={id} size={36} />
                 <View style={{ flex: 1 }}>
-                  <Text style={{ color: theme.text, fontSize: 16 }}>
+                  <Text style={{ color: theme.text, fontSize: 17 }}>
                     {member.name}
                     {id === me ? ' (tú)' : ''}
                   </Text>
@@ -362,7 +361,7 @@ export default function GroupSettings() {
 const styles = StyleSheet.create({
   header: { alignItems: 'flex-start', paddingVertical: Spacing.two },
   card: { padding: 20, gap: Spacing.three },
-  option: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
+  option: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16 },
   styles: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   style: {
     flexBasis: '47%',

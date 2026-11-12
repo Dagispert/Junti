@@ -8,6 +8,7 @@ import { SendCinematic } from '@/components/cinematics';
 import { CityPicker } from '@/components/city-picker';
 import { useGroupPeople } from '@/components/connection-card';
 import { DatePick } from '@/components/date-pick';
+import { Icon } from '@/components/icon';
 import { InlineVideo, VoiceNote } from '@/components/media-players';
 import { PressScale } from '@/components/motion';
 import { Button, Notice, Screen, Tag, Title } from '@/components/ui';
@@ -18,6 +19,7 @@ import type { Place } from '@/lib/geo';
 import { secondsOf, videoPoster } from '@/lib/media';
 import { mmss } from '@/lib/music';
 import { useVoiceRecorder } from '@/lib/recorder';
+import { Camera, ImageIcon, MapPin, Mic, Video, X } from 'lucide-react-native';
 
 const MAX_VIDEO = 30;
 
@@ -171,15 +173,15 @@ export default function Publish() {
   // Las fuentes, como botones grandes dentro del marco vacío.
   const sources = remembering
     ? [
-        { icon: '🖼️', label: 'Galería', onPress: () => pick('library', 'any') },
-        { icon: '📷', label: 'Hacer foto', onPress: () => pick('camera', 'photo') },
+        { icon: ImageIcon, label: 'Galería', onPress: () => pick('library', 'any') },
+        { icon: Camera, label: 'Hacer foto', onPress: () => pick('camera', 'photo') },
       ]
     : [
-        { icon: '📷', label: 'Foto', onPress: () => pick('camera', 'photo') },
-        { icon: '🎥', label: 'Vídeo', onPress: () => pick('camera', 'video') },
-        { icon: '🖼️', label: 'Galería', onPress: () => pick('library', 'any') },
+        { icon: Camera, label: 'Foto', onPress: () => pick('camera', 'photo') },
+        { icon: Video, label: 'Vídeo', onPress: () => pick('camera', 'video') },
+        { icon: ImageIcon, label: 'Galería', onPress: () => pick('library', 'any') },
         ...(voice.supported && !voice.result
-          ? [{ icon: '🎙️', label: 'Voz', onPress: voice.start }]
+          ? [{ icon: Mic, label: 'Voz', onPress: voice.start }]
           : []),
       ];
 
@@ -196,7 +198,7 @@ export default function Publish() {
           />
         </View>
       }>
-      <View style={{ gap: 10 }}>
+      <View style={{ gap: 12 }}>
         {/* El destino siempre a la vista antes de publicar. */}
         <Tag>Para {group.name}</Tag>
         <Title>
@@ -236,7 +238,7 @@ export default function Publish() {
                       accessibilityLabel={s.label}
                       onPress={s.onPress}
                       style={[styles.source, { backgroundColor: theme.card }]}>
-                      <Text style={styles.sourceIcon}>{s.icon}</Text>
+                      <Icon icon={s.icon} size={28} color={theme.text} />
                       <Text style={[styles.sourceLabel, { color: theme.text }]}>{s.label}</Text>
                     </PressScale>
                   </View>
@@ -259,7 +261,7 @@ export default function Publish() {
               accessibilityLabel="Quitar"
               onPress={() => setMedia(undefined)}
               style={styles.floatButton}>
-              <Text style={styles.floatText}>✕</Text>
+              <Icon icon={X} size={16} color="#FFFFFF" />
             </Pressable>
           </View>
         )}
@@ -286,14 +288,14 @@ export default function Publish() {
               />
             ))}
           </View>
-          <Text style={{ color: theme.text, fontVariant: ['tabular-nums'], fontSize: 14 }}>
+          <Text style={{ color: theme.text, fontVariant: ['tabular-nums'], fontSize: 15 }}>
             {mmss(voice.seconds)} / 2:00
           </Text>
           <Button compact label="Parar" onPress={voice.stop} />
         </View>
       )}
       {voice.result && !recording && (
-        <View style={{ gap: 6 }}>
+        <View style={{ gap: 8 }}>
           <VoiceNote voice={voice.result} />
           <Button compact variant="quiet" label="Quitar la nota de voz" onPress={voice.reset} />
         </View>
@@ -310,11 +312,11 @@ export default function Publish() {
       />
 
       {remembering && (
-        <View style={{ gap: 6 }}>
+        <View style={{ gap: 8 }}>
           <DatePick value={when} onChange={(d) => setWhen(d)} label="¿Cuándo fue?" />
           {dateFromPhoto && (
             <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
-              📸 Fecha leída de la foto. Cámbiala si no es esa.
+              Fecha leída de la foto. Cámbiala si no es esa
             </Text>
           )}
         </View>
@@ -341,10 +343,12 @@ export default function Publish() {
               accessibilityLabel="Quitar el lugar"
               onPress={() => setPlace(null)}
               style={[styles.chip, { backgroundColor: theme.card }]}>
+              <Icon icon={MapPin} size={16} color={theme.text} />
               <Text style={{ color: theme.text, fontSize: 15 }}>
-                📍 {place.name}
-                {place.country ? `, ${place.country}` : ''} ✕
+                {place.name}
+                {place.country ? `, ${place.country}` : ''}
               </Text>
+              <Icon icon={X} size={16} />
             </Pressable>
           ) : (
             <>
@@ -352,8 +356,9 @@ export default function Publish() {
                 accessibilityRole="button"
                 onPress={() => setPicking(true)}
                 style={[styles.chip, { backgroundColor: theme.card }]}>
+                <Icon icon={MapPin} size={16} color={theme.text} />
                 <Text style={{ color: theme.text, fontSize: 15 }}>
-                  📍 {remembering ? '¿Dónde fue?' : 'Añadir lugar'}
+                  {remembering ? '¿Dónde fue?' : 'Añadir lugar'}
                 </Text>
               </Pressable>
               {home && !remembering && (
@@ -371,7 +376,8 @@ export default function Publish() {
               accessibilityRole="button"
               onPress={voice.start}
               style={[styles.chip, { backgroundColor: theme.card }]}>
-              <Text style={{ color: theme.text, fontSize: 15 }}>🎙️ Añadir voz</Text>
+              <Icon icon={Mic} size={16} color={theme.text} />
+              <Text style={{ color: theme.text, fontSize: 15 }}>Añadir voz</Text>
             </Pressable>
           )}
         </View>
@@ -382,9 +388,9 @@ export default function Publish() {
 
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: Spacing.two },
-  stage: { borderRadius: Radius.frame, padding: 10 },
+  stage: { borderRadius: Radius.frame, padding: 12 },
   preview: { width: '100%', aspectRatio: 4 / 5, borderRadius: Radius.inner },
-  empty: { alignItems: 'center', justifyContent: 'center', padding: 18 },
+  empty: { alignItems: 'center', justifyContent: 'center', padding: 20 },
   sourceGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -402,8 +408,7 @@ const styles = StyleSheet.create({
     gap: 8,
     boxShadow: '0 8px 20px rgba(20,22,26,0.06)',
   },
-  sourceIcon: { fontSize: 34 },
-  sourceLabel: { fontSize: 16, fontWeight: '500' },
+  sourceLabel: { fontSize: 17, fontWeight: '500' },
   floating: { position: 'absolute', top: 22, right: 22, flexDirection: 'row', gap: 8 },
   floatButton: {
     height: 36,
@@ -414,7 +419,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(20,22,26,0.55)',
   },
-  floatText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  floatText: { color: '#fff', fontSize: 15, fontWeight: '600' },
   videoTag: {
     position: 'absolute',
     right: 12,
@@ -424,22 +429,29 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     backgroundColor: 'rgba(0,0,0,0.45)',
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: 999,
     overflow: 'hidden',
   },
   recording: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    padding: 10,
+    gap: 12,
+    padding: 12,
     borderRadius: 999,
     boxShadow: '0 10px 24px rgba(20,22,26,0.1)',
   },
   redDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#E5484D' },
   liveBars: { flex: 1, height: 30, flexDirection: 'row', alignItems: 'center', gap: 2 },
-  chips: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
-  chip: { height: 42, paddingHorizontal: 16, borderRadius: 999, justifyContent: 'center' },
+  chips: { flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap' },
+  chip: {
+    height: 44,
+    paddingHorizontal: 16,
+    borderRadius: 999,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   input: {
     minHeight: 100,
     fontSize: 17,

@@ -7,7 +7,7 @@ import { Platform, useColorScheme } from 'react-native';
 export const Colors = {
   light: {
     text: '#1D1F22',
-    textSecondary: '#9A9FA6',
+    textSecondary: '#686C73',
     background: '#F6F6F7',
     card: '#FFFFFF',
     soft: '#EDEDEF',
@@ -47,5 +47,6 @@ export const HandBold = 'Caveat_700Bold';
 
 export const Spacing = { half: 2, one: 4, two: 8, three: 16, four: 24, five: 32 } as const;
 /** frame: marco exterior de las tarjetas · inner: la foto que va dentro · pill: botones. */
-export const Radius = { small: 12, medium: 18, inner: 24, frame: 34, pill: 999 } as const;
+// Radios encajados: la foto (inner) = marco (frame) − relleno de la tarjeta (12).
+export const Radius = { small: 12, medium: 16, inner: 20, frame: 32, pill: 999 } as const;
 export const MaxContentWidth = 520;

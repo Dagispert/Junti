@@ -67,7 +67,7 @@ export default function AddSong() {
           )}
         </View>
       }>
-      <View style={{ gap: 10 }}>
+      <View style={{ gap: 12 }}>
         <Tag>Para {group(groupId)?.name ?? 'el grupo'}</Tag>
         <Title>Una canción para recordar</Title>
       </View>
@@ -77,7 +77,7 @@ export default function AddSong() {
           <View style={[styles.row, styles.chosen, { backgroundColor: theme.card }]}>
             {picked.artwork && <Image source={{ uri: picked.artwork }} style={styles.art} />}
             <View style={{ flex: 1 }}>
-              <Text style={{ color: theme.text, fontSize: 16, fontWeight: '600' }}>
+              <Text style={{ color: theme.text, fontSize: 17, fontWeight: '600' }}>
                 {picked.title}
               </Text>
               <Text style={{ color: theme.textSecondary }}>{picked.artist}</Text>
@@ -98,7 +98,7 @@ export default function AddSong() {
             placeholderTextColor={theme.textSecondary}
             style={[
               styles.input,
-              { color: theme.text, backgroundColor: theme.card, fontFamily: Hand, fontSize: 22 },
+              { color: theme.text, backgroundColor: theme.card, fontFamily: Hand, fontSize: 24 },
             ]}
           />
         </View>
@@ -132,10 +132,10 @@ export default function AddSong() {
                 <View style={[styles.art, { backgroundColor: theme.soft }]} />
               )}
               <View style={{ flex: 1 }}>
-                <Text numberOfLines={1} style={{ color: theme.text, fontSize: 16 }}>
+                <Text numberOfLines={1} style={{ color: theme.text, fontSize: 17 }}>
                   {r.title}
                 </Text>
-                <Text numberOfLines={1} style={{ color: theme.textSecondary, fontSize: 14 }}>
+                <Text numberOfLines={1} style={{ color: theme.textSecondary, fontSize: 15 }}>
                   {r.artist}
                 </Text>
               </View>
@@ -155,7 +155,7 @@ export default function AddSong() {
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: Spacing.two },
   search: {
-    fontSize: 16,
+    fontSize: 17,
     height: 52,
     borderRadius: Radius.medium,
     paddingHorizontal: Spacing.three,
@@ -169,5 +169,5 @@ const styles = StyleSheet.create({
   },
   chosen: { padding: 12, boxShadow: '0 12px 30px rgba(20,22,26,0.1)' },
   art: { width: 52, height: 52, borderRadius: 8 },
-  input: { minHeight: 110, borderRadius: Radius.inner, padding: 18, textAlignVertical: 'top' },
+  input: { minHeight: 112, borderRadius: Radius.inner, padding: 20, textAlignVertical: 'top' },
 });

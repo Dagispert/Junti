@@ -78,7 +78,7 @@ export default function Settings() {
               run(async () => {
                 await setAvatar(uri);
                 setCropping(undefined);
-              }, 'Foto actualizada.')
+              }, 'Foto actualizada')
             }
           />
           <Notice>{notice}</Notice>
@@ -118,7 +118,7 @@ export default function Settings() {
           label="Guardar"
           disabled={busy || !name.trim() || (name === profile.name && !placeChanged)}
           onPress={() =>
-            run(() => saveProfile(name.trim(), placeChanged ? place : undefined), 'Guardado.')
+            run(() => saveProfile(name.trim(), placeChanged ? place : undefined), 'Guardado')
           }
         />
       </Card>

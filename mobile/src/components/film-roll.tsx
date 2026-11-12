@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { Play } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInLeft, ZoomIn } from 'react-native-reanimated';
 
@@ -8,6 +9,7 @@ import { monthStart } from '@/lib/recap';
 import { primeNarrator } from '@/lib/narrator';
 import type { Moment } from '@/data/types';
 
+import { Icon } from './icon';
 import { Sticker, StickyNote } from './scrapbook';
 import { Photo } from './ui';
 
@@ -46,7 +48,7 @@ export function FilmRoll({
   return (
     <View style={{ gap: 4 }}>
       <View style={styles.titleRow}>
-        <Text style={styles.month}>{label}</Text>
+        <Text style={[styles.month, { flexShrink: 1 }]}>{label}</Text>
         {groupId ? (
           <Pressable
             accessibilityRole="button"
@@ -59,7 +61,8 @@ export function FilmRoll({
               });
             }}
             style={styles.recapBtn}>
-            <Text style={styles.recapText}>▶ Resumen del mes</Text>
+            <Icon icon={Play} size={14} color="#FFFFFF" />
+            <Text style={styles.recapText}>Resumen del mes</Text>
           </Pressable>
         ) : (
           <Text style={styles.count}>
@@ -70,7 +73,7 @@ export function FilmRoll({
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingVertical: 46, paddingRight: 30 }}>
+        contentContainerStyle={{ paddingVertical: 64, paddingRight: 32 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <Canister label={label} />
           <Animated.View entering={FadeInLeft.delay(200 + index * 120).duration(900)}>
@@ -97,7 +100,6 @@ export function FilmRoll({
                     ) : (
                       <View style={[styles.frame, styles.paper]}>
                         <Text numberOfLines={5} style={styles.paperText}>
-                          {m.voice ? '🎙 ' : ''}
                           {m.text ??
                             (m.voice ? `Nota de voz · ${Math.round(m.voice.duration)} s` : '')}
                         </Text>
@@ -154,7 +156,7 @@ export function FilmRoll({
 /** Cartucho de película, dibujado con piezas. */
 function Canister({ label }: { label: string }) {
   return (
-    <Animated.View entering={ZoomIn.springify().damping(13)} style={styles.canister}>
+    <Animated.View entering={ZoomIn.duration(360)} style={styles.canister}>
       <View style={styles.knob} />
       <View style={styles.cap} />
       <View style={styles.body}>
@@ -180,14 +182,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 4,
   },
-  month: { fontFamily: HandBold, fontSize: 30, color: '#C2477A' },
+  month: { fontFamily: HandBold, fontSize: 28, color: '#C2477A' },
   count: { fontFamily: Hand, fontSize: 20, color: '#8B9096' },
   recapBtn: {
     backgroundColor: '#1F2124',
     paddingHorizontal: 12,
     height: 32,
     borderRadius: 999,
-    justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   recapText: { color: '#fff', fontSize: 13, fontWeight: '500' },
   strip: {
@@ -207,9 +211,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   hole: { width: 10, height: 12, borderRadius: 2.5, backgroundColor: '#F6F1EA' },
-  frames: { flexDirection: 'row', gap: 10, paddingLeft: 18 },
+  frames: { flexDirection: 'row', gap: 12, paddingLeft: 20 },
   frame: { width: FRAME_W, height: FRAME_H, borderRadius: 3, overflow: 'hidden' },
-  paper: { backgroundColor: '#F7F0E2', padding: 10, justifyContent: 'center' },
+  paper: { backgroundColor: '#F7F0E2', padding: 12, justifyContent: 'center' },
   paperText: {
     fontFamily: Hand,
     fontSize: 20,
@@ -223,11 +227,11 @@ const styles = StyleSheet.create({
     bottom: -20,
     right: 4,
     color: '#E8B26A',
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: 11,
+    fontWeight: '600',
   },
   note: { position: 'absolute', left: -6, width: FRAME_W + 16 },
-  noteText: { fontFamily: Hand, fontSize: 19, lineHeight: 19, color: '#4A4E55' },
+  noteText: { fontFamily: Hand, fontSize: 20, lineHeight: 19, color: '#4A4E55' },
   noteSmall: { fontFamily: Hand, fontSize: 15, color: '#9AA0A6' },
   canister: { width: 80, alignItems: 'center', zIndex: 2 },
   knob: {
@@ -247,10 +251,10 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     boxShadow: 'inset -10px 0 14px rgba(0,0,0,0.25), inset 8px 0 10px rgba(255,255,255,0.15)',
   },
-  band: { backgroundColor: '#F4E9C8', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 3 },
-  iso: { color: '#2F5A20', fontWeight: '800', fontSize: 16 },
-  brand: { color: '#F4E9C8', fontWeight: '800', fontSize: 15, letterSpacing: 2 },
-  sub: { fontFamily: Hand, color: '#F4E9C8', fontSize: 16 },
+  band: { backgroundColor: '#F4E9C8', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 3 },
+  iso: { color: '#2F5A20', fontWeight: '600', fontSize: 17 },
+  brand: { color: '#F4E9C8', fontWeight: '600', fontSize: 15, letterSpacing: 2 },
+  sub: { fontFamily: Hand, color: '#F4E9C8', fontSize: 17 },
 });
 
 export { StickyNote };

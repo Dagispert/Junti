@@ -110,12 +110,12 @@ export function RecapCard({
           </View>
         )}
         <View style={[styles.play, { backgroundColor: theme.accent }]}>
-          <Text style={{ color: theme.onAccent, fontSize: 16, marginLeft: 2 }}>▶</Text>
+          <Text style={{ color: theme.onAccent, fontSize: 17, marginLeft: 2 }}>▶</Text>
         </View>
       </View>
-      <View style={{ alignItems: 'center', gap: 2, marginTop: 6 }}>
+      <View style={{ alignItems: 'center', gap: 2, marginTop: 8 }}>
         <Text style={[styles.title, { color: theme.text }]}>{recap.title}</Text>
-        <Text style={{ color: theme.textSecondary, fontSize: 14 }}>
+        <Text style={{ color: theme.textSecondary, fontSize: 15 }}>
           {recap.range}
           {recap.ongoing ? ' · hasta hoy' : ''}
         </Text>
@@ -139,10 +139,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     boxShadow: '0 12px 24px rgba(20,22,26,0.18)',
   },
-  paper: { backgroundColor: '#FFFDF6', padding: 10, justifyContent: 'center' },
+  paper: { backgroundColor: '#FFFDF6', padding: 12, justifyContent: 'center' },
   paperText: {
     fontFamily: Hand,
-    fontSize: 18,
+    fontSize: 17,
     lineHeight: 19,
     color: '#3C3F44',
     textAlign: 'center',
@@ -152,19 +152,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.25)',
   },
-  moreText: { color: '#1D1F22', fontSize: 30, fontWeight: '500' },
+  moreText: { color: '#1D1F22', fontSize: 28, fontWeight: '500' },
   play: {
     position: 'absolute',
     right: 8,
     bottom: 6,
     width: 46,
-    height: 46,
+    height: 48,
     borderRadius: 23,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 20,
     boxShadow: '0 8px 18px rgba(20,22,26,0.25)',
   },
-  title: { fontSize: 22, fontWeight: '500', letterSpacing: -0.4 },
+  title: { fontSize: 24, fontWeight: '500', letterSpacing: -0.4 },
   hint: { fontFamily: Hand, fontSize: 20 },
 });

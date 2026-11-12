@@ -72,9 +72,7 @@ export function PolaroidPile({ moments, size = 300 }: { moments: Moment[]; size?
         return (
           <Animated.View
             key={m.id}
-            entering={ZoomIn.delay(150 + i * 110)
-              .springify()
-              .damping(14)}
+            entering={ZoomIn.delay(150 + i * 110).duration(360)}
             style={{ position: 'absolute', left, top, zIndex: i }}>
             <Polaroid moment={m} width={w} rotate={rot(m.id, 14)} />
           </Animated.View>
@@ -128,7 +126,7 @@ export function Sticker({
   return (
     <Animated.View
       pointerEvents="none"
-      entering={ZoomIn.delay(delay).springify().damping(9)}
+      entering={ZoomIn.delay(delay).duration(360)}
       style={[
         {
           width: size,
@@ -166,14 +164,14 @@ export function StickyNote({
   return (
     <Animated.View
       pointerEvents="none"
-      entering={FadeInDown.delay(delay).springify().damping(12)}
+      entering={FadeInDown.delay(delay).duration(360)}
       style={[
         {
           width,
           minHeight: width * 0.7,
           backgroundColor: color,
           padding: 12,
-          paddingTop: 18,
+          paddingTop: 20,
           borderRadius: 4,
           boxShadow: '0 8px 16px rgba(20,22,26,0.15)',
           transform: [{ rotate: `${rotate}deg` }],
@@ -244,7 +242,7 @@ const styles = StyleSheet.create({
   },
   noteText: {
     fontFamily: Hand,
-    fontSize: 22,
+    fontSize: 24,
     lineHeight: 23,
     color: '#3D5C66',
     textAlign: 'center',

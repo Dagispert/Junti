@@ -2,16 +2,17 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { Icon } from '@/components/icon';
 import { Button, Field, Notice, Screen, Tag, Title } from '@/components/ui';
 import { Spacing, useTheme } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
 import type { QuestionKind } from '@/data/types';
+import { Check, X } from 'lucide-react-native';
 
-const COPY: Record<QuestionKind, { icon: string; title: string; placeholder: string }> = {
-  poll: { icon: '📊', title: 'Una encuesta', placeholder: '¿Dónde quedamos este verano?' },
-  quiz: { icon: '🤔', title: 'Un quiz', placeholder: '¿Quién de nosotros vivió en Berlín?' },
+const COPY: Record<QuestionKind, { title: string; placeholder: string }> = {
+  poll: { title: 'Una encuesta', placeholder: '¿Dónde quedamos este verano?' },
+  quiz: { title: 'Un quiz', placeholder: '¿Quién de nosotros vivió en Berlín?' },
   open: {
-    icon: '💬',
     title: 'Una pregunta',
     placeholder: '¿Qué recuerdo tienes de nuestro primer viaje?',
   },
@@ -84,11 +85,9 @@ export default function Ask() {
           />
         </View>
       }>
-      <View style={{ gap: 10 }}>
+      <View style={{ gap: 12 }}>
         <Tag>Para {group.name}</Tag>
-        <Title>
-          {copy.title} {copy.icon}
-        </Title>
+        <Title>{copy.title}</Title>
         {kind === 'quiz' && (
           <Text style={{ color: theme.textSecondary, fontSize: 15, lineHeight: 21 }}>
             Cada uno intenta adivinar y, al responder, ve la solución y lo que han dicho los demás.
@@ -124,7 +123,7 @@ export default function Ask() {
                   setOptions(names.slice(0, 8));
                   setCorrect(undefined);
                 }}>
-                <Text style={{ color: theme.text, fontSize: 14, textDecorationLine: 'underline' }}>
+                <Text style={{ color: theme.text, fontSize: 15, textDecorationLine: 'underline' }}>
                   Usar nuestros nombres
                 </Text>
               </Pressable>
@@ -140,10 +139,10 @@ export default function Ask() {
                   onPress={() => setCorrect(i)}
                   style={[
                     styles.radio,
-                    { borderColor: correct === i ? '#2E9E5B' : theme.textSecondary },
-                    correct === i && { backgroundColor: '#2E9E5B' },
+                    { borderColor: correct === i ? '#16A34A' : theme.textSecondary },
+                    correct === i && { backgroundColor: '#16A34A' },
                   ]}>
-                  {correct === i && <Text style={styles.check}>✓</Text>}
+                  {correct === i && <Icon icon={Check} size={16} color="#FFFFFF" />}
                 </Pressable>
               )}
               <TextInput
@@ -164,7 +163,7 @@ export default function Ask() {
                     setCorrect((c) => (c === undefined || c === i ? undefined : c > i ? c - 1 : c));
                   }}
                   style={styles.remove}>
-                  <Text style={{ color: theme.textSecondary, fontSize: 16 }}>✕</Text>
+                  <Icon icon={X} />
                 </Pressable>
               )}
             </View>
@@ -211,12 +210,12 @@ const styles = StyleSheet.create({
   option: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
     borderRadius: 18,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     minHeight: 52,
   },
-  optionInput: { flex: 1, fontSize: 16, paddingVertical: 14 },
+  optionInput: { flex: 1, fontSize: 17, paddingVertical: 16 },
   radio: {
     width: 26,
     height: 26,
@@ -225,8 +224,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  check: { color: '#fff', fontSize: 14, fontWeight: '700' },
-  remove: { padding: 6 },
+  check: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  remove: { padding: 8 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { height: 40, paddingHorizontal: 16, borderRadius: 999, justifyContent: 'center' },
 });

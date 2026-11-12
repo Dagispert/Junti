@@ -32,7 +32,7 @@ export default function MyGroups() {
             accessibilityLabel="Tu perfil"
             onPress={() => router.push('/settings')}
             style={styles.me}>
-            <Text style={{ color: theme.textSecondary, fontSize: 14 }}>{user(me).name}</Text>
+            <Text style={{ color: theme.textSecondary, fontSize: 15 }}>{user(me).name}</Text>
             <Avatar userId={me} size={34} />
           </Pressable>
         </View>
@@ -111,7 +111,7 @@ export default function MyGroups() {
                     <View style={[styles.dot, { backgroundColor: theme.text }]} />
                     <Text
                       numberOfLines={1}
-                      style={{ color: theme.textSecondary, fontSize: 14, flex: 1 }}>
+                      style={{ color: theme.textSecondary, fontSize: 15, flex: 1 }}>
                       {pending.title}
                     </Text>
                   </View>
@@ -145,28 +145,28 @@ const styles = StyleSheet.create({
   cover: { aspectRatio: 1, borderRadius: Radius.inner, overflow: 'hidden' },
   coverEmpty: { aspectRatio: 1.9, justifyContent: 'center' },
   groupName: {
-    marginTop: 26,
+    marginTop: 24,
     paddingHorizontal: 16,
     textAlign: 'center',
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: '500',
     letterSpacing: -0.7,
   },
-  groupMeta: { textAlign: 'center', fontSize: 14, marginTop: 4 },
+  groupMeta: { textAlign: 'center', fontSize: 15, marginTop: 4 },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
     paddingHorizontal: 8,
-    paddingTop: 14,
-    paddingBottom: 6,
+    paddingTop: 16,
+    paddingBottom: 8,
   },
   pending: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingHorizontal: 10,
-    paddingTop: 6,
+    paddingHorizontal: 12,
+    paddingTop: 8,
     paddingBottom: 8,
   },
   dot: { width: 6, height: 6, borderRadius: 3 },

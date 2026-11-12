@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { ZoomIn } from 'react-native-reanimated';
 
+import { Icon } from '@/components/icon';
 import { VideoMoment, VoiceNote, Waveform } from '@/components/media-players';
 import { Sticker, StickyNote } from '@/components/scrapbook';
 import { SkyBadge } from '@/components/sky-badge';
@@ -9,6 +10,7 @@ import { Photo, Screen } from '@/components/ui';
 import { Hand, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import { clockIn } from '@/lib/time';
+import { ArrowLeft } from 'lucide-react-native';
 
 /** Un momento a lo grande, como una foto pegada en un álbum. */
 export default function MomentView() {
@@ -35,7 +37,7 @@ export default function MomentView() {
             accessibilityLabel="Cerrar"
             onPress={() => router.back()}
             style={[styles.round, { backgroundColor: theme.card }]}>
-            <Text style={{ color: theme.text, fontSize: 18 }}>←</Text>
+            <Icon icon={ArrowLeft} color={theme.text} />
           </Pressable>
           <View style={{ alignItems: 'center', flex: 1 }}>
             <Text style={[styles.title, { color: theme.text }]}>{author.name}</Text>
@@ -44,7 +46,7 @@ export default function MomentView() {
               <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
                 {clockIn(moment.authorTz, moment.createdAt)}
                 {moment.place
-                  ? ` · 📍 ${moment.place.name}`
+                  ? ` · ${moment.place.name}`
                   : author.city
                     ? ` en ${author.city}`
                     : ''}{' '}
@@ -55,7 +57,7 @@ export default function MomentView() {
           <View style={{ width: 44 }} />
         </View>
       }>
-      <Animated.View entering={ZoomIn.springify().damping(15)} style={styles.frame}>
+      <Animated.View entering={ZoomIn.duration(360)} style={styles.frame}>
         {moment.videoUri ? (
           <View style={[styles.photo, { overflow: 'hidden' }]}>
             <VideoMoment moment={moment} style={StyleSheet.absoluteFill} />
@@ -89,7 +91,7 @@ export default function MomentView() {
       </Animated.View>
 
       {moment.voice && (
-        <View style={{ marginTop: 26 }}>
+        <View style={{ marginTop: 24 }}>
           <VoiceNote voice={moment.voice} />
         </View>
       )}
@@ -109,7 +111,7 @@ export default function MomentView() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
   round: {
     width: 44,
     height: 44,
@@ -118,11 +120,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     boxShadow: '0 6px 16px rgba(20,22,26,0.12)',
   },
-  title: { fontSize: 22, fontWeight: '600', letterSpacing: -0.4 },
-  meta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+  title: { fontSize: 24, fontWeight: '600', letterSpacing: -0.4 },
+  meta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
   frame: {
-    marginTop: 30,
-    marginHorizontal: 6,
+    marginTop: 32,
+    marginHorizontal: 8,
     backgroundColor: '#FFFFFF',
     padding: 12,
     borderRadius: 26,
@@ -131,6 +133,6 @@ const styles = StyleSheet.create({
   },
   photo: { width: '100%', aspectRatio: 4 / 5, borderRadius: 18 },
   note: { position: 'absolute', top: -26, right: -10 },
-  prompt: { fontSize: 14, textAlign: 'center', marginTop: 18 },
-  comment: { fontFamily: Hand, fontSize: 22, lineHeight: 24, paddingHorizontal: 10 },
+  prompt: { fontSize: 15, textAlign: 'center', marginTop: 20 },
+  comment: { fontFamily: Hand, fontSize: 24, lineHeight: 24, paddingHorizontal: 12 },
 });

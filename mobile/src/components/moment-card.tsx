@@ -35,9 +35,9 @@ export function MomentCard({ moment }: { moment: Moment }) {
   const placeName = moment.place?.name.split(',')[0];
   // Un recuerdo lleva su fecha; un momento, la hora local de quien lo compartió.
   const when = moment.memory
-    ? `📼 ${new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }).format(moment.createdAt)}`
+    ? `Recuerdo · ${new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }).format(moment.createdAt)}`
     : clockIn(moment.authorTz, moment.createdAt);
-  const where = `${when}${placeName ? ` · 📍 ${placeName}` : !moment.memory && author.city ? ` en ${author.city}` : ''}`;
+  const where = `${when}${placeName ? ` · ${placeName}` : !moment.memory && author.city ? ` en ${author.city}` : ''}`;
 
   const send = () => {
     const text = draft.trim();
@@ -83,7 +83,7 @@ export function MomentCard({ moment }: { moment: Moment }) {
       ) : moment.text || proposal ? (
         <View style={[styles.textPanel, { backgroundColor: theme.soft }]}>
           {proposal && (
-            <Text style={{ color: theme.textSecondary, fontSize: 14 }}>{proposal.title}</Text>
+            <Text style={{ color: theme.textSecondary, fontSize: 15 }}>{proposal.title}</Text>
           )}
           <Text style={[styles.bigText, { color: theme.text }]}>{moment.text}</Text>
         </View>
@@ -96,9 +96,9 @@ export function MomentCard({ moment }: { moment: Moment }) {
 
       <View style={styles.footer}>
         <Avatar userId={author.id} size={40} />
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, minWidth: 160 }}>
           <Text style={{ color: theme.text, fontSize: 15, fontWeight: '500' }}>{author.name}</Text>
-          <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
+          <Text numberOfLines={2} style={{ color: theme.textSecondary, fontSize: 13 }}>
             {moment.imageUri ? '' : `${where} · `}
             {moment.memory
               ? `recuerdo añadido ${relative(moment.sharedAt)}`
@@ -215,32 +215,40 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
-  overMetaText: { color: 'rgba(255,255,255,0.88)', fontSize: 14 },
+  overMetaText: { color: 'rgba(255,255,255,0.88)', fontSize: 15 },
   caption: { position: 'absolute', left: 20, right: 20, bottom: 20, gap: 4 },
   overProposal: { color: 'rgba(255,255,255,0.75)', fontSize: 13 },
-  overText: { color: '#fff', fontSize: 18, lineHeight: 24, fontWeight: '500', letterSpacing: -0.2 },
+  overText: { color: '#fff', fontSize: 17, lineHeight: 24, fontWeight: '500' },
   textPanel: { borderRadius: Radius.inner, padding: 24, paddingVertical: 32, gap: Spacing.two },
   bigText: { fontSize: 24, lineHeight: 31, fontWeight: '500', letterSpacing: -0.5 },
   footer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
     paddingHorizontal: 8,
-    paddingTop: 14,
+    paddingTop: 16,
   },
-  reactions: { flexDirection: 'row', gap: 6 },
+  reactions: { flexDirection: 'row', gap: 8 },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     height: 36,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     borderRadius: Radius.pill,
   },
-  thread: { paddingHorizontal: 8, paddingTop: 12, paddingBottom: 6, gap: 8 },
-  comment: { fontSize: 14, lineHeight: 20 },
+  thread: { paddingHorizontal: 8, paddingTop: 12, paddingBottom: 8, gap: 8 },
+  comment: { fontSize: 15, lineHeight: 20 },
   inputRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  input: { flex: 1, fontSize: 14, height: 40, borderRadius: Radius.pill, paddingHorizontal: 16 },
+  input: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 15,
+    height: 40,
+    borderRadius: Radius.small,
+    paddingHorizontal: 16,
+  },
 });

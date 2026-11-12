@@ -47,7 +47,7 @@ export function LegalView({ kind, onClose }: { kind: LegalKind; onClose: () => v
 const styles = StyleSheet.create({
   header: { alignItems: 'flex-start', paddingVertical: Spacing.two },
   meta: { fontSize: 13, marginTop: -8 },
-  heading: { fontSize: 18, fontWeight: '600', marginTop: Spacing.two },
+  heading: { fontSize: 17, fontWeight: '600', marginTop: Spacing.two },
   body: { fontSize: 15, lineHeight: 22 },
   bullet: { flexDirection: 'row', gap: 8 },
 });

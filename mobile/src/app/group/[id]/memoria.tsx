@@ -51,10 +51,10 @@ export default function Memory() {
           {pile.length > 0 && <PolaroidPile moments={pile} size={320} />}
           <Text style={[styles.heroText, { color: theme.text }]}>
             {week.length >= 5
-              ? 'Ha pasado mucho esta semana.'
+              ? 'Ha pasado mucho esta semana'
               : week.length > 0
-                ? `Esta semana, ${week.length} ${week.length === 1 ? 'momento' : 'momentos'}.`
-                : 'Una semana tranquila.'}
+                ? `Esta semana, ${week.length} ${week.length === 1 ? 'momento' : 'momentos'}`
+                : 'Una semana tranquila'}
           </Text>
           {week.length > 0 && (
             <Scribble size={22} rotate={-2}>
@@ -77,5 +77,5 @@ export default function Memory() {
 
 const styles = StyleSheet.create({
   hero: { alignItems: 'center', gap: Spacing.two, paddingVertical: Spacing.three },
-  heroText: { fontSize: 22, letterSpacing: -0.4, textAlign: 'center' },
+  heroText: { fontSize: 24, letterSpacing: -0.4, textAlign: 'center' },
 });

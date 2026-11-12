@@ -163,9 +163,7 @@ export function buildRecap(
       return false;
     });
     if (marked.length) {
-      story.push(
-        `En el calendario: ${join(marked.map((e) => `${KINDS[e.kind].emoji} ${e.title}`))}.`,
-      );
+      story.push(`En el calendario: ${join(marked.map((e) => e.title))}.`);
     }
     if (periodSongs.length) {
       story.push(`Y la banda sonora creció con ${join(periodSongs.map((s) => quote(s.title)))}.`);

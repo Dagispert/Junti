@@ -7,7 +7,6 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
-  withSpring,
   withTiming,
   cancelAnimation,
 } from 'react-native-reanimated';
@@ -16,6 +15,8 @@ import { Hand, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import type { Song } from '@/data/types';
 import { mmss, spotifyLink, usePreview } from '@/lib/music';
+import { ArrowUpRight, Music } from 'lucide-react-native';
+import { Icon } from './icon';
 
 const COVER = 128;
 
@@ -35,7 +36,7 @@ export function Soundtrack({ groupId }: { groupId: string }) {
       ) : (
         <>
           <View style={styles.head}>
-            <Text style={[styles.title, { color: theme.text }]}>Nuestra banda sonora…</Text>
+            <Text style={[styles.title, { color: theme.text }]}>Nuestra banda sonora</Text>
             <Pressable
               accessibilityRole="button"
               onPress={() => router.push({ pathname: '/add-song', params: { groupId } })}
@@ -79,12 +80,12 @@ export function Soundtrack({ groupId }: { groupId: string }) {
                       <View style={[styles.tooltip, { backgroundColor: theme.card }]}>
                         <Text
                           numberOfLines={1}
-                          style={{ color: theme.textSecondary, fontSize: 12 }}>
+                          style={{ color: theme.textSecondary, fontSize: 13 }}>
                           {s.artist}
                         </Text>
                         <Text
                           numberOfLines={1}
-                          style={{ color: theme.text, fontSize: 14, fontWeight: '600' }}>
+                          style={{ color: theme.text, fontSize: 15, fontWeight: '600' }}>
                           {s.title}
                         </Text>
                       </View>
@@ -122,7 +123,7 @@ function Artwork({ song, size }: { song: Song; size: number }) {
         alignItems: 'center',
         justifyContent: 'center',
       }}>
-      <Text style={{ fontSize: size * 0.3 }}>🎵</Text>
+      <Icon icon={Music} size={Math.round(size * 0.3)} color="#8B9096" />
     </View>
   );
 }
@@ -147,7 +148,7 @@ function Player({
   // El disco sale de la funda al abrir la canción y gira mientras suena.
   useEffect(() => {
     slide.value = 0;
-    slide.value = withSpring(1, { damping: 14, stiffness: 90 });
+    slide.value = withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) });
   }, [song.id, slide]);
   useEffect(() => {
     if (audio.playing) {
@@ -166,19 +167,20 @@ function Player({
   const go = (d: number) => onSwitch(list[(i + d + list.length) % list.length].id);
 
   return (
-    <View style={{ gap: 18 }}>
+    <View style={{ gap: 20 }}>
       <View style={styles.head}>
         <Pressable
           accessibilityRole="button"
           onPress={onBack}
           style={[styles.pill, { backgroundColor: theme.soft }]}>
-          <Text style={[styles.pillText, { color: theme.textSecondary }]}>‹ Volver</Text>
+          <Text style={[styles.pillText, { color: theme.textSecondary }]}>Volver</Text>
         </Pressable>
         <Pressable
           accessibilityRole="link"
           onPress={() => Linking.openURL(spotifyLink(song.title, song.artist))}
           style={[styles.pill, { backgroundColor: theme.soft }]}>
-          <Text style={[styles.pillText, { color: theme.textSecondary }]}>Ver en Spotify ↗</Text>
+          <Text style={[styles.pillText, { color: theme.textSecondary }]}>Ver en Spotify</Text>
+          <Icon icon={ArrowUpRight} size={16} />
         </Pressable>
       </View>
       <View style={styles.playerRow}>
@@ -208,17 +210,17 @@ function Player({
             <Artwork song={song} size={COVER} />
           </View>
         </View>
-        <View style={{ flex: 1, alignItems: 'center', gap: 6 }}>
+        <View style={{ flex: 1, alignItems: 'center', gap: 8 }}>
           <Text numberOfLines={1} style={{ color: theme.textSecondary, fontSize: 13 }}>
             {song.artist}
           </Text>
           <Text
             numberOfLines={2}
-            style={{ color: theme.text, fontSize: 16, fontWeight: '600', textAlign: 'center' }}>
+            style={{ color: theme.text, fontSize: 17, fontWeight: '600', textAlign: 'center' }}>
             {song.title}
           </Text>
           <View style={[styles.time, { backgroundColor: theme.soft }]}>
-            <Text style={{ color: theme.textSecondary, fontSize: 12 }}>
+            <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
               {mmss(audio.position)} / {mmss(audio.duration)}
             </Text>
           </View>
@@ -285,11 +287,11 @@ const styles = StyleSheet.create({
     overflow: 'visible',
   },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  title: { fontSize: 22, fontWeight: '500', letterSpacing: -0.4 },
-  pill: { height: 36, paddingHorizontal: 14, borderRadius: 999, justifyContent: 'center' },
-  pillText: { fontSize: 14, fontWeight: '500' },
+  title: { fontSize: 24, fontWeight: '500', letterSpacing: -0.4 },
+  pill: { height: 36, paddingHorizontal: 16, borderRadius: 999, justifyContent: 'center' },
+  pillText: { fontSize: 15, fontWeight: '500' },
   empty: { fontSize: 15, lineHeight: 21 },
-  stack: { height: COVER + 10, alignSelf: 'center', marginTop: 10, maxWidth: '100%' },
+  stack: { height: COVER + 10, alignSelf: 'center', marginTop: 12, maxWidth: '100%' },
   cover: { position: 'absolute', top: 0 },
   tooltip: {
     position: 'absolute',
@@ -297,12 +299,12 @@ const styles = StyleSheet.create({
     left: 10,
     minWidth: 140,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderRadius: 12,
     boxShadow: '0 8px 20px rgba(20,22,26,0.2)',
   },
   hint: { fontSize: 13, textAlign: 'center' },
-  playerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  playerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   vinyl: {
     position: 'absolute',
     left: 0,
@@ -334,8 +336,8 @@ const styles = StyleSheet.create({
     boxShadow: '0 12px 22px rgba(20,22,26,0.3)',
   },
   time: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 999 },
-  controls: { flexDirection: 'row', borderRadius: 999, paddingHorizontal: 6, marginTop: 4 },
-  ctrl: { width: 42, height: 38, alignItems: 'center', justifyContent: 'center' },
-  ctrlText: { fontSize: 16 },
-  note: { fontFamily: Hand, fontSize: 22, lineHeight: 24, textAlign: 'center' },
+  controls: { flexDirection: 'row', borderRadius: 999, paddingHorizontal: 8, marginTop: 4 },
+  ctrl: { width: 44, height: 40, alignItems: 'center', justifyContent: 'center' },
+  ctrlText: { fontSize: 17 },
+  note: { fontFamily: Hand, fontSize: 24, lineHeight: 24, textAlign: 'center' },
 });

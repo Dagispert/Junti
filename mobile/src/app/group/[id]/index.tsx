@@ -103,7 +103,7 @@ export default function Today() {
           groupId={group.id}
           kind="week"
           from={lastWeekReady}
-          hint="¡Ya está vuestro resumen!"
+          hint="Ya está vuestro resumen"
         />
       )}
       {feed.length === 0 && (
@@ -133,7 +133,7 @@ export function Missing() {
 }
 
 const styles = StyleSheet.create({
-  proposal: { padding: 24, gap: 14 },
-  question: { fontSize: 26, lineHeight: 32, fontWeight: '500', letterSpacing: -0.6 },
+  proposal: { padding: 24, gap: 16 },
+  question: { fontSize: 28, lineHeight: 32, fontWeight: '500', letterSpacing: -0.6 },
   actions: { flexDirection: 'row', alignItems: 'center', marginTop: 4, marginLeft: -2 },
 });

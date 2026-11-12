@@ -24,7 +24,7 @@ export function OnThisDay({ groupId }: { groupId: string }) {
     <View style={[styles.card, { backgroundColor: theme.card }]}>
       <Tape style={{ position: 'absolute', top: -8, left: '40%' }} />
       <Text style={styles.kicker}>{found.label}</Text>
-      <Text style={{ color: theme.textSecondary, fontSize: 14, textAlign: 'center' }}>
+      <Text style={{ color: theme.textSecondary, fontSize: 15, textAlign: 'center' }}>
         {date} · {who.join(', ')}
       </Text>
       <View style={styles.row}>
@@ -54,13 +54,13 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 32,
     padding: 20,
-    paddingTop: 22,
-    gap: 6,
+    paddingTop: 24,
+    gap: 8,
     alignItems: 'center',
     boxShadow: '0 18px 40px rgba(20,22,26,0.10)',
   },
-  kicker: { fontFamily: HandBold, fontSize: 30, color: '#C2477A', textAlign: 'center' },
-  row: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 14, marginBottom: 6 },
+  kicker: { fontFamily: HandBold, fontSize: 28, color: '#C2477A', textAlign: 'center' },
+  row: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 16, marginBottom: 8 },
   paper: {
     width: 120,
     minHeight: 120,

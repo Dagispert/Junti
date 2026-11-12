@@ -66,7 +66,7 @@ export function CityPicker({
 
   if (!open) {
     return (
-      <View style={{ gap: 6 }}>
+      <View style={{ gap: 8 }}>
         <Text style={{ color: theme.textSecondary, fontSize: 13 }}>{label}</Text>
         <Pressable
           accessibilityRole="button"
@@ -76,7 +76,7 @@ export function CityPicker({
             setOpen(true);
           }}
           style={[styles.field, { backgroundColor: theme.soft }]}>
-          <Text style={{ color: value ? theme.text : theme.textSecondary, fontSize: 16, flex: 1 }}>
+          <Text style={{ color: value ? theme.text : theme.textSecondary, fontSize: 17, flex: 1 }}>
             {value ? value.name : empty}
           </Text>
           {value && describe(value) ? (
@@ -128,7 +128,7 @@ export function CityPicker({
             styles.result,
             { backgroundColor: pressed ? theme.soft : 'transparent' },
           ]}>
-          <Text style={{ color: theme.text, fontSize: 16 }}>{p.name}</Text>
+          <Text style={{ color: theme.text, fontSize: 17 }}>{p.name}</Text>
           <Text style={{ color: theme.textSecondary, fontSize: 13 }}>{describe(p)}</Text>
         </Pressable>
       ))}
@@ -140,7 +140,7 @@ export function CityPicker({
               onChange(null);
               setOpen(false);
             }}>
-            <Text style={{ color: theme.textSecondary, fontSize: 14 }}>{clear}</Text>
+            <Text style={{ color: theme.textSecondary, fontSize: 15 }}>{clear}</Text>
           </Pressable>
         )}
         <Pressable
@@ -149,7 +149,7 @@ export function CityPicker({
             setOpen(false);
             onClose?.();
           }}>
-          <Text style={{ color: theme.textSecondary, fontSize: 14 }}>Cancelar</Text>
+          <Text style={{ color: theme.textSecondary, fontSize: 15 }}>Cancelar</Text>
         </Pressable>
       </View>
     </View>
@@ -164,10 +164,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    fontSize: 16,
+    fontSize: 17,
   },
-  hint: { fontSize: 14, paddingHorizontal: 4 },
-  result: { paddingVertical: 10, paddingHorizontal: 12, borderRadius: Radius.small, gap: 2 },
+  hint: { fontSize: 15, paddingHorizontal: 4 },
+  result: { paddingVertical: 12, paddingHorizontal: 12, borderRadius: Radius.small, gap: 2 },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',

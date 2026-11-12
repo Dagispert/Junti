@@ -1,7 +1,9 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { Icon } from '@/components/icon';
 import { Radius, useTheme } from '@/constants/theme';
 import { longDate } from '@/lib/calendar';
+import { ChevronDown, ChevronUp } from 'lucide-react-native';
 
 const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
@@ -37,7 +39,7 @@ export function DatePick({
         accessibilityLabel={`${name} siguiente`}
         onPress={() => shift(part, 1)}
         style={styles.step}>
-        <Text style={[styles.stepText, { color: theme.textSecondary }]}>⌃</Text>
+        <Icon icon={ChevronUp} />
       </Pressable>
       <Text style={[styles.colValue, { color: theme.text }]}>{text}</Text>
       <Pressable
@@ -45,12 +47,12 @@ export function DatePick({
         accessibilityLabel={`${name} anterior`}
         onPress={() => shift(part, -1)}
         style={styles.step}>
-        <Text style={[styles.stepText, { color: theme.textSecondary }]}>⌄</Text>
+        <Icon icon={ChevronDown} />
       </Pressable>
     </View>
   );
   return (
-    <View style={{ gap: 6 }}>
+    <View style={{ gap: 8 }}>
       <Text style={{ color: theme.textSecondary, fontSize: 13 }}>{label}</Text>
       <View style={[styles.picker, { backgroundColor: theme.soft }]}>
         {col('d', String(value.getDate()), 'Día')}
@@ -66,6 +68,6 @@ const styles = StyleSheet.create({
   picker: { flexDirection: 'row', borderRadius: Radius.medium, paddingVertical: 4 },
   col: { flex: 1, alignItems: 'center' },
   step: { width: '100%', height: 36, alignItems: 'center', justifyContent: 'center' },
-  stepText: { fontSize: 22 },
-  colValue: { fontSize: 22, fontWeight: '600' },
+  stepText: { fontSize: 24 },
+  colValue: { fontSize: 24, fontWeight: '600' },
 });

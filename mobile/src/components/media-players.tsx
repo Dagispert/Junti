@@ -1,4 +1,5 @@
 import { useVideoPlayer, VideoView, type VideoPlayer } from 'expo-video';
+import { Pause, Play, Volume2, VolumeX } from 'lucide-react-native';
 import { memo, useEffect, useRef, useState } from 'react';
 import {
   Platform,
@@ -14,6 +15,7 @@ import { useTheme } from '@/constants/theme';
 import type { Moment } from '@/data/types';
 import { mmss } from '@/lib/music';
 
+import { Icon } from './icon';
 import { Photo } from './ui';
 
 // En la web el vídeo es una etiqueta <video>: «top/left/right/bottom: 0» no la estira
@@ -185,7 +187,7 @@ export function VideoMoment({ moment, style }: { moment: Moment; style?: StylePr
       )}
       <Surface player={player} />
       <View pointerEvents="none" style={styles.sound}>
-        <Text style={styles.soundText}>{sound ? '🔊' : '🔇'}</Text>
+        <Icon icon={sound ? Volume2 : VolumeX} size={16} color="#fff" />
       </View>
       {!!moment.videoDuration && (
         <Text pointerEvents="none" style={styles.duration}>
@@ -219,7 +221,7 @@ export function Waveform({
   return (
     <View
       pointerEvents="none"
-      style={{ flexDirection: 'row', alignItems: 'center', gap: 3, height, width: '82%' }}>
+      style={{ flexDirection: 'row', alignItems: 'center', gap: 4, height, width: '82%' }}>
       {bars.map((v, i) => (
         <View
           key={i}
@@ -288,7 +290,7 @@ export function VoiceNote({
 
   return (
     <View
-      style={[styles.voice, { backgroundColor: theme.soft }, compact && { paddingVertical: 6 }]}>
+      style={[styles.voice, { backgroundColor: theme.soft }, compact && { paddingVertical: 8 }]}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={playing ? 'Pausar la nota de voz' : 'Escuchar la nota de voz'}
@@ -298,14 +300,7 @@ export function VoiceNote({
           { backgroundColor: theme.accent },
           compact && { width: 32, height: 32 },
         ]}>
-        <Text
-          style={{
-            color: theme.onAccent,
-            fontSize: compact ? 12 : 14,
-            marginLeft: playing ? 0 : 2,
-          }}>
-          {playing ? '❚❚' : '▶'}
-        </Text>
+        <Icon icon={playing ? Pause : Play} size={compact ? 14 : 16} color={theme.onAccent} />
       </Pressable>
       <View style={[styles.wave, { height: h }]}>
         {bars.map((v, i) => {
@@ -337,7 +332,7 @@ const styles = StyleSheet.create({
     left: 14,
     bottom: 14,
     width: 34,
-    height: 34,
+    height: 36,
     borderRadius: 17,
     backgroundColor: 'rgba(0,0,0,0.45)',
     alignItems: 'center',
@@ -353,25 +348,25 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     backgroundColor: 'rgba(0,0,0,0.45)',
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: 999,
     overflow: 'hidden',
   },
   voice: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
     padding: 8,
-    paddingRight: 14,
+    paddingRight: 16,
     borderRadius: 999,
   },
   voiceBtn: {
     width: 38,
-    height: 38,
+    height: 40,
     borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
   },
   wave: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 2 },
-  voiceTime: { fontSize: 12, fontVariant: ['tabular-nums'], minWidth: 30, textAlign: 'right' },
+  voiceTime: { fontSize: 13, fontVariant: ['tabular-nums'], minWidth: 30, textAlign: 'right' },
 });

@@ -3,12 +3,14 @@ import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { EventCard } from '@/components/event-card';
+import { Icon } from '@/components/icon';
 import { Appear } from '@/components/motion';
 import { Scribble } from '@/components/scrapbook';
 import { Button, Lead, Screen, Title } from '@/components/ui';
 import { HandBold, Radius, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import { happensOn, KINDS, longDate, toISO, today, upcoming } from '@/lib/calendar';
+import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 
 const WEEKDAYS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 
@@ -46,12 +48,12 @@ export default function CalendarScreen() {
     <Screen
       header={
         <View style={styles.header}>
-          <Button compact label="‹ Volver" variant="quiet" onPress={() => router.back()} />
-          <Button compact label="＋ Añadir" onPress={() => add(selected)} />
+          <Button compact label="Volver" variant="quiet" onPress={() => router.back()} />
+          <Button compact label="Añadir" onPress={() => add(selected)} />
         </View>
       }>
       <View style={{ gap: 4 }}>
-        <Text style={{ color: theme.textSecondary, fontSize: 14 }}>{group(groupId)?.name}</Text>
+        <Text style={{ color: theme.textSecondary, fontSize: 15 }}>{group(groupId)?.name}</Text>
         <Title>Calendario</Title>
       </View>
 
@@ -62,7 +64,7 @@ export default function CalendarScreen() {
             accessibilityLabel="Mes anterior"
             onPress={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}
             style={styles.arrow}>
-            <Text style={[styles.arrowText, { color: theme.text }]}>‹</Text>
+            <Icon icon={ChevronLeft} color={theme.text} />
           </Pressable>
           <Text style={styles.monthTitle}>{title[0].toUpperCase() + title.slice(1)}</Text>
           <Pressable
@@ -70,7 +72,7 @@ export default function CalendarScreen() {
             accessibilityLabel="Mes siguiente"
             onPress={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}
             style={styles.arrow}>
-            <Text style={[styles.arrowText, { color: theme.text }]}>›</Text>
+            <Icon icon={ChevronRight} color={theme.text} />
           </Pressable>
         </View>
         <View style={styles.grid}>
@@ -102,7 +104,9 @@ export default function CalendarScreen() {
                   </Text>
                 </View>
                 {dayEvents[0] && (
-                  <Text style={styles.dayEmoji}>{KINDS[dayEvents[0].kind].emoji}</Text>
+                  <View
+                    style={[styles.dayDot, { backgroundColor: KINDS[dayEvents[0].kind].color }]}
+                  />
                 )}
               </Pressable>
             );
@@ -110,17 +114,17 @@ export default function CalendarScreen() {
         </View>
       </View>
 
-      <View style={{ gap: 10 }}>
+      <View style={{ gap: 12 }}>
         <View style={styles.rowBetween}>
           <Text style={[styles.section, { color: theme.text }]}>{longDate(selected)}</Text>
           <Pressable accessibilityRole="button" onPress={() => add(selected)}>
-            <Text style={{ color: theme.textSecondary, fontSize: 14 }}>＋ Añadir este día</Text>
+            <Text style={{ color: theme.textSecondary, fontSize: 15 }}>＋ Añadir este día</Text>
           </Pressable>
         </View>
         {onDay.length ? (
           onDay.map((e) => <EventCard key={e.id} event={e} compact />)
         ) : (
-          <Text style={{ color: theme.textSecondary, fontSize: 14 }}>Nada apuntado.</Text>
+          <Text style={{ color: theme.textSecondary, fontSize: 15 }}>Nada apuntado.</Text>
         )}
       </View>
 
@@ -138,7 +142,7 @@ export default function CalendarScreen() {
           ))
         )}
         <Scribble size={20}>
-          Os avisaremos el mismo día ✦ y una semana antes de lo que esperáis con ganas
+          Os avisaremos el mismo día y una semana antes de lo que esperáis con ganas
         </Scribble>
       </View>
     </Screen>
@@ -147,7 +151,7 @@ export default function CalendarScreen() {
 
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 },
-  month: { borderRadius: 30, padding: 14, boxShadow: '0 18px 40px rgba(20,22,26,0.10)' },
+  month: { borderRadius: 30, padding: 16, boxShadow: '0 18px 40px rgba(20,22,26,0.10)' },
   monthHead: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -157,16 +161,16 @@ const styles = StyleSheet.create({
   },
   monthTitle: { fontFamily: HandBold, fontSize: 28, color: '#C2477A' },
   arrow: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  arrowText: { fontSize: 26 },
+  arrowText: { fontSize: 28 },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   weekday: {
     width: `${100 / 7}%`,
     textAlign: 'center',
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
-    paddingBottom: 6,
+    paddingBottom: 8,
   },
-  cell: { width: `${100 / 7}%`, height: 50, alignItems: 'center', justifyContent: 'flex-start' },
+  cell: { width: `${100 / 7}%`, height: 52, alignItems: 'center', justifyContent: 'flex-start' },
   dayCircle: {
     width: 36,
     height: 36,
@@ -175,8 +179,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   dayNum: { fontSize: 15, fontWeight: '500' },
-  dayEmoji: { position: 'absolute', bottom: 0, fontSize: 11 },
+  dayDot: { position: 'absolute', bottom: 4, width: 6, height: 6, borderRadius: 3 },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
-  section: { fontSize: 18, fontWeight: '600', letterSpacing: -0.3 },
-  kicker: { fontFamily: HandBold, fontSize: 30, color: '#C2477A' },
+  section: { fontSize: 17, fontWeight: '600' },
+  kicker: { fontFamily: HandBold, fontSize: 28, color: '#C2477A' },
 });

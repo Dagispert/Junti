@@ -3,9 +3,13 @@ import { Pressable, type PressableProps, type StyleProp, type ViewStyle } from '
 import Animated, {
   FadeInDown,
   useAnimatedStyle,
+  Easing,
   useSharedValue,
-  withSpring,
+  withTiming,
 } from 'react-native-reanimated';
+
+/** La única curva de la app: salida suave, sin rebotes. */
+export const EASE = Easing.out(Easing.cubic);
 
 /** Entrada suave desde abajo, escalonada según su posición en la lista. */
 export function Appear({
@@ -19,17 +23,16 @@ export function Appear({
 }) {
   return (
     <Animated.View
-      entering={FadeInDown.duration(520)
+      entering={FadeInDown.duration(360)
         .delay(Math.min(index, 6) * 80)
-        .springify()
-        .damping(18)}
+        .duration(360)}
       style={style}>
       {children}
     </Animated.View>
   );
 }
 
-/** Pulsable que se hunde un poco al tocarlo, como una tarjeta física. */
+/** Pulsable que se hunde un poco al tocarlo. */
 export function PressScale({
   children,
   style,
@@ -41,11 +44,11 @@ export function PressScale({
     <Pressable
       {...rest}
       onPressIn={(e) => {
-        scale.value = withSpring(0.97, { damping: 20, stiffness: 300 });
+        scale.value = withTiming(0.98, { duration: 120, easing: EASE });
         rest.onPressIn?.(e);
       }}
       onPressOut={(e) => {
-        scale.value = withSpring(1, { damping: 14, stiffness: 220 });
+        scale.value = withTiming(1, { duration: 180, easing: EASE });
         rest.onPressOut?.(e);
       }}>
       <Animated.View style={[animated, style]}>{children}</Animated.View>

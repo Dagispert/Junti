@@ -293,7 +293,11 @@ function memoryElement(items: GlobeMemory[], index: number, onTap: (ids: string[
     img.src = photo;
     img.alt = '';
     b.appendChild(img);
-  } else b.textContent = '✎';
+  } else {
+    // Un recuerdo sin foto: un lápiz de línea (el mismo trazo que los iconos de la app).
+    b.innerHTML =
+      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/></svg>';
+  }
   inner.appendChild(b);
   if (items.length > 1) {
     const n = document.createElement('div');

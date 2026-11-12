@@ -77,25 +77,25 @@ export function UpcomingCard({ groupId }: { groupId: string }) {
           <Avatar userId={event.personId!} size={64} />
           <Text style={styles.partyTitle}>
             {event.personId === me
-              ? '¡Feliz cumpleaños!'
-              : `¡Hoy cumple ${user(event.personId!).name.split(' ')[0]}!`}
+              ? 'Feliz cumpleaños'
+              : `Hoy cumple ${user(event.personId!).name.split(' ')[0]}`}
           </Text>
           <Text style={{ color: theme.textSecondary, fontSize: 15, textAlign: 'center' }}>
             {event.personId === me
-              ? 'Todo el grupo piensa hoy en ti 🎂'
-              : 'Compártele algo: una foto, un recuerdo, una canción 🎂'}
+              ? 'Todo el grupo piensa hoy en ti'
+              : 'Compártele algo: una foto, un recuerdo, una canción'}
           </Text>
         </View>
       ))}
       {soon && (
-        <View style={{ gap: 6 }}>
+        <View style={{ gap: 8 }}>
           <View style={styles.row}>
             <Text style={styles.kicker}>Próximamente</Text>
             <Text
               accessibilityRole="link"
               onPress={() => router.push({ pathname: '/calendar', params: { groupId } })}
-              style={{ color: theme.textSecondary, fontSize: 14 }}>
-              Ver calendario ›
+              style={{ color: theme.textSecondary, fontSize: 15 }}>
+              Ver calendario
             </Text>
           </View>
           <EventCard event={soon.event} />

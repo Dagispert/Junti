@@ -12,6 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Icon } from '@/components/icon';
 import { InlineVideo, VoiceNote, Waveform } from '@/components/media-players';
 import { PolaroidPile, Scribble, Sticker, StickyNote } from '@/components/scrapbook';
 import { SkyBadge } from '@/components/sky-badge';
@@ -27,6 +28,7 @@ import { Subtitle } from '@/components/subtitle';
 import { styleOf } from '@/lib/narrative';
 import { buildRecap } from '@/lib/recap';
 import { clockIn } from '@/lib/time';
+import { Music, Volume2, VolumeX, X } from 'lucide-react-native';
 
 type Slide =
   | { type: 'cover' }
@@ -288,14 +290,15 @@ export default function RecapScreen() {
         <Text style={styles.topTitle}>
           {group(groupId)?.name} · {recap.range}
         </Text>
-        <View style={{ flexDirection: 'row', gap: 6 }}>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
           {!!voice && (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={voiceOn ? 'Silenciar a la narradora' : 'Oír a la narradora'}
               onPress={() => setVoiceOn((v) => !v)}
               style={[styles.round, !voiceOn && styles.musicOff]}>
-              <Text style={styles.roundText}>{voiceOn ? '🗣️' : '🗣️ Voz'}</Text>
+              <Icon icon={voiceOn ? Volume2 : VolumeX} color={INK} />
+              {!voiceOn && <Text style={styles.roundText}>Voz</Text>}
             </Pressable>
           )}
           {audio.available && (
@@ -307,7 +310,8 @@ export default function RecapScreen() {
                 audio.toggle();
               }}
               style={[styles.round, !audio.playing && styles.musicOff]}>
-              <Text style={styles.roundText}>{audio.playing ? '♪' : '♪ Música'}</Text>
+              <Icon icon={Music} color={INK} />
+              {!audio.playing && <Text style={styles.roundText}>Música</Text>}
             </Pressable>
           )}
           <Pressable
@@ -315,7 +319,7 @@ export default function RecapScreen() {
             accessibilityLabel="Cerrar resumen"
             onPress={close}
             style={styles.round}>
-            <Text style={styles.roundText}>✕</Text>
+            <Icon icon={X} color={INK} />
           </Pressable>
         </View>
       </View>
@@ -362,17 +366,17 @@ export default function RecapScreen() {
               </Animated.Text>
               {song && (
                 <Animated.Text entering={FadeIn.delay(1500)} style={styles.music}>
-                  ♪ {song.title} — {song.artist}
+                  {song.title} — {song.artist}
                 </Animated.Text>
               )}
               {narration ? (
                 <Animated.Text entering={FadeIn.delay(1800)} style={styles.narrator}>
-                  ✨ Narrado en estilo {styleOf(narration.style).label.toLowerCase()}
+                  Narrado en estilo {styleOf(narration.style).label.toLowerCase()}
                 </Animated.Text>
               ) : (
                 writing && (
                   <Animated.Text entering={FadeIn.delay(1800)} style={styles.narrator}>
-                    ✨ La narradora está preparando la historia…
+                    La narradora está preparando la historia…
                   </Animated.Text>
                 )
               )}
@@ -380,26 +384,26 @@ export default function RecapScreen() {
           )}
 
           {slide.type === 'scene' && (
-            <View style={[styles.center, { paddingBottom: 170, gap: 18 }]}>
+            <View style={[styles.center, { paddingBottom: 168, gap: 20 }]}>
               {recap.picks.some((m) => m.imageUri || m.videoUri) ? (
                 <PolaroidPile
                   moments={recap.picks.filter((m) => m.imageUri || m.videoUri)}
                   size={Math.min(width - 60, 320)}
                 />
               ) : (
-                <Sticker emoji="✨" size={84} rotate={-8} delay={200} />
+                <Sticker emoji="🗺️" size={84} rotate={-8} delay={200} />
               )}
               {!!story?.title && <Text style={styles.narrationTitle}>{story.title}</Text>}
             </View>
           )}
 
           {slide.type === 'story' && (
-            <View style={[styles.center, { paddingHorizontal: 28, gap: 22 }]}>
+            <View style={[styles.center, { paddingHorizontal: 28, gap: 24 }]}>
               {recap.story.map((line, i) => (
                 <Animated.Text
                   key={i}
                   entering={FadeInDown.delay(300 + i * 1800).duration(900)}
-                  style={[styles.storyLine, i === 0 && { fontSize: 26, lineHeight: 33 }]}>
+                  style={[styles.storyLine, i === 0 && { fontSize: 28, lineHeight: 33 }]}>
                   {line}
                 </Animated.Text>
               ))}
@@ -432,8 +436,8 @@ export default function RecapScreen() {
             <View
               style={[
                 styles.center,
-                { gap: 18, paddingHorizontal: 24 },
-                !!line && { paddingBottom: 170 },
+                { gap: 20, paddingHorizontal: 24 },
+                !!line && { paddingBottom: 168 },
               ]}>
               <Text style={styles.kicker}>
                 {recap.kind === 'week' ? 'La semana en números' : 'El mes en números'}
@@ -457,7 +461,7 @@ export default function RecapScreen() {
                 {recap.authors.map((id, i) => (
                   <Animated.View
                     key={id}
-                    entering={ZoomIn.delay(600 + i * 120).springify()}
+                    entering={ZoomIn.delay(600 + i * 120).duration(360)}
                     style={{ alignItems: 'center', gap: 4 }}>
                     <Avatar userId={id} size={52} />
                     <Text style={styles.personName}>{first(id)}</Text>
@@ -483,12 +487,12 @@ export default function RecapScreen() {
           )}
 
           {slide.type === 'end' && (
-            <View style={[styles.center, { gap: 18 }, !!line && { paddingBottom: 170 }]}>
-              <Sticker emoji="🍍" size={84} rotate={-8} delay={200} />
+            <View style={[styles.center, { gap: 20 }, !!line && { paddingBottom: 168 }]}>
+              <Sticker emoji="💌" size={84} rotate={-8} delay={200} />
               <Text style={styles.big}>
                 {recap.ongoing ? 'Y la semana sigue…' : 'Hasta la próxima'}
               </Text>
-              <Text style={[styles.sub, { textAlign: 'center', paddingHorizontal: 30 }]}>
+              <Text style={[styles.sub, { textAlign: 'center', paddingHorizontal: 32 }]}>
                 {recap.kind === 'week'
                   ? 'Todo esto queda guardado en vuestra memoria.'
                   : 'Un mes más de vida compartida, guardado en vuestra memoria.'}
@@ -507,7 +511,7 @@ export default function RecapScreen() {
                   }}
                   style={styles.again}>
                   <Text style={styles.againText}>
-                    {writing ? '✨ Escribiendo otra versión…' : '✨ Otra versión de la crónica'}
+                    {writing ? 'Escribiendo otra versión…' : 'Otra versión de la crónica'}
                   </Text>
                 </Pressable>
               )}
@@ -515,7 +519,7 @@ export default function RecapScreen() {
                 <Text
                   style={[
                     styles.sub,
-                    { fontSize: 14, textAlign: 'center', paddingHorizontal: 30 },
+                    { fontSize: 15, textAlign: 'center', paddingHorizontal: 32 },
                   ]}>
                   {narrationNote}
                 </Text>
@@ -556,12 +560,12 @@ function MomentSlide({
     <View
       style={[
         styles.center,
-        { paddingHorizontal: 22, gap: 16 },
-        narrated && { paddingBottom: 170 },
+        { paddingHorizontal: 24, gap: 16 },
+        narrated && { paddingBottom: 168 },
       ]}>
-      {loved && <Text style={[styles.kicker, { marginBottom: 18 }]}>Lo que más os llegó</Text>}
+      {loved && <Text style={[styles.kicker, { marginBottom: 20 }]}>Lo que más os llegó</Text>}
       {moment.imageUri || moment.videoUri ? (
-        <Animated.View entering={ZoomIn.springify().damping(16)} style={styles.frame}>
+        <Animated.View entering={ZoomIn.duration(360)} style={styles.frame}>
           <View style={styles.photoBox}>
             {moment.videoUri ? (
               // En la historia, el vídeo se mueve solo, en silencio y en bucle.
@@ -599,7 +603,7 @@ function MomentSlide({
           ))}
         </Animated.View>
       ) : (
-        <Animated.View entering={ZoomIn.springify().damping(15)} style={styles.paper}>
+        <Animated.View entering={ZoomIn.duration(360)} style={styles.paper}>
           {moment.text ? (
             <Text style={styles.paperText}>{moment.text}</Text>
           ) : moment.voice ? (
@@ -613,7 +617,7 @@ function MomentSlide({
         <Avatar userId={moment.authorId} size={34} />
         <View>
           <Text style={styles.bylineName}>{who}</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <SkyBadge tz={moment.authorTz} at={moment.createdAt} size={14} />
             <Text style={styles.bylineMeta}>
               {new Intl.DateTimeFormat('es-ES', { weekday: 'long' }).format(moment.createdAt)} ·{' '}
@@ -654,7 +658,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 10,
+    paddingTop: 12,
   },
   topTitle: { color: 'rgba(42,39,36,0.6)', fontSize: 13, fontWeight: '500' },
   round: {
@@ -664,15 +668,17 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.8)',
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 4,
   },
-  roundText: { color: INK, fontSize: 16 },
+  roundText: { color: INK, fontSize: 15, fontWeight: '500' },
   musicOff: { width: 'auto', paddingHorizontal: 12 },
   slide: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   big: { color: INK, fontSize: 40, fontWeight: '500', letterSpacing: -1, textAlign: 'center' },
-  sub: { color: 'rgba(42,39,36,0.6)', fontSize: 18 },
+  sub: { color: 'rgba(42,39,36,0.6)', fontSize: 17 },
   music: { fontFamily: Hand, fontSize: 20, color: '#C2477A', marginTop: 8 },
-  kicker: { fontFamily: HandBold, fontSize: 30, color: '#C2477A' },
+  kicker: { fontFamily: HandBold, fontSize: 28, color: '#C2477A' },
   narrator: {
     fontFamily: Hand,
     fontSize: 20,
@@ -688,14 +694,14 @@ const styles = StyleSheet.create({
     color: INK,
     textAlign: 'center',
   },
-  again: { paddingVertical: 10, paddingHorizontal: 16 },
-  againText: { fontFamily: Hand, fontSize: 21, color: '#C2477A' },
-  storyLine: { color: INK, fontSize: 21, lineHeight: 29, letterSpacing: -0.2, textAlign: 'center' },
+  again: { paddingVertical: 12, paddingHorizontal: 16 },
+  againText: { fontFamily: Hand, fontSize: 20, color: '#C2477A' },
+  storyLine: { color: INK, fontSize: 20, lineHeight: 29, textAlign: 'center' },
   frame: {
     width: '100%',
     maxWidth: 400,
     backgroundColor: '#fff',
-    padding: 10,
+    padding: 12,
     borderRadius: 24,
     transform: [{ rotate: '-2deg' }],
     boxShadow: '0 22px 44px rgba(20,22,26,0.16)',
@@ -712,36 +718,36 @@ const styles = StyleSheet.create({
     boxShadow: '0 18px 36px rgba(20,22,26,0.14)',
     borderRadius: 4,
   },
-  paperText: { fontFamily: Hand, fontSize: 32, lineHeight: 34, color: INK, textAlign: 'center' },
+  paperText: { fontFamily: Hand, fontSize: 34, lineHeight: 34, color: INK, textAlign: 'center' },
   byline: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
     alignSelf: 'flex-start',
-    paddingLeft: 6,
+    paddingLeft: 8,
   },
-  bylineName: { color: INK, fontSize: 16, fontWeight: '600' },
+  bylineName: { color: INK, fontSize: 17, fontWeight: '600' },
   bylineMeta: { color: 'rgba(42,39,36,0.6)', fontSize: 13 },
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 12 },
   stat: {
     width: 140,
-    paddingVertical: 14,
+    paddingVertical: 16,
     borderRadius: 20,
     backgroundColor: '#fff',
     alignItems: 'center',
     boxShadow: '0 10px 24px rgba(20,22,26,0.08)',
   },
   statN: { color: INK, fontSize: 40, fontWeight: '600', letterSpacing: -1 },
-  statL: { color: 'rgba(42,39,36,0.6)', fontSize: 14 },
-  people: { flexDirection: 'row', gap: 14, flexWrap: 'wrap', justifyContent: 'center' },
+  statL: { color: 'rgba(42,39,36,0.6)', fontSize: 15 },
+  people: { flexDirection: 'row', gap: 16, flexWrap: 'wrap', justifyContent: 'center' },
   personName: { color: INK, fontSize: 13, fontWeight: '500' },
   cta: {
-    marginTop: 10,
+    marginTop: 12,
     backgroundColor: INK,
     paddingHorizontal: 28,
     height: 48,
     borderRadius: 18,
     justifyContent: 'center',
   },
-  ctaText: { color: '#fff', fontSize: 16, fontWeight: '500' },
+  ctaText: { color: '#fff', fontSize: 17, fontWeight: '500' },
 });

@@ -1,15 +1,18 @@
 import type { EventKind, GroupEvent } from '@/data/types';
+import { Cake, Heart, PartyPopper, Pin, Plane, Users, type LucideIcon } from 'lucide-react-native';
 
+// Cada tipo: su icono de línea, su nombre y un color suave (solo para el
+// billete del evento y el punto del calendario).
 export const KINDS: Record<
   EventKind,
-  { emoji: string; label: string; color: string; yearly: boolean }
+  { icon: LucideIcon; label: string; color: string; yearly: boolean }
 > = {
-  birthday: { emoji: '🎂', label: 'Cumpleaños', color: '#F4B6C8', yearly: true },
-  anniversary: { emoji: '💞', label: 'Aniversario', color: '#F7C9A9', yearly: true },
-  trip: { emoji: '✈️', label: 'Viaje', color: '#B9DDF2', yearly: false },
-  reunion: { emoji: '🫂', label: 'Reencuentro', color: '#CDE7B0', yearly: false },
-  celebration: { emoji: '🎉', label: 'Celebración', color: '#F6E19A', yearly: false },
-  other: { emoji: '📌', label: 'Otro', color: '#E3E0EA', yearly: false },
+  birthday: { icon: Cake, label: 'Cumpleaños', color: '#F4B6C8', yearly: true },
+  anniversary: { icon: Heart, label: 'Aniversario', color: '#F7C9A9', yearly: true },
+  trip: { icon: Plane, label: 'Viaje', color: '#B9DDF2', yearly: false },
+  reunion: { icon: Users, label: 'Reencuentro', color: '#CDE7B0', yearly: false },
+  celebration: { icon: PartyPopper, label: 'Celebración', color: '#F6E19A', yearly: false },
+  other: { icon: Pin, label: 'Otro', color: '#E3E0EA', yearly: false },
 };
 
 const DAY = 86_400_000;
@@ -59,7 +62,7 @@ export function happensOn(e: GroupEvent, day: Date): boolean {
 }
 
 export function countdown(days: number): string {
-  if (days === 0) return '¡Hoy!';
+  if (days === 0) return 'Hoy';
   if (days === 1) return 'Mañana';
   if (days < 7) return `Dentro de ${days} días`;
   if (days < 14) return 'La semana que viene';

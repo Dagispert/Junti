@@ -192,7 +192,7 @@ const styles = StyleSheet.create({
   wrap: { gap: Spacing.four, alignItems: 'stretch' },
   frame: { alignSelf: 'center', overflow: 'hidden', cursor: 'grab', touchAction: 'none' } as never,
   zoomRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingHorizontal: 8 },
-  zoomLabel: { fontSize: 22, width: 16, textAlign: 'center' },
+  zoomLabel: { fontSize: 24, width: 16, textAlign: 'center' },
   track: { flex: 1, height: 40, justifyContent: 'center', touchAction: 'none' } as never,
   line: { height: 4, borderRadius: Radius.pill },
   knob: { position: 'absolute', width: 24, height: 24, borderRadius: 12, top: 8 },

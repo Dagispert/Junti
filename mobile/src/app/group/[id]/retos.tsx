@@ -38,7 +38,7 @@ export default function Challenges() {
     return (
       <Card key={challenge.id} style={styles.card}>
         {answers.length > 0 && <PhotoFan moments={answers} size={120} />}
-        <View style={{ alignItems: 'center', gap: 10 }}>
+        <View style={{ alignItems: 'center', gap: 12 }}>
           <Tag center>
             {!open
               ? 'Finalizado'
@@ -76,13 +76,13 @@ export default function Challenges() {
       <View style={styles.actions}>
         <Button
           compact
-          label="🏁 Nuevo reto"
+          label="Nuevo reto"
           onPress={() => router.push({ pathname: '/new-challenge', params: { groupId: id } })}
         />
         <Button
           compact
           variant="light"
-          label="📊 Preguntar algo"
+          label="Preguntar algo"
           onPress={() => router.push({ pathname: '/add', params: { groupId: id } })}
         />
       </View>
@@ -97,16 +97,16 @@ export default function Challenges() {
       {ideas.length > 0 && (
         <View style={{ gap: Spacing.two }}>
           <Tag>Ideas para el grupo</Tag>
-          <Card style={{ padding: 6 }}>
+          <Card style={{ padding: 8 }}>
             {ideas.map((idea, i) => (
               <View
                 key={idea.title}
                 style={[styles.idea, i > 0 && { borderTopWidth: 1, borderTopColor: theme.soft }]}>
                 <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={{ color: theme.text, fontSize: 16, fontWeight: '500' }}>
+                  <Text style={{ color: theme.text, fontSize: 17, fontWeight: '500' }}>
                     {idea.title}
                   </Text>
-                  <Text style={{ color: theme.textSecondary, fontSize: 14, lineHeight: 19 }}>
+                  <Text style={{ color: theme.textSecondary, fontSize: 15, lineHeight: 19 }}>
                     {idea.body}
                   </Text>
                 </View>
@@ -132,7 +132,7 @@ export default function Challenges() {
 }
 
 const styles = StyleSheet.create({
-  card: { padding: 24, gap: 18 },
+  card: { padding: 24, gap: 20 },
   title: {
     fontSize: 24,
     lineHeight: 30,
@@ -140,13 +140,13 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
     textAlign: 'center',
   },
-  body: { fontSize: 16, lineHeight: 22, textAlign: 'center' },
+  body: { fontSize: 17, lineHeight: 22, textAlign: 'center' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     minHeight: 36,
   },
-  idea: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, padding: 14 },
-  actions: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
+  idea: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, padding: 16 },
+  actions: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
 });

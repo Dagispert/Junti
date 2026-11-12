@@ -75,7 +75,7 @@ const styles = StyleSheet.create({
   text: {
     fontFamily: Hand,
     color: '#2A2724',
-    fontSize: 29,
+    fontSize: 28,
     lineHeight: 33,
     textAlign: 'center',
   },

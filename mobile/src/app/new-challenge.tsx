@@ -58,9 +58,9 @@ export default function NewChallenge() {
           />
         </View>
       }>
-      <View style={{ gap: 10 }}>
+      <View style={{ gap: 12 }}>
         <Tag>Para {group.name}</Tag>
-        <Title>Un reto 🏁</Title>
+        <Title>Un reto</Title>
       </View>
       <Field
         label="El reto"
@@ -111,10 +111,10 @@ export default function NewChallenge() {
                   setBody(idea.body);
                 }}
                 style={[styles.idea, { backgroundColor: theme.card }]}>
-                <Text style={{ color: theme.text, fontSize: 16, fontWeight: '500' }}>
+                <Text style={{ color: theme.text, fontSize: 17, fontWeight: '500' }}>
                   {idea.title}
                 </Text>
-                <Text style={{ color: theme.textSecondary, fontSize: 14, lineHeight: 19 }}>
+                <Text style={{ color: theme.textSecondary, fontSize: 15, lineHeight: 19 }}>
                   {idea.body}
                 </Text>
               </Pressable>
