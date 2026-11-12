@@ -40,6 +40,10 @@ const STEPS: Step[] = [
     text: 'Hola, soy la narradora de Junti, la que cuenta vuestras historias. Antes de empezar, te enseño cómo funciona todo con un ejemplo: imagina un grupo con Rey, que vive en La Habana; Tomi, en Berlín; y Martuki, en Tokio.',
   },
   {
+    title: 'Por qué existe Junti',
+    text: 'Antes, te cuento por qué existo. Cuando la gente que quieres vive lejos, la vida se va quedando en chats que se pierden, y en redes hechas para enseñar, no para compartir. Y sin darnos cuenta, nos perdemos los días pequeños de los demás. Junti no es una red social más: aquí no hay likes, ni seguidores, ni nadie mirando. Es vuestro rincón para crear recuerdos sin estar juntos, y para ir guardando la memoria de todo lo que os une. Seáis amigos, familia o pareja: estéis donde estéis, seguís estando juntos.',
+  },
+  {
     target: 'tour-mapa',
     shape: 'sphere',
     tab: 'hoy',
@@ -97,6 +101,19 @@ const STEPS: Step[] = [
       who: 'La narradora',
       where: 'Resumen de la semana',
       text: 'Mientras Rey jugaba al dominó, Tomi se apuntaba a alemán… por cuarta vez',
+    },
+  },
+  {
+    target: 'tab-memoria',
+    shape: 'rect',
+    tab: 'memoria',
+    title: 'Un carrete cada mes',
+    text: 'Y cada mes se revela un carrete, como los de antes: una tira de película con las fotos de ese mes. Los emojis que más habéis usado se convierten en pegatinas. Dale al play y lo veréis como una pequeña película, con música; y si me habéis activado, os lo cuento yo.',
+    example: {
+      photo: 4,
+      who: 'Carrete de octubre',
+      where: '23 fotos',
+      text: 'Los ❤️ y los 😂 del mes, convertidos en pegatinas',
     },
   },
   {

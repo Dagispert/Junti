@@ -396,3 +396,29 @@ set role service_role;
 select pg_temp.expect((select count(*) = 0 from claim_profile_birthdays()), 'el aviso de cumpleaños no se repite');
 reset role;
 \echo PERFIL CORRECTO
+
+-- ── Dónde empezó todo ──
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000e2';
+insert into group_origins (id, group_id, place_name, year, story, member_ids)
+  values ('60000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-0000000000ae', 'Valladolid', 2008, 'En el colegio',
+          '{00000000-0000-0000-0000-0000000000e1,00000000-0000-0000-0000-0000000000e2}');
+select pg_temp.fails($$insert into group_origins (group_id, place_name, created_by) values ('10000000-0000-0000-0000-0000000000ae', 'Lisboa', '00000000-0000-0000-0000-0000000000e1')$$, 'nadie apunta un comienzo en nombre de otro');
+select pg_temp.fails($$insert into group_origins (group_id, place_name, year) values ('10000000-0000-0000-0000-0000000000ae', 'Lisboa', 1800)$$, 'el año tiene que ser razonable');
+update groups set roots = 'Todos de Valladolid' where id = '10000000-0000-0000-0000-0000000000ae';
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000e3';
+select pg_temp.expect((select count(*) = 1 from group_origins where story = 'En el colegio'), 'todo el grupo ve dónde empezó todo');
+update group_origins set story = 'En el colegio, en 3.º B' where id = '60000000-0000-0000-0000-000000000001';
+delete from group_origins where id = '60000000-0000-0000-0000-000000000001';
+select pg_temp.expect((select story = 'En el colegio, en 3.º B' from group_origins where id = '60000000-0000-0000-0000-000000000001'), 'cualquiera del grupo puede corregirlo, pero no borrar el de otro');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000c';
+select pg_temp.expect((select count(*) = 0 from group_origins), 'alguien ajeno no ve los comienzos');
+select pg_temp.fails($$insert into group_origins (group_id, place_name) values ('10000000-0000-0000-0000-0000000000ae', 'Lisboa')$$, 'alguien ajeno no añade comienzos');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000e1';
+select pg_temp.expect((select roots is null from groups where id = '10000000-0000-0000-0000-0000000000ae'), 'solo quien administra cambia «de dónde sois»');
+update groups set roots = 'Todos de Valladolid' where id = '10000000-0000-0000-0000-0000000000ae';
+select pg_temp.expect((select roots = 'Todos de Valladolid' from groups where id = '10000000-0000-0000-0000-0000000000ae'), 'quien administra fija de dónde sois');
+delete from group_origins where id = '60000000-0000-0000-0000-000000000001';
+select pg_temp.expect((select count(*) = 0 from group_origins), 'quien administra puede quitar un comienzo');
+reset role;
+\echo DONDE EMPEZO TODO CORRECTO

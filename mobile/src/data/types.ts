@@ -62,6 +62,23 @@ export type Group = {
   narrativeStyle: string;
   /** Si he pedido que mis momentos no se usen en la narración. */
   myNarrativeOptOut: boolean;
+  /** De dónde sois, si compartís origen («Todos somos de Valladolid»). */
+  roots?: string;
+  /** Dónde empezó todo: uno o varios comienzos (no todos se conocieron igual). */
+  origins: GroupOrigin[];
+};
+
+/** Un comienzo del grupo: dónde y cuándo se conocieron (todos, o algunos). */
+export type GroupOrigin = {
+  id: string;
+  createdBy?: string;
+  place: string;
+  lat?: number;
+  lng?: number;
+  year?: number;
+  story?: string;
+  /** Quiénes se conocieron así. Vacío = todo el grupo. */
+  memberIds: string[];
 };
 
 /** Crónica de un periodo escrita por la narradora. */

@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { Plus } from 'lucide-react-native';
+import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Radius, Spacing, useTheme } from '@/constants/theme';
@@ -7,12 +8,15 @@ import { useStore } from '@/data/store';
 import type { Moment } from '@/data/types';
 import { clockIn, relative } from '@/lib/time';
 
+import { type Burst, EmojiBursts } from './emoji-burst';
+import { EmojiPicker } from './emoji-picker';
+import { Icon } from './icon';
 import { VideoMoment, VoiceNote } from './media-players';
 import { PhotoCarousel } from './photo-carousel';
 import { SkyBadge } from './sky-badge';
 import { Avatar, Card, Photo, Scrim } from './ui';
 
-const QUICK_REACTIONS = ['❤️', '😂', '😮'];
+const QUICK_REACTIONS = ['❤️', '😂'];
 /** Los comentarios no son un chat: se muestran pocos y el resto se pliega. */
 const VISIBLE_COMMENTS = 2;
 
@@ -33,6 +37,10 @@ export function MomentCard({ moment }: { moment: Moment }) {
   const [confirming, setConfirming] = useState(false);
   const [reported, setReported] = useState<'' | 'ask' | 'sent'>('');
   const [editing, setEditing] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
+  const [bursts, setBursts] = useState<Burst[]>([]);
+  const [cardHeight, setCardHeight] = useState(0);
+  const burstId = useRef(0);
 
   const author = user(moment.authorId);
   const proposal = proposals.find((p) => p.id === moment.proposalId);
@@ -49,6 +57,17 @@ export function MomentCard({ moment }: { moment: Moment }) {
     : clockIn(moment.authorTz, moment.createdAt);
   const where = `${when}${placeName ? ` · ${placeName}` : !moment.memory && author.city ? ` en ${author.city}` : ''}`;
 
+  /** Reaccionar: al ponerla, el emoji sale volando por encima de la publicación. */
+  const react = (emoji: string) => {
+    const mine = moment.reactions.some((r) => r.emoji === emoji && r.userId === me);
+    if (!mine) setBursts((b) => [...b, { id: ++burstId.current, emoji }]);
+    toggleReaction(moment.id, emoji).catch(() => {});
+  };
+  const pickOther = (emoji: string) => {
+    if (moment.reactions.some((r) => r.emoji === emoji && r.userId === me)) return;
+    react(emoji);
+  };
+
   const send = () => {
     const text = draft.trim();
     if (!text) return;
@@ -58,205 +77,224 @@ export function MomentCard({ moment }: { moment: Moment }) {
 
   return (
     <Card>
-      {moment.imageUri || moment.videoUri ? (
-        <View style={styles.photoWrap}>
-          {moment.videoUri ? (
-            <VideoMoment moment={moment} style={StyleSheet.absoluteFill} />
-          ) : moment.photos ? (
-            <PhotoCarousel
-              photos={moment.photos}
-              dotsBottom={moment.text || proposal ? 96 : 16}
-              onOpen={() => router.push({ pathname: '/moment/[id]', params: { id: moment.id } })}
-            />
-          ) : (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Ver en grande"
-              onPress={() => router.push({ pathname: '/moment/[id]', params: { id: moment.id } })}
-              style={StyleSheet.absoluteFill}>
-              <Photo moment={moment} style={StyleSheet.absoluteFill} />
-            </Pressable>
-          )}
-          <Scrim edge="top" height="32%" />
-          <Text pointerEvents="none" style={styles.overName}>
-            {author.name}
-          </Text>
-          {/* El cielo que tenía cuando lo compartió. */}
-          <View pointerEvents="none" style={styles.overMeta}>
-            {!moment.memory && <SkyBadge tz={moment.authorTz} at={moment.createdAt} size={16} />}
-            <Text style={styles.overMetaText}>{where}</Text>
-          </View>
-          {(!!moment.text || !!proposal) && (
-            <>
-              <Scrim edge="bottom" />
-              <View pointerEvents="none" style={styles.caption}>
-                {proposal && <Text style={styles.overProposal}>{proposal.title}</Text>}
-                {!!moment.text && <Text style={styles.overText}>{moment.text}</Text>}
-              </View>
-            </>
-          )}
-        </View>
-      ) : moment.text || proposal ? (
-        <View style={[styles.textPanel, { backgroundColor: theme.soft }]}>
-          {proposal && (
-            <Text style={{ color: theme.textSecondary, fontSize: 15 }}>{proposal.title}</Text>
-          )}
-          <Text style={[styles.bigText, { color: theme.text }]}>{moment.text}</Text>
-        </View>
-      ) : null}
-      {moment.voice && (
-        <View style={{ paddingHorizontal: 4, paddingTop: moment.imageUri || moment.text ? 12 : 4 }}>
-          <VoiceNote voice={moment.voice} />
-        </View>
-      )}
-
-      <View style={styles.footer}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Ver la ficha de ${author.name}`}
-          onPress={() =>
-            router.push({
-              pathname: '/person/[id]',
-              params: { id: author.id, groupId: moment.groupId },
-            })
-          }>
-          <Avatar userId={author.id} size={40} />
-        </Pressable>
-        <View style={{ flex: 1, minWidth: 160 }}>
-          <Text style={{ color: theme.text, fontSize: 15, fontWeight: '500' }}>{author.name}</Text>
-          <Text numberOfLines={2} style={{ color: theme.textSecondary, fontSize: 13 }}>
-            {moment.imageUri ? '' : `${where} · `}
-            {moment.memory
-              ? `recuerdo añadido ${relative(moment.sharedAt)}`
-              : relative(moment.createdAt)}
-            {moment.edited ? ' · editado' : ''}
-          </Text>
-        </View>
-        <View style={styles.reactions}>
-          {emojis.map((emoji) => {
-            const count = moment.reactions.filter((r) => r.emoji === emoji).length;
-            const mine = moment.reactions.some((r) => r.emoji === emoji && r.userId === me);
-            return (
+      <View onLayout={(e) => setCardHeight(e.nativeEvent.layout.height)}>
+        {moment.imageUri || moment.videoUri ? (
+          <View style={styles.photoWrap}>
+            {moment.videoUri ? (
+              <VideoMoment moment={moment} style={StyleSheet.absoluteFill} />
+            ) : moment.photos ? (
+              <PhotoCarousel
+                photos={moment.photos}
+                dotsBottom={moment.text || proposal ? 96 : 16}
+                onOpen={() => router.push({ pathname: '/moment/[id]', params: { id: moment.id } })}
+              />
+            ) : (
               <Pressable
-                key={emoji}
                 accessibilityRole="button"
-                accessibilityLabel={`Reaccionar con ${emoji}`}
-                onPress={() => toggleReaction(moment.id, emoji).catch(() => {})}
-                style={[styles.chip, { backgroundColor: mine ? theme.accent : theme.soft }]}>
-                <Text style={{ fontSize: 15, opacity: count ? 1 : 0.5 }}>{emoji}</Text>
-                {count > 0 && (
-                  <Text
-                    style={{ fontSize: 13, color: mine ? theme.onAccent : theme.textSecondary }}>
-                    {count}
-                  </Text>
-                )}
+                accessibilityLabel="Ver en grande"
+                onPress={() => router.push({ pathname: '/moment/[id]', params: { id: moment.id } })}
+                style={StyleSheet.absoluteFill}>
+                <Photo moment={moment} style={StyleSheet.absoluteFill} />
               </Pressable>
-            );
-          })}
-        </View>
-      </View>
+            )}
+            <Scrim edge="top" height="32%" />
+            <Text pointerEvents="none" style={styles.overName}>
+              {author.name}
+            </Text>
+            {/* El cielo que tenía cuando lo compartió. */}
+            <View pointerEvents="none" style={styles.overMeta}>
+              {!moment.memory && <SkyBadge tz={moment.authorTz} at={moment.createdAt} size={16} />}
+              <Text style={styles.overMetaText}>{where}</Text>
+            </View>
+            {(!!moment.text || !!proposal) && (
+              <>
+                <Scrim edge="bottom" />
+                <View pointerEvents="none" style={styles.caption}>
+                  {proposal && <Text style={styles.overProposal}>{proposal.title}</Text>}
+                  {!!moment.text && <Text style={styles.overText}>{moment.text}</Text>}
+                </View>
+              </>
+            )}
+          </View>
+        ) : moment.text || proposal ? (
+          <View style={[styles.textPanel, { backgroundColor: theme.soft }]}>
+            {proposal && (
+              <Text style={{ color: theme.textSecondary, fontSize: 15 }}>{proposal.title}</Text>
+            )}
+            <Text style={[styles.bigText, { color: theme.text }]}>{moment.text}</Text>
+          </View>
+        ) : null}
+        {moment.voice && (
+          <View
+            style={{ paddingHorizontal: 4, paddingTop: moment.imageUri || moment.text ? 12 : 4 }}>
+            <VoiceNote voice={moment.voice} />
+          </View>
+        )}
 
-      {editing !== null && (
-        <View style={styles.editBox}>
-          <TextInput
-            value={editing}
-            onChangeText={setEditing}
-            multiline
-            autoFocus
-            maxLength={2000}
-            accessibilityLabel="Texto del momento"
-            style={[styles.editInput, { color: theme.text, backgroundColor: theme.soft }]}
-          />
-          <View style={styles.editActions}>
-            <Pressable accessibilityRole="button" onPress={() => setEditing(null)}>
-              <Text style={{ color: theme.textSecondary, fontSize: 15 }}>Cancelar</Text>
-            </Pressable>
+        <View style={styles.footer}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Ver la ficha de ${author.name}`}
+            onPress={() =>
+              router.push({
+                pathname: '/person/[id]',
+                params: { id: author.id, groupId: moment.groupId },
+              })
+            }>
+            <Avatar userId={author.id} size={36} />
+          </Pressable>
+          <View style={{ flexShrink: 1, minWidth: 64, maxWidth: 180 }}>
+            <Text numberOfLines={1} style={{ color: theme.text, fontSize: 15, fontWeight: '500' }}>
+              {author.name}
+            </Text>
+            <Text numberOfLines={2} style={{ color: theme.textSecondary, fontSize: 13 }}>
+              {moment.imageUri ? '' : `${where} · `}
+              {moment.memory
+                ? `recuerdo añadido ${relative(moment.sharedAt)}`
+                : relative(moment.createdAt)}
+              {moment.edited ? ' · editado' : ''}
+            </Text>
+          </View>
+          <View style={styles.reactions}>
+            {emojis.map((emoji) => {
+              const count = moment.reactions.filter((r) => r.emoji === emoji).length;
+              const mine = moment.reactions.some((r) => r.emoji === emoji && r.userId === me);
+              return (
+                <Pressable
+                  key={emoji}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Reaccionar con ${emoji}`}
+                  onPress={() => react(emoji)}
+                  style={[styles.chip, { backgroundColor: mine ? theme.accent : theme.soft }]}>
+                  <Text style={{ fontSize: 15, opacity: count ? 1 : 0.5 }}>{emoji}</Text>
+                  {count > 0 && (
+                    <Text
+                      style={{ fontSize: 13, color: mine ? theme.onAccent : theme.textSecondary }}>
+                      {count}
+                    </Text>
+                  )}
+                </Pressable>
+              );
+            })}
             <Pressable
               accessibilityRole="button"
-              disabled={!editing.trim() && !moment.imageUri && !moment.videoUri && !moment.voice}
-              onPress={() =>
-                editMoment(moment.id, editing.trim())
-                  .then(() => setEditing(null))
-                  .catch(() => {})
-              }
-              style={[styles.saveBtn, { backgroundColor: theme.accent }]}>
-              <Text style={{ color: theme.onAccent, fontSize: 15, fontWeight: '500' }}>
-                Guardar
-              </Text>
+              accessibilityLabel="Reaccionar con otro emoji"
+              onPress={() => setPicking(true)}
+              style={[styles.chip, { backgroundColor: theme.soft }]}>
+              <Icon icon={Plus} size={16} />
             </Pressable>
           </View>
         </View>
-      )}
 
-      <View style={styles.thread}>
-        {hidden > 0 && (
-          <Pressable onPress={() => setExpanded(true)}>
-            <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
-              Ver {hidden} {hidden === 1 ? 'comentario anterior' : 'comentarios anteriores'}
-            </Text>
-          </Pressable>
+        {editing !== null && (
+          <View style={styles.editBox}>
+            <TextInput
+              value={editing}
+              onChangeText={setEditing}
+              multiline
+              autoFocus
+              maxLength={2000}
+              accessibilityLabel="Texto del momento"
+              style={[styles.editInput, { color: theme.text, backgroundColor: theme.soft }]}
+            />
+            <View style={styles.editActions}>
+              <Pressable accessibilityRole="button" onPress={() => setEditing(null)}>
+                <Text style={{ color: theme.textSecondary, fontSize: 15 }}>Cancelar</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                disabled={!editing.trim() && !moment.imageUri && !moment.videoUri && !moment.voice}
+                onPress={() =>
+                  editMoment(moment.id, editing.trim())
+                    .then(() => setEditing(null))
+                    .catch(() => {})
+                }
+                style={[styles.saveBtn, { backgroundColor: theme.accent }]}>
+                <Text style={{ color: theme.onAccent, fontSize: 15, fontWeight: '500' }}>
+                  Guardar
+                </Text>
+              </Pressable>
+            </View>
+          </View>
         )}
-        {comments.map((comment) => (
-          <Text key={comment.id} style={[styles.comment, { color: theme.textSecondary }]}>
-            <Text style={{ color: theme.text, fontWeight: '500' }}>
-              {user(comment.userId).name}{' '}
+
+        <View style={styles.thread}>
+          {hidden > 0 && (
+            <Pressable onPress={() => setExpanded(true)}>
+              <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
+                Ver {hidden} {hidden === 1 ? 'comentario anterior' : 'comentarios anteriores'}
+              </Text>
+            </Pressable>
+          )}
+          {comments.map((comment) => (
+            <Text key={comment.id} style={[styles.comment, { color: theme.textSecondary }]}>
+              <Text style={{ color: theme.text, fontWeight: '500' }}>
+                {user(comment.userId).name}{' '}
+              </Text>
+              {comment.text}
             </Text>
-            {comment.text}
-          </Text>
-        ))}
-        <View style={styles.inputRow}>
-          <TextInput
-            value={draft}
-            onChangeText={setDraft}
-            onSubmitEditing={send}
-            placeholder="Añadir un comentario…"
-            placeholderTextColor={theme.textSecondary}
-            returnKeyType="send"
-            style={[styles.input, { color: theme.text, backgroundColor: theme.soft }]}
-          />
-          {moment.authorId !== me && (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Denunciar este momento"
-              disabled={reported === 'sent'}
-              onPress={() =>
-                reported === 'ask'
-                  ? reportMoment(moment.id)
-                      .then(() => setReported('sent'))
-                      .catch(() => setReported(''))
-                  : setReported('ask')
-              }>
-              <Text style={{ fontSize: 13, color: reported ? theme.text : theme.textSecondary }}>
-                {reported === 'sent'
-                  ? 'Denunciado'
-                  : reported === 'ask'
-                    ? '¿Denunciar?'
-                    : 'Denunciar'}
-              </Text>
-            </Pressable>
-          )}
-          {moment.authorId === me && editing === null && (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Editar el texto"
-              onPress={() => setEditing(moment.text ?? '')}>
-              <Text style={{ fontSize: 13, color: theme.textSecondary }}>Editar</Text>
-            </Pressable>
-          )}
-          {moment.authorId === me && (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Eliminar este momento"
-              onPress={() =>
-                confirming ? deleteMoment(moment.id).catch(() => {}) : setConfirming(true)
-              }>
-              <Text style={{ fontSize: 13, color: confirming ? theme.text : theme.textSecondary }}>
-                {confirming ? '¿Eliminar?' : 'Eliminar'}
-              </Text>
-            </Pressable>
-          )}
+          ))}
+          <View style={styles.inputRow}>
+            <TextInput
+              value={draft}
+              onChangeText={setDraft}
+              onSubmitEditing={send}
+              placeholder="Añadir un comentario…"
+              placeholderTextColor={theme.textSecondary}
+              returnKeyType="send"
+              style={[styles.input, { color: theme.text, backgroundColor: theme.soft }]}
+            />
+            {moment.authorId !== me && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Denunciar este momento"
+                disabled={reported === 'sent'}
+                onPress={() =>
+                  reported === 'ask'
+                    ? reportMoment(moment.id)
+                        .then(() => setReported('sent'))
+                        .catch(() => setReported(''))
+                    : setReported('ask')
+                }>
+                <Text style={{ fontSize: 13, color: reported ? theme.text : theme.textSecondary }}>
+                  {reported === 'sent'
+                    ? 'Denunciado'
+                    : reported === 'ask'
+                      ? '¿Denunciar?'
+                      : 'Denunciar'}
+                </Text>
+              </Pressable>
+            )}
+            {moment.authorId === me && editing === null && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Editar el texto"
+                onPress={() => setEditing(moment.text ?? '')}>
+                <Text style={{ fontSize: 13, color: theme.textSecondary }}>Editar</Text>
+              </Pressable>
+            )}
+            {moment.authorId === me && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Eliminar este momento"
+                onPress={() =>
+                  confirming ? deleteMoment(moment.id).catch(() => {}) : setConfirming(true)
+                }>
+                <Text
+                  style={{ fontSize: 13, color: confirming ? theme.text : theme.textSecondary }}>
+                  {confirming ? '¿Eliminar?' : 'Eliminar'}
+                </Text>
+              </Pressable>
+            )}
+          </View>
         </View>
       </View>
+      <EmojiBursts
+        bursts={bursts}
+        height={cardHeight}
+        onDone={(id) => setBursts((b) => b.filter((x) => x.id !== id))}
+      />
+      <EmojiPicker visible={picking} onClose={() => setPicking(false)} onPick={pickOther} />
     </Card>
   );
 }
@@ -294,17 +332,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
     paddingHorizontal: 8,
     paddingTop: 16,
   },
-  reactions: { flexDirection: 'row', gap: 8 },
+  reactions: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    height: 36,
-    paddingHorizontal: 12,
+    height: 34,
+    minWidth: 34,
+    justifyContent: 'center',
+    paddingHorizontal: 9,
     borderRadius: Radius.pill,
   },
   editBox: { paddingHorizontal: 8, paddingTop: 12, gap: 8 },

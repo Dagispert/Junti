@@ -9,6 +9,7 @@ import { AVATAR_BUCKET, MEDIA_BUCKET, supabase } from '@/lib/supabase';
 import type {
   About,
   Album,
+  GroupOrigin,
   Group,
   GroupEvent,
   Moment,
@@ -108,6 +109,11 @@ type Store = {
     groupId: string,
     look: { color?: string; sticker?: string | null; coverUri?: string | null },
   ) => Promise<void>;
+  /** Dónde empezó todo: añade (sin id) o corrige un comienzo del grupo. */
+  saveOrigin: (groupId: string, origin: Omit<GroupOrigin, 'id'> & { id?: string }) => Promise<void>;
+  deleteOrigin: (originId: string) => Promise<void>;
+  /** Solo administradores: de dónde sois («Todos somos de…»); vacío lo quita. */
+  setRoots: (groupId: string, roots: string) => Promise<void>;
   /** Mi preferencia: cuántas propuestas por semana me gustaría recibir. */
   voteFrequency: (groupId: string, perWeek: number) => Promise<void>;
   /** Solo administradores: fija los días con propuesta (1 = lunes … 7 = domingo). */
@@ -211,7 +217,15 @@ const inFlight = new Map<string, Promise<{ narration: Narration | null; reason?:
 
 const StoreContext = createContext<Store | null>(null);
 
-export const PALETTE = ['#D9663F', '#4E8D7C', '#5B7DB1', '#B8648F', '#C9A227', '#7A6FB0', '#3F8FA8'];
+export const PALETTE = [
+  '#D9663F',
+  '#4E8D7C',
+  '#5B7DB1',
+  '#B8648F',
+  '#C9A227',
+  '#7A6FB0',
+  '#3F8FA8',
+];
 const colorFor = (id: string) =>
   PALETTE[[...id].reduce((sum, ch) => sum + ch.charCodeAt(0), 0) % PALETTE.length];
 
@@ -267,6 +281,7 @@ async function load(me: string): Promise<Data> {
     questionRows,
     keyRows,
     albumRows,
+    originRows,
   ] = await Promise.all([
     supabase
       .from('memberships')
@@ -278,7 +293,7 @@ async function load(me: string): Promise<Data> {
     supabase
       .from('groups')
       .select(
-        'id, name, description, color, cover_path, sticker, cadence_days, narrative_enabled, narrative_style',
+        'id, name, description, color, cover_path, sticker, cadence_days, narrative_enabled, narrative_style, roots',
       )
       .order('created_at')
       .then(check),
@@ -333,6 +348,12 @@ async function load(me: string): Promise<Data> {
       .select('id, group_id, created_by, title, description, created_at, album_moments(moment_id)')
       .order('created_at', { ascending: false })
       .then(check) as PromiseLike<any[]>,
+    supabase
+      .from('group_origins')
+      .select('id, group_id, created_by, place_name, lat, lng, year, story, member_ids')
+      .order('year', { ascending: true, nullsFirst: false })
+      .order('created_at')
+      .then(check),
   ]);
 
   // Fotos de perfil: también privadas, con dirección temporal firmada.
@@ -405,6 +426,19 @@ async function load(me: string): Promise<Data> {
         votes: Object.fromEntries(
           members.filter((m) => m.frequency_vote).map((m) => [m.user_id, m.frequency_vote]),
         ),
+        roots: g.roots ?? undefined,
+        origins: (originRows ?? [])
+          .filter((o) => o.group_id === g.id)
+          .map((o) => ({
+            id: o.id,
+            createdBy: o.created_by ?? undefined,
+            place: o.place_name,
+            lat: o.lat ?? undefined,
+            lng: o.lng ?? undefined,
+            year: o.year ?? undefined,
+            story: o.story ?? undefined,
+            memberIds: o.member_ids ?? [],
+          })),
       };
     });
 
@@ -974,12 +1008,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setAlbumMoments: async (albumId, add, remove) => {
       if (add.length) {
         check(
-          await supabase
-            .from('album_moments')
-            .upsert(
-              add.map((moment_id) => ({ album_id: albumId, moment_id })),
-              { onConflict: 'album_id,moment_id', ignoreDuplicates: true },
-            ),
+          await supabase.from('album_moments').upsert(
+            add.map((moment_id) => ({ album_id: albumId, moment_id })),
+            { onConflict: 'album_id,moment_id', ignoreDuplicates: true },
+          ),
         );
       }
       if (remove.length) {
@@ -1087,6 +1119,35 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         change.cover_path = path;
       }
       check(await supabase.from('groups').update(change).eq('id', groupId));
+      await refresh();
+    },
+    saveOrigin: async (groupId, o) => {
+      const row = {
+        place_name: o.place,
+        lat: o.lat ?? null,
+        lng: o.lng ?? null,
+        year: o.year ?? null,
+        story: o.story || null,
+        member_ids: o.memberIds,
+      };
+      check(
+        o.id
+          ? await supabase.from('group_origins').update(row).eq('id', o.id)
+          : await supabase.from('group_origins').insert({ ...row, group_id: groupId }),
+      );
+      await refresh();
+    },
+    deleteOrigin: async (originId) => {
+      check(await supabase.from('group_origins').delete().eq('id', originId));
+      await refresh();
+    },
+    setRoots: async (groupId, roots) => {
+      check(
+        await supabase
+          .from('groups')
+          .update({ roots: roots.trim() || null })
+          .eq('id', groupId),
+      );
       await refresh();
     },
     voteFrequency: async (groupId, perWeek) => {

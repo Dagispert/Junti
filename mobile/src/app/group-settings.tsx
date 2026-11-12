@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { OriginsEditor } from '@/components/origins-editor';
 import { Avatar, Button, Card, Field, Lead, Notice, Screen, Tag, Title } from '@/components/ui';
 import { Radius, Spacing, useTheme } from '@/constants/theme';
 import { frequencies } from '@/data/library';
@@ -109,6 +110,10 @@ export default function GroupSettings() {
           />
         </Card>
       )}
+
+      <View style={{ gap: Spacing.two }}>
+        <OriginsEditor group={group} />
+      </View>
 
       {group.isAdmin && (
         <View style={{ gap: Spacing.two }}>
