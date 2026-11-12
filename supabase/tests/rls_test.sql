@@ -341,3 +341,31 @@ reset role;
 select pg_temp.expect((select body from actividad2 where sub_endpoint = 'https://push.example/e3') =
   'Félix ha añadido un recuerdo 📼 · Eva propone un reto: «El cielo de cada uno» · 3 preguntas nuevas (Eva)', 'avisos de recuerdos, retos y preguntas');
 \echo PREGUNTAS Y RECUERDOS CORRECTOS
+
+-- ── Álbumes y personalización del grupo ──
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000e2';
+insert into albums (id, group_id, title) values ('50000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-0000000000ae', 'Viaje a Roma');
+insert into album_moments (album_id, moment_id) values ('50000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-0000000000e1');
+select pg_temp.expect((select count(*) = 1 from album_moments), 'un miembro crea un álbum y añade un momento del grupo');
+select pg_temp.fails($$insert into album_moments (album_id, moment_id) values ('50000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001')$$, 'no se pueden añadir momentos de otro grupo');
+update groups set sticker = '🌻' where id = '10000000-0000-0000-0000-0000000000ae';
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000e1';
+select pg_temp.expect((select sticker is null from groups where id = '10000000-0000-0000-0000-0000000000ae'), 'quien no administra no cambia la pegatina del grupo');
+update groups set sticker = '🌻', color = '#4E8D7C' where id = '10000000-0000-0000-0000-0000000000ae';
+select pg_temp.expect((select sticker = '🌻' from groups where id = '10000000-0000-0000-0000-0000000000ae'), 'quien administra personaliza el grupo');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000c';
+select pg_temp.expect((select count(*) = 0 from albums), 'alguien ajeno no ve los álbumes');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000e3';
+delete from albums where id = '50000000-0000-0000-0000-000000000001';
+select pg_temp.expect((select count(*) = 1 from albums), 'quien no creó el álbum (ni administra) no lo borra');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000e2';
+update moments set text = 'Uno (editado)', edited_at = now() where id = '20000000-0000-0000-0000-0000000000e1';
+select pg_temp.expect((select text = 'Uno (editado)' from moments where id = '20000000-0000-0000-0000-0000000000e1'), 'el autor edita el texto de su momento');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000e3';
+update moments set text = 'hackeado' where id = '20000000-0000-0000-0000-0000000000e1';
+select pg_temp.expect((select text = 'Uno (editado)' from moments where id = '20000000-0000-0000-0000-0000000000e1'), 'nadie más edita un momento ajeno');
+update memberships set quiet_from = 23, quiet_to = 8 where group_id = '10000000-0000-0000-0000-0000000000ae' and user_id = auth.uid();
+select pg_temp.expect((select quiet_from = 23 from memberships where group_id = '10000000-0000-0000-0000-0000000000ae' and user_id = auth.uid()), 'cada uno elige sus horas de descanso');
+reset role;
+\echo ALBUMES Y GRUPO CORRECTOS
