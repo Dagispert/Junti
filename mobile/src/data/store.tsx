@@ -6,7 +6,6 @@ import { extensionFor } from '@/lib/media';
 import { disablePush } from '@/lib/push';
 import { AVATAR_BUCKET, MEDIA_BUCKET, supabase } from '@/lib/supabase';
 
-import { dailyPrompts } from './library';
 import type { Group, GroupEvent, Moment, Narration, Proposal, Song, User } from './types';
 
 // Estado de la app, respaldado por Supabase. Todo lo que se lee aquí ya viene
@@ -451,21 +450,14 @@ async function ensureTodayPrompts(data: Data): Promise<boolean> {
       ),
   );
   if (!missing.length) return false;
-  const day = Math.floor(Date.now() / 86_400_000);
-  // Fecha local (AAAA-MM-DD): la base de datos admite una sola propuesta por grupo y día,
-  // así que si el servidor u otra persona ya la creó, esta inserción se ignora.
+  // Fecha local (AAAA-MM-DD). El servidor elige de la biblioteca una propuesta que el
+  // grupo aún no haya tenido; si ya existe la de hoy, la deja como está.
   const now = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  const { error } = await supabase.from('proposals').upsert(
-    missing.map((g) => ({
-      group_id: g.id,
-      kind: 'prompt' as const,
-      day: today,
-      title: dailyPrompts[(day + g.id.charCodeAt(0)) % dailyPrompts.length],
-    })),
-    { onConflict: 'group_id,day', ignoreDuplicates: true },
+  const results = await Promise.all(
+    missing.map((g) => supabase.rpc('daily_prompt', { g: g.id, d: today })),
   );
-  return !error;
+  return results.some((r) => !r.error && r.data);
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {

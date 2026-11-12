@@ -280,3 +280,15 @@ select pg_temp.expect((select count(*) = 0 from activity_queue), 'la cola de avi
 select pg_temp.fails($$select claim_activity()$$, 'la app no puede reclamar avisos');
 reset role;
 \echo ACTIVIDAD CORRECTA
+
+-- ── Propuesta del día desde la biblioteca ──
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000e1';
+select pg_temp.expect((select daily_prompt('10000000-0000-0000-0000-0000000000ae', '2030-01-01') is not null), 'un miembro obtiene la propuesta del día de la biblioteca');
+select pg_temp.expect((select daily_prompt('10000000-0000-0000-0000-0000000000ae', '2030-01-01')) =
+  (select id from proposals where group_id = '10000000-0000-0000-0000-0000000000ae' and day = '2030-01-01'), 'la propuesta del día es una sola');
+select pg_temp.expect((select library_id is not null from proposals where group_id = '10000000-0000-0000-0000-0000000000ae' and day = '2030-01-01'), 'viene de la biblioteca');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000c';
+select pg_temp.fails($$select daily_prompt('10000000-0000-0000-0000-0000000000ae', '2030-01-02')$$, 'alguien ajeno no puede crear propuestas en el grupo');
+reset role;
+\echo PROPUESTAS DE LA BIBLIOTECA CORRECTAS
