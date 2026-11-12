@@ -102,10 +102,8 @@ export default function RecapScreen() {
       }
       if (result.reason === 'limit')
         setNarrationNote('Ya no quedan más versiones para este resumen.');
-      if (result.reason === 'busy')
-        setNarrationNote(
-          'Te cuento la versión que ya tenía: lo último que habéis compartido entrará en un rato.',
-        );
+      if (result.reason === 'resting')
+        setNarrationNote('Versión corta: la narradora está descansando y vuelve en un rato.');
       setWriting(false);
       if (text && !text.audioUrl) {
         setVoicing(true);

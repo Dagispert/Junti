@@ -124,7 +124,7 @@ type Body = {
 };
 
 const COLUMNS =
-  'id, title, body, scenes, style, moment_count, generations, updated_at, audio_path, scene_times, audio_duration';
+  'id, title, body, scenes, style, moment_count, generations, updated_at, audio_path, scene_times, audio_duration, model';
 
 type Row = Record<string, unknown> & { id: string; audio_path?: string | null };
 
@@ -244,11 +244,15 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (!moments.length) return reply(200, { narration: null, reason: 'empty' });
+    // La versión de siesta (sin IA) se da por buena un rato; luego se vuelve a
+    // intentar con la narradora de verdad.
+    const resting = existing?.model === 'plantilla';
     const fresh =
       existing &&
       existing.scenes &&
       existing.style === style &&
-      existing.moment_count === moments.length;
+      existing.moment_count === moments.length &&
+      (!resting || Date.now() - Date.parse(existing.updated_at) < 15 * 60_000);
     if (fresh && !body.force) return reply(200, { narration: await present(existing as Row) });
     if (existing && body.force && existing.generations >= MAX_VERSIONS) {
       return reply(200, { narration: await present(existing as Row), reason: 'limit' });
@@ -259,21 +263,22 @@ Deno.serve(async (req) => {
     const system =
       SYSTEM.replace('LIMITE', String(limit)).replace('ESCENAS', kind === 'week' ? '7' : '10') +
       `\n\nEstilo: ${(STYLES[style] ?? STYLES.emotivo).text}`;
-    let text: string, model: string;
+    let parsed: { title: string; body: string; scenes: Scene[] } | null;
+    let model: string;
     try {
-      ({ text, model } = await gemini(system, prompt));
+      const answer = await gemini(system, prompt);
+      model = answer.model;
+      parsed = parse(answer.text, moments.map((m) => m.id));
+      if (!parsed) throw new Error('La narradora no devolvió un texto válido');
     } catch (e) {
-      // Si Google está saturado pero ya había una crónica, se cuenta esa y
-      // la nueva (con lo último que se compartió) llegará más tarde.
+      // Si Google está saturado, la narradora «descansa»: cuenta una versión
+      // corta hecha con plantillas, en el tono del grupo, sin IA.
       const msg = e instanceof Error ? e.message : String(e);
-      if (msg.startsWith('busy') && existing?.scenes && existing.style === style) {
-        console.error(msg);
-        return reply(200, { narration: await present(existing as Row), reason: 'busy' });
-      }
-      throw e;
+      if (!msg.startsWith('busy') && !msg.includes('texto válido')) throw e;
+      console.error(msg);
+      parsed = await restingNarration(style, kind!, moments);
+      model = 'plantilla';
     }
-    const parsed = parse(text, moments.map((m) => m.id));
-    if (!parsed) throw new Error('La narradora no devolvió un texto válido');
 
     const saved = {
       group_id: groupId,
@@ -284,7 +289,8 @@ Deno.serve(async (req) => {
       body: parsed.body.slice(0, 4000),
       scenes: parsed.scenes,
       moment_count: moments.length,
-      generations: (existing?.generations ?? 0) + 1,
+      // La versión de siesta no gasta una de las versiones.
+      generations: (existing?.generations ?? 0) + (model === 'plantilla' ? 0 : 1),
       model,
       updated_at: new Date().toISOString(),
       // El audio era de la versión anterior.
@@ -299,7 +305,10 @@ Deno.serve(async (req) => {
       .select(COLUMNS)
       .single();
     if (saveError) throw saveError;
-    return reply(200, { narration: await present(row as Row) });
+    return reply(200, {
+      narration: await present(row as Row),
+      ...(model === 'plantilla' ? { reason: 'resting' } : {}),
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(message);
@@ -871,4 +880,184 @@ function sceneTimes(pcm: Uint8Array, rate: number, scenes: string[]): number[] {
     times.push(Math.round((at * 0.02) * 100) / 100);
   }
   return times;
+}
+
+// ───────────── La versión de siesta (sin IA) ─────────────
+// Si Gemini no está disponible, la narradora «está descansando» y cuenta una
+// versión corta hecha con plantillas, en el tono del grupo: así el tono se
+// mantiene aunque no se use la IA.
+
+type Tone = {
+  /** Abre: por qué hoy descansa. */
+  rest: string;
+  /** Cada momento: {name}, {what}, {city}. Se van alternando. */
+  lines: string[];
+  /** Las cifras: {n}, {r}, {c}. */
+  stats: string;
+  bye: string;
+  title: string;
+};
+
+const TONES: Record<string, Tone> = {
+  emotivo: {
+    rest: 'Hoy estoy descansando, perdonadme: es que tengo mucho amor que recopilar. Así que esta vez os lo cuento cortito.',
+    lines: [
+      '{name} nos trajo {what}, desde {city}.',
+      'Y desde {city}, {name} se acordó de todos con {what}.',
+      '{name} compartió {what}, y con eso ya estábamos un poco más cerca.',
+    ],
+    stats: 'En total, {n} momentos, {r} reacciones y {c} comentarios. Cada uno, una forma de decir aquí sigo.',
+    bye: 'La próxima vez os lo cuento como merecéis. Hasta pronto.',
+    title: 'Mucho amor que recopilar',
+  },
+  divertido: {
+    rest: 'Hoy me he cogido el día libre. Es que habláis demasiado y necesito un respiro. Pero algo os cuento, que no se diga.',
+    lines: [
+      '{name} apareció desde {city} con {what}. Ahí lo dejo.',
+      'Atención, que {name} nos manda {what}.',
+      '{name}, en modo reportero desde {city}, con {what}.',
+    ],
+    stats: 'Balance: {n} momentos, {r} reacciones y {c} comentarios. Lo dicho: habláis demasiado.',
+    bye: 'Y ahora, si me disculpáis, vuelvo a mi siesta. La próxima, con todo lujo de detalles.',
+    title: 'Habláis demasiado',
+  },
+  familiar: {
+    rest: 'Hoy estoy descansando, como quien se echa la siesta después de una comida familiar. Os lo cuento sencillito.',
+    lines: [
+      '{name} nos mandó {what}, desde {city}.',
+      'Desde {city}, {name} con {what}.',
+      'Y {name}, como siempre, con {what}.',
+    ],
+    stats: 'Entre todos, {n} momentos, {r} reacciones y {c} comentarios.',
+    bye: 'La próxima, con más calma. Un abrazo a todos.',
+    title: 'La siesta de la narradora',
+  },
+  romantico: {
+    rest: 'Hoy descanso un poco: tengo tanto amor que recopilar que necesito ordenarlo. Mientras, os dejo esto.',
+    lines: [
+      '{name} pensó en ti y compartió {what}.',
+      'Desde {city}, {name} te mandó {what}.',
+      '{name} guardó este momento para ti: {what}.',
+    ],
+    stats: '{n} momentos y {r} reacciones: cada una, un te echo de menos.',
+    bye: 'La próxima vez, con todo el cariño que merece. Hasta pronto.',
+    title: 'Tanto amor que ordenar',
+  },
+  nostalgico: {
+    rest: 'Hoy estoy descansando. Es que tengo mucho que asimilar, y los recuerdos necesitan su tiempo. Os dejo lo esencial.',
+    lines: [
+      '{name} dejó {what}, para recordarlo algún día.',
+      'Desde {city}, {name} con {what}.',
+      'Algún día volveremos a esto: {what}, de {name}.',
+    ],
+    stats: 'Quedan {n} momentos, {r} reacciones y {c} comentarios para la memoria.',
+    bye: 'Lo demás lo contaré cuando lo haya asimilado. Hasta la próxima.',
+    title: 'Mucho que asimilar',
+  },
+  documental: {
+    rest: 'Nota de producción: la narradora está descansando. Tiene mucho material que asimilar. Emitimos, mientras tanto, una versión breve.',
+    lines: [
+      '{city}. {name} registra {what}.',
+      'Nuevo registro: {name}, {what}.',
+      'En {city}, {name} documenta {what}.',
+    ],
+    stats: 'Datos del periodo: {n} momentos, {r} reacciones y {c} comentarios.',
+    bye: 'Fin de la emisión breve. La versión completa, próximamente.',
+    title: 'Emisión breve',
+  },
+  ironico: {
+    rest: 'Hoy no estoy. Bueno, estoy, pero descansando: habláis demasiado y una tiene un límite. Aquí va lo justo.',
+    lines: [
+      '{name} nos honra con {what}, desde {city}.',
+      'Sorpresa: {name} ha compartido algo. {what}.',
+      '{name}, desde {city}, con {what}. Toma ya.',
+    ],
+    stats: '{n} momentos, {r} reacciones y {c} comentarios. Nada mal para estar tan lejos.',
+    bye: 'Y ya. La versión larga, cuando me apetezca. Hasta otra.',
+    title: 'Lo justo',
+  },
+  diario: {
+    rest: 'Querido diario: hoy estoy descansando. Tengo mucho que asimilar. Apunto solo lo importante.',
+    lines: [
+      'Hoy {name} nos enseñó {what}, desde {city}.',
+      'Apunto: {name}, {what}.',
+      'Y {name}, desde {city}, con {what}.',
+    ],
+    stats: 'Esta vez fueron {n} momentos, {r} reacciones y {c} comentarios.',
+    bye: 'Mañana escribo más. Fin de la página.',
+    title: 'Querido diario',
+  },
+};
+
+async function restingNarration(
+  style: string,
+  kind: string,
+  moments: MomentRow[],
+): Promise<{ title: string; body: string; scenes: Scene[] }> {
+  const tone = TONES[style] ?? TONES.emotivo;
+  const ids = moments.map((m) => m.id);
+  const authorIds = [...new Set(moments.map((m) => m.author_id))];
+  const [{ data: people }, { data: media }, { count: r }, { count: c }] = await Promise.all([
+    supabase.from('profiles').select('id, name, nickname, home_city, home_visible').in('id', authorIds),
+    supabase.from('moment_media').select('moment_id, media_assets(kind)').in('moment_id', ids),
+    supabase.from('reactions').select('moment_id', { count: 'exact', head: true }).in('moment_id', ids),
+    supabase
+      .from('comments')
+      .select('id', { count: 'exact', head: true })
+      .in('moment_id', ids)
+      .is('deleted_at', null),
+  ]);
+  const who = new Map((people ?? []).map((p) => [p.id, p]));
+  const kindOf = new Map<string, string>();
+  for (const m of media ?? []) {
+    const k = (m as { media_assets?: { kind?: string } }).media_assets?.kind;
+    if (k && !kindOf.has(m.moment_id)) kindOf.set(m.moment_id, k);
+  }
+  const what = (m: MomentRow) => {
+    // Sin emojis: se lee en voz alta.
+    const text = (m.text ?? '')
+      .replace(/\p{Extended_Pictographic}|\uFE0F|\u200D/gu, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (text) {
+      const short = text.length > 70 ? `${text.slice(0, 67).replace(/\s\S*$/, '')}…` : text;
+      return `«${short}»`;
+    }
+    const k = kindOf.get(m.id);
+    return k === 'video' ? 'un vídeo' : k === 'audio' ? 'una nota de voz' : 'una foto';
+  };
+
+  // Unos pocos momentos repartidos, sin dejar a nadie fuera.
+  const max = kind === 'week' ? 6 : 8;
+  const picked = new Set<MomentRow>();
+  for (const id of authorIds) {
+    const first = moments.find((m) => m.author_id === id);
+    if (first && picked.size < max) picked.add(first);
+  }
+  for (let i = 0; picked.size < Math.min(max, moments.length); i++) {
+    picked.add(moments[Math.floor((i * moments.length) / max) % moments.length]);
+  }
+  const chosen = moments.filter((m) => picked.has(m));
+
+  const scenes: Scene[] = [{ moment_id: null, text: tone.rest }];
+  chosen.forEach((m, i) => {
+    const p = who.get(m.author_id);
+    const name = p?.nickname || (p?.name ?? 'Alguien').split(' ')[0];
+    const city =
+      (m.place_name ?? '').split(',')[0] || (p?.home_visible && p.home_city) || 'lejos';
+    const line = tone.lines[i % tone.lines.length]
+      .replace('{name}', name)
+      .replace('{what}', what(m))
+      .replace('{city}', city);
+    scenes.push({ moment_id: m.id, text: line.charAt(0).toUpperCase() + line.slice(1) });
+  });
+  scenes.push({
+    moment_id: 'stats',
+    text: tone.stats
+      .replace('{n}', String(moments.length))
+      .replace('{r}', String(r ?? 0))
+      .replace('{c}', String(c ?? 0)),
+  });
+  scenes.push({ moment_id: 'end', text: tone.bye });
+  return { title: tone.title, body: scenes.map((s) => s.text).join('\n\n'), scenes };
 }
