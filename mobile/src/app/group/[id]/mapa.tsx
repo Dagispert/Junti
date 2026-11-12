@@ -85,7 +85,9 @@ export default function MapScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
+      {/* Sin fondo propio: el del planeta se cortaba al llegar a la barra de abajo. */}
       <GlobeMap
+        transparent
         people={people}
         focusId={focus}
         onSelect={(pid) => {
@@ -131,6 +133,7 @@ export default function MapScreen() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
+          style={styles.filtersRow}
           contentContainerStyle={styles.filters}>
           {chip(showPeople, 'Personas', () => setLayer('people'), Users)}
           {chip(
@@ -203,6 +206,7 @@ export default function MapScreen() {
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
+            style={styles.peopleRow}
             contentContainerStyle={styles.people}>
             {people.map((p) => (
               <Pressable
@@ -251,7 +255,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     boxShadow: '0 8px 20px rgba(20,22,26,0.15)',
   },
-  filters: { paddingHorizontal: 16, gap: 8 },
+  filters: { paddingHorizontal: 16, paddingVertical: 16, gap: 8 },
+  filtersRow: { marginVertical: -16 },
   filter: {
     height: 36,
     paddingHorizontal: 16,
@@ -293,7 +298,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 20,
   },
-  people: { paddingHorizontal: 16, gap: 8 },
+  // Con aire arriba y abajo: si no, la fila recorta la sombra de las tarjetas.
+  people: { paddingHorizontal: 16, paddingVertical: 18, gap: 8 },
+  peopleRow: { marginVertical: -18 },
   person: {
     flexDirection: 'row',
     alignItems: 'center',
