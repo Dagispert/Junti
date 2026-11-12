@@ -92,6 +92,16 @@ export function OriginsEditor({ group }: { group: Group }) {
       return { ...d, memberIds: next.length >= group.memberIds.length ? [] : next };
     });
 
+  // Quién no aparece en ningún comienzo. Si alguno incluye a todo el grupo
+  // (os conocisteis a la vez), nunca falta nadie y esto no se muestra.
+  const covered = new Set(
+    group.origins.flatMap((o) => (o.memberIds.length ? o.memberIds : group.memberIds)),
+  );
+  const missing = group.origins.length ? group.memberIds.filter((id) => !covered.has(id)) : [];
+  const missingNames = new Intl.ListFormat('es', { type: 'conjunction' }).format(
+    missing.map((id) => (id === store.me ? 'tú' : name(id))),
+  );
+
   return (
     <>
       <Tag>Dónde empezó todo</Tag>
@@ -130,6 +140,26 @@ export function OriginsEditor({ group }: { group: Group }) {
           </View>
         </Card>
       ))}
+
+      {!draft && missing.length > 0 && (
+        <Card style={[styles.card, { backgroundColor: theme.soft }]}>
+          <View style={styles.originRow}>
+            <AvatarRow userIds={missing} size={28} />
+            <Text style={{ color: theme.text, fontSize: 15, lineHeight: 21, flex: 1 }}>
+              {missing.length === 1 && missing[0] === store.me
+                ? 'Falta cómo llegaste tú al grupo.'
+                : `Falta cómo ${missing.length === 1 ? 'llegó' : 'llegaron'} ${missingNames} al grupo.`}
+            </Text>
+          </View>
+          <View style={styles.actions}>
+            <Button
+              compact
+              label="Contarlo"
+              onPress={() => setDraft({ ...empty(), memberIds: missing })}
+            />
+          </View>
+        </Card>
+      )}
 
       {draft ? (
         <Card style={styles.card}>
