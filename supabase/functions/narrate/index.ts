@@ -259,7 +259,19 @@ Deno.serve(async (req) => {
     const system =
       SYSTEM.replace('LIMITE', String(limit)).replace('ESCENAS', kind === 'week' ? '7' : '10') +
       `\n\nEstilo: ${(STYLES[style] ?? STYLES.emotivo).text}`;
-    const { text, model } = await gemini(system, prompt);
+    let text: string, model: string;
+    try {
+      ({ text, model } = await gemini(system, prompt));
+    } catch (e) {
+      // Si Google está saturado pero ya había una crónica, se cuenta esa y
+      // la nueva (con lo último que se compartió) llegará más tarde.
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.startsWith('busy') && existing?.scenes && existing.style === style) {
+        console.error(msg);
+        return reply(200, { narration: await present(existing as Row), reason: 'busy' });
+      }
+      throw e;
+    }
     const parsed = parse(text, moments.map((m) => m.id));
     if (!parsed) throw new Error('La narradora no devolvió un texto válido');
 
@@ -583,6 +595,7 @@ async function gemini(system: string, prompt: string): Promise<{ text: string; m
   );
   let listed = false;
   let busy = '';
+  const retried = new Set<string>();
   while (tried.length < 8) {
     if (!queue.length && !listed) {
       listed = true;
@@ -612,7 +625,7 @@ async function gemini(system: string, prompt: string): Promise<{ text: string; m
     if (left < 8_000) break;
     let res: Response;
     try {
-      res = await call(model, Math.min(left, tried.length === 1 ? 60_000 : 35_000));
+      res = await call(model, Math.min(left, tried.length === 1 ? 45_000 : 30_000));
     } catch {
       log.push(`${model}: sin respuesta a tiempo`);
       continue;
@@ -624,6 +637,13 @@ async function gemini(system: string, prompt: string): Promise<{ text: string; m
     if (res.status === 400 && /not supported|JSON mode/i.test(message)) continue;
     if (res.status === 429 || res.status === 503) {
       busy = `busy ${res.status} ${model}: ${message}`;
+      // Una saturación pasajera (503): se reintenta una vez el mismo modelo.
+      if (res.status === 503 && !retried.has(model) && 125_000 - (Date.now() - started) > 20_000) {
+        retried.add(model);
+        tried.pop();
+        queue.unshift(model);
+        await new Promise((r) => setTimeout(r, 4000));
+      }
       continue;
     }
     if (!res.ok) throw new Error(`Gemini ${res.status} ${model}: ${message || 'error'}`);
