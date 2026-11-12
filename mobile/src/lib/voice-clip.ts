@@ -9,6 +9,24 @@ const web = Platform.OS === 'web' && typeof window !== 'undefined';
 const base = web && window.location.pathname.startsWith('/Junti') ? '/Junti' : '';
 const MUTE_KEY = 'junti-voz-silenciada';
 
+// Todas las voces que suenan ahora, para que una nueva corte a la anterior.
+const playing = new Set<HTMLAudioElement>();
+const stopAll = () => playing.forEach((a) => a.pause());
+
+let preview: HTMLAudioElement | null = null;
+/** La muestra de un tono de la narradora («Vale, a partir de ahora…»). */
+export function playTone(id: string) {
+  if (!web) return;
+  stopAll();
+  if (!preview) {
+    preview = new Audio();
+    playing.add(preview);
+  }
+  preview.src = `${base}/voz/tonos/${id}.mp3`;
+  preview.currentTime = 0;
+  preview.play().catch(() => {});
+}
+
 const readMuted = () => {
   try {
     return web && localStorage.getItem(MUTE_KEY) === '1';
@@ -25,7 +43,10 @@ export function useVoiceClip(path: string | null) {
 
   useEffect(() => {
     if (!web || !path) return;
-    if (!audio.current) audio.current = new Audio();
+    if (!audio.current) {
+      audio.current = new Audio();
+      playing.add(audio.current);
+    }
     const a = audio.current;
     a.src = `${base}/${path}`;
     a.muted = readMuted();
@@ -44,7 +65,13 @@ export function useVoiceClip(path: string | null) {
     };
   }, [path]);
 
-  useEffect(() => () => audio.current?.pause(), []);
+  useEffect(
+    () => () => {
+      audio.current?.pause();
+      if (audio.current) playing.delete(audio.current);
+    },
+    [],
+  );
 
   const setMuted = useCallback((m: boolean) => {
     setMutedState(m);
@@ -60,6 +87,7 @@ export function useVoiceClip(path: string | null) {
     const a = audio.current;
     if (!a) return;
     if (a.ended) a.currentTime = 0;
+    stopAll();
     a.play()
       .then(() => setNeedsTap(false))
       .catch(() => {});

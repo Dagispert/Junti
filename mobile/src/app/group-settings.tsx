@@ -15,6 +15,7 @@ import { STICKERS } from '@/data/look';
 import { errorText, PALETTE, useStore } from '@/data/store';
 import { exportMemory } from '@/lib/export';
 import { NARRATIVE_STYLES, styleOf } from '@/lib/narrative';
+import { playTone } from '@/lib/voice-clip';
 
 const sameDays = (a: number[], b: number[]) =>
   a.length === b.length && [...a].sort().every((d, i) => d === [...b].sort()[i]);
@@ -386,7 +387,11 @@ export default function GroupSettings() {
             )}
             {group.narrativeEnabled && (
               <>
-                <Small>{admin ? 'Su tono:' : 'Tono elegido por el grupo:'}</Small>
+                <Small>
+                  {admin
+                    ? 'Su tono (toca uno para oír cómo suena):'
+                    : 'Tono elegido por el grupo (toca uno para oír cómo suena):'}
+                </Small>
                 <View style={styles.styles}>
                   {NARRATIVE_STYLES.map((option) => {
                     const on = group.narrativeStyle === option.id;
@@ -396,8 +401,12 @@ export default function GroupSettings() {
                         accessibilityRole="button"
                         accessibilityLabel={`Estilo ${option.label}`}
                         accessibilityState={{ selected: on }}
-                        disabled={busy || !admin}
-                        onPress={() => run(() => store.setNarrative(group.id, true, option.id))}
+                        disabled={busy}
+                        onPress={() => {
+                          // Al elegirlo se oye cómo suena; quien no administra solo lo escucha.
+                          playTone(option.id);
+                          if (admin) run(() => store.setNarrative(group.id, true, option.id));
+                        }}
                         style={[
                           styles.style,
                           { backgroundColor: on ? theme.accent : theme.soft },

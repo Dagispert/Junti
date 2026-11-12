@@ -18,7 +18,7 @@ import { errorText, PALETTE, useStore } from '@/data/store';
 import type { Place } from '@/lib/geo';
 import { copyText, inviteLink } from '@/lib/invite';
 import { NARRATIVE_STYLES } from '@/lib/narrative';
-import { useVoiceClip } from '@/lib/voice-clip';
+import { playTone, useVoiceClip } from '@/lib/voice-clip';
 
 type Kind = 'amigos' | 'familia' | 'pareja';
 
@@ -400,7 +400,10 @@ export default function NewGroup() {
           <View style={styles.fields}>
             <Choices
               value={narrator === null ? '' : narrator ? 'si' : 'no'}
-              onChange={(v) => setNarrator(v === 'si')}
+              onChange={(v) => {
+                setNarrator(v === 'si');
+                if (v === 'si') playTone(style);
+              }}
               options={[
                 { id: 'si', label: 'Sí, contadla' },
                 { id: 'no', label: 'Ahora no' },
@@ -415,7 +418,10 @@ export default function NewGroup() {
                       key={s.id}
                       accessibilityRole="radio"
                       accessibilityState={{ checked: style === s.id }}
-                      onPress={() => setStyle(s.id)}
+                      onPress={() => {
+                        setStyle(s.id);
+                        playTone(s.id);
+                      }}
                       style={[
                         styles.styleCard,
                         {
