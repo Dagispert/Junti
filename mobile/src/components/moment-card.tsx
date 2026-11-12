@@ -111,7 +111,17 @@ export function MomentCard({ moment }: { moment: Moment }) {
       )}
 
       <View style={styles.footer}>
-        <Avatar userId={author.id} size={40} />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Ver la ficha de ${author.name}`}
+          onPress={() =>
+            router.push({
+              pathname: '/person/[id]',
+              params: { id: author.id, groupId: moment.groupId },
+            })
+          }>
+          <Avatar userId={author.id} size={40} />
+        </Pressable>
         <View style={{ flex: 1, minWidth: 160 }}>
           <Text style={{ color: theme.text, fontSize: 15, fontWeight: '500' }}>{author.name}</Text>
           <Text numberOfLines={2} style={{ color: theme.textSecondary, fontSize: 13 }}>

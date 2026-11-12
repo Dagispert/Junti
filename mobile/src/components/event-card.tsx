@@ -22,8 +22,14 @@ export function EventCard({ event, compact }: { event: GroupEvent; compact?: boo
   const kind = KINDS[event.kind];
   const days = daysUntil(event);
   const when = occurrence(event);
+  // Los cumpleaños que vienen del perfil se ven en la ficha de la persona.
   const open = () =>
-    router.push({ pathname: '/event', params: { groupId: event.groupId, id: event.id } });
+    event.id.startsWith('perfil-') && event.personId
+      ? router.push({
+          pathname: '/person/[id]',
+          params: { id: event.personId, groupId: event.groupId },
+        })
+      : router.push({ pathname: '/event', params: { groupId: event.groupId, id: event.id } });
 
   if (event.kind === 'trip' || event.kind === 'reunion') {
     const end = event.endsOn ? fromISO(event.endsOn) : undefined;

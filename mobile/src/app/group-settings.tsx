@@ -47,6 +47,7 @@ export default function GroupSettings() {
   const [leaving, setLeaving] = useState(false);
   const [removing, setRemoving] = useState('');
   const [exporting, setExporting] = useState('');
+  const [myNick, setMyNick] = useState(group?.nicknames[store.me] ?? '');
 
   if (!group) return null;
   const { me } = store;
@@ -356,6 +357,31 @@ export default function GroupSettings() {
       </View>
 
       <View style={{ gap: Spacing.two }}>
+        <Tag>Cómo te llaman aquí</Tag>
+        <Card style={styles.card}>
+          <Field
+            label="Tu apodo en este grupo (opcional)"
+            value={myNick}
+            onChangeText={setMyNick}
+            placeholder={store.user(store.me).about.nickname ?? 'Por ejemplo: la peque, el capi…'}
+            maxLength={40}
+          />
+          <Button
+            label="Guardar apodo"
+            variant="light"
+            disabled={busy || myNick.trim() === (group.nicknames[store.me] ?? '')}
+            onPress={() =>
+              run(() => store.setGroupNickname(group.id, myNick.trim() || null), 'Apodo guardado')
+            }
+          />
+        </Card>
+        <Text style={{ color: theme.textSecondary, fontSize: 13, lineHeight: 19 }}>
+          Si en este grupo te llaman distinto, ponlo aquí: lo verán en tu ficha y la narradora lo
+          usará.
+        </Text>
+      </View>
+
+      <View style={{ gap: Spacing.two }}>
         <Tag>Tus avisos de este grupo</Tag>
         <Card style={{ padding: 8 }}>
           <View style={styles.option}>
@@ -459,7 +485,14 @@ export default function GroupSettings() {
               <View
                 key={id}
                 style={[styles.option, i > 0 && { borderTopWidth: 1, borderTopColor: theme.soft }]}>
-                <Avatar userId={id} size={36} />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Ver la ficha de ${member.name}`}
+                  onPress={() =>
+                    router.push({ pathname: '/person/[id]', params: { id, groupId: group.id } })
+                  }>
+                  <Avatar userId={id} size={36} />
+                </Pressable>
                 <View style={{ flex: 1 }}>
                   <Text style={{ color: theme.text, fontSize: 17 }}>
                     {member.name}

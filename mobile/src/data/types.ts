@@ -14,6 +14,21 @@ export type User = {
   /** Foto de perfil: dirección temporal firmada y su ruta en el almacén. */
   avatarUri?: string;
   avatarPath?: string;
+  /** Más contexto (todo opcional): apodo, cómo hablar de ella/él, cumpleaños… */
+  about: About;
+};
+
+export type About = {
+  nickname?: string;
+  /** f: femenino · m: masculino · n: neutro */
+  voiceGender?: 'f' | 'm' | 'n';
+  birthMonth?: number;
+  birthDay?: number;
+  /** Solo si quiere compartirlo. */
+  birthYear?: number;
+  hometown?: string;
+  bio?: string;
+  interests?: string[];
 };
 
 export type Group = {
@@ -26,6 +41,8 @@ export type Group = {
   coverPath?: string;
   sticker?: string;
   memberIds: string[];
+  /** Apodos que cada uno usa en este grupo. */
+  nicknames: Record<string, string>;
   /** Si soy administrador de este grupo. */
   isAdmin: boolean;
   adminIds: string[];

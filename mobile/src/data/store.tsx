@@ -7,6 +7,7 @@ import { disablePush } from '@/lib/push';
 import { AVATAR_BUCKET, MEDIA_BUCKET, supabase } from '@/lib/supabase';
 
 import type {
+  About,
   Album,
   Group,
   GroupEvent,
@@ -43,6 +44,10 @@ type Store = {
   /** Entrar sin contraseña: envía un enlace al correo (crea la cuenta si no existe). */
   sendLoginLink: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
+  /** El resto del perfil: apodo, cómo hablar de mí, cumpleaños, de dónde soy, frase y gustos. */
+  saveAbout: (about: About) => Promise<void>;
+  /** Mi apodo en un grupo concreto (null lo quita). */
+  setGroupNickname: (groupId: string, nickname: string | null) => Promise<void>;
   /** place: la ciudad elegida en el buscador; null la quita; sin pasarla, no cambia. */
   saveProfile: (name: string, place?: Place | null) => Promise<void>;
   createGroup: (name: string, description: string) => Promise<string>;
@@ -218,6 +223,7 @@ const FORMER_MEMBER: Omit<User, 'id'> = {
   city: '',
   tz: 'UTC',
   color: '#A89E93',
+  about: {},
 };
 
 function check<T>(result: { data: T; error: { message: string } | null }): T {
@@ -265,7 +271,7 @@ async function load(me: string): Promise<Data> {
     supabase
       .from('memberships')
       .select(
-        'group_id, user_id, role, frequency_vote, preferred_hour, muted_until, narrative_opt_out, quiet_from, quiet_to',
+        'group_id, user_id, role, frequency_vote, preferred_hour, muted_until, narrative_opt_out, quiet_from, quiet_to, nickname',
       )
       .eq('status', 'active')
       .then(check),
@@ -279,7 +285,7 @@ async function load(me: string): Promise<Data> {
     supabase
       .from('profiles')
       .select(
-        'id, name, home_city, home_country, home_lat, home_lng, home_visible, timezone, avatar_path',
+        'id, name, home_city, home_country, home_lat, home_lng, home_visible, timezone, avatar_path, nickname, voice_gender, birth_month, birth_day, birth_year, hometown, bio, interests',
       )
       .then(check),
     supabase
@@ -356,6 +362,16 @@ async function load(me: string): Promise<Data> {
         : { city: '' }),
       tz: p.timezone,
       color: colorFor(p.id),
+      about: {
+        nickname: p.nickname ?? undefined,
+        voiceGender: p.voice_gender ?? undefined,
+        birthMonth: p.birth_month ?? undefined,
+        birthDay: p.birth_day ?? undefined,
+        birthYear: p.birth_year ?? undefined,
+        hometown: p.hometown ?? undefined,
+        bio: p.bio ?? undefined,
+        interests: p.interests ?? undefined,
+      },
     };
   }
 
@@ -372,6 +388,9 @@ async function load(me: string): Promise<Data> {
         coverPath: g.cover_path ?? undefined,
         sticker: g.sticker ?? undefined,
         memberIds: members.map((m) => m.user_id),
+        nicknames: Object.fromEntries(
+          members.filter((m) => m.nickname).map((m) => [m.user_id, m.nickname]),
+        ),
         isAdmin: members.some((m) => m.user_id === me && m.role === 'admin'),
         myHour: members.find((m) => m.user_id === me)?.preferred_hour ?? 19,
         quietFrom: members.find((m) => m.user_id === me)?.quiet_from ?? 22,
@@ -508,6 +527,28 @@ async function load(me: string): Promise<Data> {
     yearly: e.yearly,
     personId: e.person_id ?? undefined,
   }));
+
+  // Los cumpleaños apuntados en los perfiles salen solos en el calendario de cada
+  // grupo (salvo que alguien ya lo haya apuntado a mano).
+  for (const g of groups) {
+    for (const uid of g.memberIds) {
+      const a = users[uid]?.about;
+      if (!a?.birthMonth || !a.birthDay) continue;
+      if (events.some((e) => e.groupId === g.id && e.kind === 'birthday' && e.personId === uid))
+        continue;
+      const mm = String(a.birthMonth).padStart(2, '0');
+      const dd = String(a.birthDay).padStart(2, '0');
+      events.push({
+        id: `perfil-${g.id}-${uid}`,
+        groupId: g.id,
+        kind: 'birthday',
+        title: `Cumpleaños de ${users[uid].name.split(' ')[0]}`,
+        startsOn: `${a.birthYear ?? 2000}-${mm}-${dd}`,
+        yearly: true,
+        personId: uid,
+      });
+    }
+  }
 
   const keys = new Map((keyRows ?? []).map((k) => [k.question_id, k.correct as number]));
   const questions: Question[] = (questionRows ?? []).map((q) => ({
@@ -652,6 +693,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase.auth.signUp({ email, password });
       if (error) throw new Error(error.message);
       return !!data.session;
+    },
+    saveAbout: async (a) => {
+      check(
+        await supabase
+          .from('profiles')
+          .update({
+            nickname: a.nickname || null,
+            voice_gender: a.voiceGender ?? null,
+            birth_month: a.birthMonth ?? null,
+            birth_day: a.birthDay ?? null,
+            birth_year: a.birthMonth ? (a.birthYear ?? null) : null,
+            hometown: a.hometown || null,
+            bio: a.bio || null,
+            interests: a.interests?.length ? a.interests : null,
+          })
+          .eq('id', me),
+      );
+      await refresh();
+    },
+    setGroupNickname: async (groupId, nickname) => {
+      check(
+        await supabase
+          .from('memberships')
+          .update({ nickname: nickname || null })
+          .match({ group_id: groupId, user_id: me }),
+      );
+      await refresh();
     },
     sendLoginLink: async (email) => {
       const back =

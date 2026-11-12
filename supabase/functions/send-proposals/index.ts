@@ -69,10 +69,14 @@ Deno.serve(async () => {
     // Actividad del grupo: momentos nuevos, comentarios y gente nueva (agrupados).
     const { data: activity, error: activityError } = await supabase.rpc('claim_activity');
     if (activityError) console.error('actividad', activityError.message);
+    // Cumpleaños apuntados en los perfiles.
+    const { data: birthdays, error: birthdaysError } = await supabase.rpc('claim_profile_birthdays');
+    if (birthdaysError) console.error('cumpleaños', birthdaysError.message);
     const due = [
       ...(proposals ?? []).map((n: any) => ({ ...n, body: n.p_title })),
       ...(reminders ?? []).map((n: any) => ({ ...n, p_id: null })),
       ...(activity ?? []).map((n: any) => ({ ...n, p_id: null })),
+      ...(birthdays ?? []).map((n: any) => ({ ...n, p_id: null })),
     ];
 
     let sent = 0;

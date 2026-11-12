@@ -369,3 +369,30 @@ update memberships set quiet_from = 23, quiet_to = 8 where group_id = '10000000-
 select pg_temp.expect((select quiet_from = 23 from memberships where group_id = '10000000-0000-0000-0000-0000000000ae' and user_id = auth.uid()), 'cada uno elige sus horas de descanso');
 reset role;
 \echo ALBUMES Y GRUPO CORRECTOS
+
+-- ── Perfil con más contexto ──
+reset role;
+update memberships set muted_until = null, preferred_hour = 0 where group_id = '10000000-0000-0000-0000-0000000000ae';
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000e2';
+update profiles set nickname = 'Fe', voice_gender = 'm', bio = 'Fotógrafo en Lisboa', interests = '{surf,cocinar}', hometown = 'Valladolid',
+  birth_month = extract(month from now() at time zone 'Europe/Madrid'), birth_day = extract(day from now() at time zone 'Europe/Madrid')
+  where id = auth.uid();
+update memberships set nickname = 'Felipín' where group_id = '10000000-0000-0000-0000-0000000000ae' and user_id = auth.uid();
+select pg_temp.fails($$update profiles set birth_year = 1990, birth_month = null, birth_day = null where id = auth.uid()$$, 'no hay año de nacimiento sin día y mes');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000e1';
+select pg_temp.expect((select nickname = 'Fe' and bio = 'Fotógrafo en Lisboa' from profiles where id = '00000000-0000-0000-0000-0000000000e2'), 'quien comparte grupo ve el apodo y la frase');
+update profiles set nickname = 'hackeado' where id = '00000000-0000-0000-0000-0000000000e2';
+select pg_temp.expect((select nickname = 'Fe' from profiles where id = '00000000-0000-0000-0000-0000000000e2'), 'nadie cambia el perfil de otro');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000c';
+select pg_temp.expect((select count(*) = 0 from profiles where id = '00000000-0000-0000-0000-0000000000e2'), 'alguien ajeno no ve el perfil');
+reset role;
+set role service_role;
+create temp table cumples as select * from claim_profile_birthdays();
+reset role;
+select pg_temp.expect((select body from cumples where g_name = 'Actividad' and sub_endpoint = 'https://push.example/e1') = '🎂 Hoy cumple Felipín. Felicítalo', 'aviso del cumpleaños del perfil, con el apodo del grupo y en masculino');
+select pg_temp.expect((select body from cumples where g_name = 'Actividad' and sub_endpoint = 'https://push.example/e2') = '🎂 Feliz cumpleaños. Hoy el grupo piensa en ti', 'felicitación a quien cumple');
+set role service_role;
+select pg_temp.expect((select count(*) = 0 from claim_profile_birthdays()), 'el aviso de cumpleaños no se repite');
+reset role;
+\echo PERFIL CORRECTO

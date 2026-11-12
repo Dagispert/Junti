@@ -1,19 +1,23 @@
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
+import { X } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { Image as RNImage, StyleSheet, View } from 'react-native';
+import { Image as RNImage, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AvatarCropper } from '@/components/avatar-cropper';
 import { CityPicker } from '@/components/city-picker';
+import { DatePick } from '@/components/date-pick';
+import { Icon } from '@/components/icon';
 import { Avatar, Button, Card, Field, Lead, Notice, Screen, Tag, Title } from '@/components/ui';
-import { Spacing } from '@/constants/theme';
+import { Spacing, useTheme } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
 import type { Place } from '@/lib/geo';
 import { disablePush, enablePush, pushState, type PushState } from '@/lib/push';
 
 /** Ajustes personales: cómo me ven los demás, cerrar sesión y borrar la cuenta. */
 export default function Settings() {
-  const { me, user, saveProfile, setAvatar, signOut, deleteAccount } = useStore();
+  const theme = useTheme();
+  const { me, user, saveProfile, saveAbout, setAvatar, signOut, deleteAccount } = useStore();
   const profile = user(me);
   const [name, setName] = useState(profile.name);
   const current: Place | null =
@@ -25,6 +29,24 @@ export default function Settings() {
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  // Sobre ti
+  const about = profile.about;
+  const [nickname, setNickname] = useState(about.nickname ?? '');
+  const [gender, setGender] = useState(about.voiceGender);
+  const [hasBirthday, setHasBirthday] = useState(!!about.birthMonth);
+  const [birthday, setBirthday] = useState(
+    () => new Date(about.birthYear ?? 2000, (about.birthMonth ?? 1) - 1, about.birthDay ?? 1),
+  );
+  const [shareYear, setShareYear] = useState(!!about.birthYear);
+  const [hometown, setHometown] = useState(about.hometown ?? '');
+  const [bio, setBio] = useState(about.bio ?? '');
+  const [interests, setInterests] = useState<string[]>(about.interests ?? []);
+  const [interest, setInterest] = useState('');
+  const addInterest = () => {
+    const v = interest.trim().slice(0, 30);
+    if (v && !interests.includes(v) && interests.length < 8) setInterests([...interests, v]);
+    setInterest('');
+  };
   const [push, setPush] = useState<PushState>();
   useEffect(() => {
     pushState().then(setPush);
@@ -125,6 +147,171 @@ export default function Settings() {
       <Notice>{notice}</Notice>
 
       <View style={{ gap: Spacing.two }}>
+        <View style={styles.aboutHead}>
+          <Tag>Sobre ti</Tag>
+          <Button
+            compact
+            variant="quiet"
+            label="Ver mi ficha"
+            onPress={() => router.push({ pathname: '/person/[id]', params: { id: me } })}
+          />
+        </View>
+        <Text style={{ color: theme.textSecondary, fontSize: 13, lineHeight: 19 }}>
+          Todo es opcional. Solo lo ven las personas de tus grupos, y la narradora lo usa para
+          contar vuestras historias con más cariño.
+        </Text>
+        <Card style={styles.card}>
+          <Field
+            label="Apodo"
+            value={nickname}
+            onChangeText={setNickname}
+            placeholder="Como te llaman los tuyos"
+            maxLength={40}
+          />
+
+          <View style={{ gap: 8 }}>
+            <Text style={{ color: theme.textSecondary, fontSize: 13 }}>Cuando hablen de ti</Text>
+            <View style={styles.chips}>
+              {(
+                [
+                  ['f', 'En femenino'],
+                  ['m', 'En masculino'],
+                  ['n', 'Sin género'],
+                ] as const
+              ).map(([value, label]) => {
+                const on = gender === value;
+                return (
+                  <Pressable
+                    key={value}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: on }}
+                    onPress={() => setGender(on ? undefined : value)}
+                    style={[styles.chip, { backgroundColor: on ? theme.accent : theme.soft }]}>
+                    <Text style={{ color: on ? theme.onAccent : theme.text, fontSize: 15 }}>
+                      {label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
+          <View style={{ gap: 8 }}>
+            <Pressable
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: hasBirthday }}
+              onPress={() => setHasBirthday(!hasBirthday)}
+              style={styles.checkRow}>
+              <View
+                style={[
+                  styles.box,
+                  { borderColor: hasBirthday ? theme.accent : theme.textSecondary },
+                  hasBirthday && { backgroundColor: theme.accent },
+                ]}
+              />
+              <Text style={{ color: theme.text, fontSize: 17 }}>Mi cumpleaños</Text>
+            </Pressable>
+            {hasBirthday && (
+              <>
+                <DatePick
+                  value={birthday}
+                  onChange={setBirthday}
+                  label="Día y mes"
+                  hideYear={!shareYear}
+                />
+                <Pressable
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: shareYear }}
+                  onPress={() => setShareYear(!shareYear)}
+                  style={styles.checkRow}>
+                  <View
+                    style={[
+                      styles.box,
+                      { borderColor: shareYear ? theme.accent : theme.textSecondary },
+                      shareYear && { backgroundColor: theme.accent },
+                    ]}
+                  />
+                  <Text style={{ color: theme.text, fontSize: 15 }}>
+                    Compartir también el año (para saber cuántos cumples)
+                  </Text>
+                </Pressable>
+              </>
+            )}
+          </View>
+
+          <Field
+            label="De dónde eres"
+            value={hometown}
+            onChangeText={setHometown}
+            placeholder="Valladolid, Cádiz, Bogotá…"
+            maxLength={80}
+          />
+          <Field
+            label="Una frase sobre ti"
+            value={bio}
+            onChangeText={setBio}
+            placeholder="Bióloga en Lisboa y fan del café"
+            maxLength={160}
+            multiline
+          />
+
+          <View style={{ gap: 8 }}>
+            <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
+              Lo que te gusta (hasta 8)
+            </Text>
+            {interests.length > 0 && (
+              <View style={styles.chips}>
+                {interests.map((i) => (
+                  <Pressable
+                    key={i}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Quitar ${i}`}
+                    onPress={() => setInterests(interests.filter((x) => x !== i))}
+                    style={[styles.chip, { backgroundColor: theme.soft }]}>
+                    <Text style={{ color: theme.text, fontSize: 15 }}>{i}</Text>
+                    <Icon icon={X} size={14} />
+                  </Pressable>
+                ))}
+              </View>
+            )}
+            {interests.length < 8 && (
+              <Field
+                label="Añadir"
+                value={interest}
+                onChangeText={setInterest}
+                onSubmitEditing={addInterest}
+                onBlur={addInterest}
+                placeholder="surf, cocinar, fotografía…"
+                maxLength={30}
+                returnKeyType="done"
+              />
+            )}
+          </View>
+
+          <Button
+            label="Guardar"
+            disabled={busy}
+            onPress={() =>
+              run(
+                () =>
+                  saveAbout({
+                    nickname: nickname.trim(),
+                    voiceGender: gender,
+                    birthMonth: hasBirthday ? birthday.getMonth() + 1 : undefined,
+                    birthDay: hasBirthday ? birthday.getDate() : undefined,
+                    birthYear: hasBirthday && shareYear ? birthday.getFullYear() : undefined,
+                    hometown: hometown.trim(),
+                    bio: bio.trim(),
+                    interests,
+                  }),
+                'Guardado',
+              )
+            }
+          />
+        </Card>
+      </View>
+
+      <View style={{ gap: Spacing.two }}>
         <Tag>Avisos</Tag>
         {push === 'on' && (
           <>
@@ -210,5 +397,17 @@ const styles = StyleSheet.create({
   header: { alignItems: 'flex-start', paddingVertical: Spacing.two },
   card: { padding: 20, gap: Spacing.three },
   avatarRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  aboutHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    height: 40,
+    paddingHorizontal: 16,
+    borderRadius: 999,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  checkRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 32 },
+  box: { width: 20, height: 20, borderRadius: 6, borderWidth: 2 },
   confirm: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
 });
