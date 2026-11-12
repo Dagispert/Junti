@@ -37,8 +37,10 @@ export default function MapScreen() {
   const group = groupById(id);
   const people = useGlobePeople(group);
   const [focus, setFocus] = useState<string | null>(null);
-  const [showPeople, setShowPeople] = useState(true);
-  const [showMemories, setShowMemories] = useState(true);
+  // Personas o recuerdos, nunca a la vez: así el planeta no se llena de cosas.
+  const [layer, setLayer] = useState<'people' | 'memories'>('people');
+  const showPeople = layer === 'people';
+  const showMemories = layer === 'memories';
   const [period, setPeriod] = useState<Period>('all');
   const [picked, setPicked] = useState<string[]>([]);
   if (!group) return <Missing />;
@@ -130,11 +132,14 @@ export default function MapScreen() {
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filters}>
-          {chip(showPeople, 'Personas', () => setShowPeople(!showPeople), Users)}
+          {chip(showPeople, 'Personas', () => setLayer('people'), Users)}
           {chip(
             showMemories,
             `Recuerdos${placed.length ? ` · ${placed.length}` : ''}`,
-            () => setShowMemories(!showMemories),
+            () => {
+              setLayer('memories');
+              setFocus(null);
+            },
             MapPin,
           )}
           {showMemories &&

@@ -80,19 +80,17 @@ function hash(s: string) {
   return Math.abs(h);
 }
 
-/** La «piel» del planeta, pintada en un lienzo. Devuelve también una máscara de tierra. */
-function paintTexture(world: World, homeIds: Set<string>, size: number) {
-  const W = size;
-  const H = size / 2;
-  const canvas = document.createElement('canvas');
-  canvas.width = W;
-  canvas.height = H;
-  const ctx = canvas.getContext('2d')!;
-  const proj = geoEquirectangular()
-    .scale(W / (2 * Math.PI))
-    .translate([W / 2, H / 2]);
+/** Pinta el mapa (mar, costas, países y fronteras) con una proyección dada. */
+function paintMap(
+  ctx: CanvasRenderingContext2D,
+  world: World,
+  homeIds: Set<string>,
+  proj: ReturnType<typeof geoEquirectangular>,
+  W: number,
+  H: number,
+  k: number,
+) {
   const path = geoPath(proj, ctx);
-  const k = W / 4096;
 
   const sea = ctx.createLinearGradient(0, 0, 0, H);
   sea.addColorStop(0, PAL.oceanDeep);
@@ -131,6 +129,20 @@ function paintTexture(world: World, homeIds: Set<string>, size: number) {
   ctx.setLineDash([7 * k, 5 * k]);
   ctx.stroke();
   ctx.setLineDash([]);
+}
+
+/** La «piel» del planeta, pintada en un lienzo. Devuelve también una máscara de tierra. */
+function paintTexture(world: World, homeIds: Set<string>, size: number) {
+  const W = size;
+  const H = size / 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d')!;
+  const proj = geoEquirectangular()
+    .scale(W / (2 * Math.PI))
+    .translate([W / 2, H / 2]);
+  paintMap(ctx, world, homeIds, proj, W, H, W / 4096);
 
   // Máscara de tierra (sin hielo) para plantar árboles.
   const mask = document.createElement('canvas');
@@ -161,6 +173,45 @@ function paintTexture(world: World, homeIds: Set<string>, size: number) {
   return { canvas, isLand };
 }
 
+/**
+ * Un trozo del planeta en alta resolución (para cuando se acerca la cámara):
+ * se pinta solo esa región y se pone encima como un «parche» curvo, para que
+ * al ampliar un país no se vea borroso.
+ */
+type Region = { lat0: number; lat1: number; lng0: number; lng1: number };
+function makeDetail(world: World, homeIds: Set<string>, r: Region, maxTex: number) {
+  const spanLng = r.lng1 - r.lng0;
+  const spanLat = r.lat1 - r.lat0;
+  const W = Math.min(2048, maxTex);
+  const s = W / (spanLng * DEG);
+  const H = Math.min(maxTex, Math.round(s * spanLat * DEG));
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d')!;
+  const proj = geoEquirectangular()
+    .scale(s)
+    .translate([-r.lng0 * DEG * s, r.lat1 * DEG * s]);
+  // Grosor de líneas: algo más finas, en proporción, que en el mundo entero.
+  const ppd = W / spanLng;
+  paintMap(ctx, world, homeIds, proj, W, H, Math.min(3, (ppd / (4096 / 360)) * 0.45));
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const mesh = new THREE.Mesh(
+    new THREE.SphereGeometry(
+      R * 1.0006,
+      48,
+      48,
+      (r.lng0 + 180) * DEG,
+      spanLng * DEG,
+      (90 - r.lat1) * DEG,
+      spanLat * DEG,
+    ),
+    new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, metalness: 0 }),
+  );
+  return mesh;
+}
+
 // ── Chinchetas (HTML encima del lienzo) ──
 
 const CSS = `
@@ -169,18 +220,32 @@ const CSS = `
 .jpin{position:absolute;left:0;top:0;cursor:pointer;font-family:Inter,system-ui,sans-serif;will-change:transform,opacity;transition:opacity .25s}
 .jpin-in{position:relative;display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-100%);
   animation:jpin-in .8s cubic-bezier(.2,1.5,.4,1) both;animation-delay:var(--d,0s)}
-.jpin-card{width:44px;height:52px;border-radius:11px;border:3px solid #fff;overflow:hidden;
-  box-shadow:0 10px 20px rgba(20,40,30,.35);display:flex;align-items:center;justify-content:center;
+.jpin-card{width:42px;height:42px;border-radius:50%;border:3px solid #fff;overflow:hidden;
+  box-shadow:0 8px 18px rgba(20,40,30,.32);display:flex;align-items:center;justify-content:center;
   transition:transform .4s cubic-bezier(.2,1.5,.4,1)}
-.jpin:hover .jpin-card,.jpin.is-focus .jpin-card{transform:scale(1.2) translateY(-3px)}
+.jpin:hover .jpin-card,.jpin.is-focus .jpin-card{transform:scale(1.18) translateY(-2px)}
 .jpin-card img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
-.jpin-card span{color:#fff;font-size:19px;font-weight:700}
-.jpin-tip{width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:9px solid #fff;margin-top:-1px}
-.jpin-label{position:absolute;top:100%;margin-top:4px;white-space:nowrap;display:flex;gap:5px;align-items:center;
-  background:rgba(255,255,255,.95);color:#1D1F22;font-size:11px;font-weight:600;padding:3px 9px 3px 3px;border-radius:999px;
-  box-shadow:0 4px 12px rgba(20,40,30,.2)}
-.jpin-label small{font-weight:500;color:#6B7076;font-size:10px}
-.jpin-sky{width:14px;height:14px;border-radius:50%}
+.jpin-card span{color:#fff;font-size:18px;font-weight:700}
+.jpin-tip{width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid #fff;margin-top:-1px}
+.jpin-label{position:absolute;top:100%;margin-top:3px;white-space:nowrap;display:flex;flex-direction:column;align-items:center;
+  background:rgba(255,255,255,.94);color:#1D1F22;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;
+  box-shadow:0 3px 10px rgba(20,40,30,.18)}
+.jpin-more{display:none;align-items:center;gap:4px;font-weight:500;color:#6B7076;font-size:10px}
+.jpin.is-focus .jpin-more{display:flex}
+.jpin.is-focus .jpin-label{border-radius:10px;padding:3px 9px}
+.jpin-sky{width:9px;height:9px;border-radius:50%}
+.jclu{position:absolute;left:0;top:0;cursor:pointer;will-change:transform,opacity;transition:opacity .25s}
+.jclu-in{display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-100%);animation:jmem-pop .45s cubic-bezier(.2,1.5,.4,1) both}
+.jclu-faces{display:flex;padding:3px;background:#fff;border-radius:999px;box-shadow:0 8px 18px rgba(20,40,30,.32)}
+.jclu-faces div{width:30px;height:30px;border-radius:50%;overflow:hidden;margin-left:-10px;border:2px solid #fff;background:#23262B;
+  display:flex;align-items:center;justify-content:center;color:#fff;font:700 13px Inter,system-ui,sans-serif}
+.jclu-faces div:first-child{margin-left:0}
+.jclu-faces img{width:100%;height:100%;object-fit:cover;display:block}
+.jclu-n{min-width:30px;height:30px;margin-left:-8px;border-radius:999px;background:#1D1F22;color:#fff;
+  font:700 12px Inter,system-ui,sans-serif;display:flex;align-items:center;justify-content:center;border:2px solid #fff}
+.jclu-label{margin-top:4px;white-space:nowrap;background:rgba(255,255,255,.94);color:#1D1F22;font:600 11px Inter,system-ui,sans-serif;
+  padding:2px 9px;border-radius:999px;box-shadow:0 3px 10px rgba(20,40,30,.18)}
+@keyframes jmem-pop{0%{opacity:0;transform:translate(-50%,-100%) scale(.6)}100%{opacity:1;transform:translate(-50%,-100%) scale(1)}}
 .jmem{position:absolute;left:0;top:0;cursor:pointer;will-change:transform,opacity;transition:opacity .25s}
 .jmem-in{transform:translate(-50%,-50%);animation:jmem-in .7s cubic-bezier(.2,1.6,.4,1) both;animation-delay:var(--d,0s)}
 .jmem-b{width:38px;height:38px;border-radius:50%;border:3px solid #fff;overflow:hidden;background:#F3E2AE;
@@ -247,12 +312,15 @@ function pinElement(p: GlobePerson, index: number, onSelect: (id: string) => voi
   const sky = document.createElement('div');
   sky.className = 'jpin-sky';
   sky.style.background = SKY[skyPhase(localHour(p.tz))];
+  // Solo el nombre; la hora y el sitio, al tocarla.
   const name = document.createElement('span');
-  name.textContent = `${p.isMe ? 'Tú' : p.name.split(' ')[0]} · ${clock(p.tz)} `;
-  const where = document.createElement('small');
-  where.textContent = p.country ?? p.city ?? '';
-  name.appendChild(where);
-  label.append(sky, name);
+  name.textContent = p.isMe ? 'Tú' : p.name.split(' ')[0];
+  const more = document.createElement('div');
+  more.className = 'jpin-more';
+  const when = document.createElement('span');
+  when.textContent = `${clock(p.tz)} · ${p.city ?? p.country ?? ''}`;
+  more.append(sky, when);
+  label.append(name, more);
   inner.append(card, tip, label);
   el.appendChild(inner);
   el.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -310,6 +378,50 @@ function memoryElement(items: GlobeMemory[], index: number, onTap: (ids: string[
   el.addEventListener('click', (e) => {
     e.stopPropagation();
     onTap(items.map((m) => m.id));
+  });
+  return el;
+}
+
+/** Varias personas tan juntas que se pisan: una sola chincheta con sus caras. */
+function clusterElement(list: GlobePerson[], onTap: () => void) {
+  const el = document.createElement('div');
+  el.className = 'jclu';
+  el.setAttribute('role', 'button');
+  const countries = [...new Set(list.map((p) => p.country).filter(Boolean))];
+  const where = countries.length === 1 ? countries[0] : (list[0].city ?? '');
+  el.setAttribute('aria-label', `${list.length} personas${where ? ` en ${where}` : ''}. Acercar`);
+  const inner = document.createElement('div');
+  inner.className = 'jclu-in';
+  const faces = document.createElement('div');
+  faces.className = 'jclu-faces';
+  for (const p of list.slice(0, 3)) {
+    const f = document.createElement('div');
+    if (p.photo) {
+      const img = document.createElement('img');
+      img.src = p.photo;
+      img.alt = '';
+      f.appendChild(img);
+    } else {
+      f.style.background = p.color;
+      f.textContent = p.name[0] ?? '·';
+    }
+    faces.appendChild(f);
+  }
+  if (list.length > 3) {
+    const n = document.createElement('div');
+    n.className = 'jclu-n';
+    n.textContent = `+${list.length - 3}`;
+    faces.appendChild(n);
+  }
+  const label = document.createElement('div');
+  label.className = 'jclu-label';
+  label.textContent = `${where || 'Aquí'} · ${list.length}`;
+  inner.append(faces, label);
+  el.appendChild(inner);
+  el.addEventListener('pointerdown', (e) => e.stopPropagation());
+  el.addEventListener('click', (e) => {
+    e.stopPropagation();
+    onTap();
   });
   return el;
 }
@@ -563,6 +675,18 @@ export function GlobeMap({
     let focused: string | null = null;
     let worldData: World | null = null;
     let homeKey = '';
+    let homeSet = new Set<string>();
+    // Grupos de personas que se pisan en pantalla.
+    const clusters = new Map<string, HTMLDivElement>();
+    // Parche de alta resolución para cuando la cámara se acerca.
+    let detail: THREE.Mesh | null = null;
+    let detailAt = { lat: 999, lng: 999, span: 0 };
+    let detailTime = 0;
+    // Paseo en reposo cuando el grupo está tan repartido que no cabe de una vez.
+    let overview = { lat: 25, lng: -20, spread: 0 };
+    let tourOrder: GlobePerson[] = [];
+    let tourIdx = -1;
+    let tourAt = 0;
     const started = performance.now();
 
     function centerOf(list: GlobePerson[]) {
@@ -578,12 +702,26 @@ export function GlobeMap({
       for (const p of list) spread = Math.max(spread, v.angleTo(toVec(p.lat, p.lng).normalize()));
       return { lat, lng, spread };
     }
+    /** Lo cerca que hay que estar para que quepan todos: más cerca si estáis juntos. */
+    const fitDist = (spread: number) => Math.min(4.2, Math.max(1.45, 1 + spread * 5.2));
     function aimOverview() {
       const c = centerOf(peopleRef.current);
+      overview = c;
+      tourOrder = [...peopleRef.current].sort((a, b) => a.lng - b.lng);
       const f = facing(c.lat, c.lng);
       target.yaw = f.yaw;
-      target.pitch = Math.max(-0.9, Math.min(0.9, f.pitch * 0.8));
-      target.dist = Math.min(4.2, 2.9 + c.spread * 1.1);
+      target.pitch = Math.max(-0.9, Math.min(0.9, f.pitch * (c.spread < 0.5 ? 1 : 0.8)));
+      target.dist = fitDist(c.spread);
+    }
+    /** Acercarse a un grupo de personas para verlas por separado. */
+    function zoomTo(list: GlobePerson[]) {
+      const c = centerOf(list);
+      const f = facing(c.lat, c.lng);
+      focused = 'cluster';
+      target.yaw = nearestYaw(f.yaw);
+      target.pitch = Math.max(-1.25, Math.min(1.25, f.pitch));
+      target.dist = Math.max(1.3, Math.min(2.6, 1 + c.spread * 4.5));
+      lastTouch = -1e9;
     }
     function nearestYaw(y: number) {
       // Gira por el camino más corto.
@@ -594,6 +732,8 @@ export function GlobeMap({
 
     function setPeople(list: GlobePerson[]) {
       pins.forEach((p) => p.el.remove());
+      clusters.forEach((el) => el.remove());
+      clusters.clear();
       pins = list.map((p, i) => {
         const el = pinElement(p, i, (id) => selectRef.current?.(id));
         el.style.pointerEvents = interactive ? 'auto' : 'none';
@@ -620,6 +760,8 @@ export function GlobeMap({
       const k = [...homes].sort().join(',');
       if (k === homeKey && earthMat.map) return;
       homeKey = k;
+      homeSet = homes;
+      detailAt = { lat: 999, lng: 999, span: 0 }; // repintar el parche con las casas nuevas
       const size = Math.min(4096, renderer.capabilities.maxTextureSize);
       const { canvas, isLand } = paintTexture(worldData, homes, size);
       const tex = new THREE.CanvasTexture(canvas);
@@ -680,7 +822,7 @@ export function GlobeMap({
         const f = facing(lat, lng);
         target.yaw = nearestYaw(f.yaw);
         target.pitch = Math.max(-1.2, Math.min(1.2, f.pitch));
-        target.dist = 2.3;
+        target.dist = 2.1;
         lastTouch = -1e9;
       },
       setPeople: (list) => {
@@ -695,7 +837,7 @@ export function GlobeMap({
           const f = facing(p.lat, p.lng);
           target.yaw = nearestYaw(f.yaw);
           target.pitch = Math.max(-1.2, Math.min(1.2, f.pitch));
-          target.dist = 2.3;
+          target.dist = Math.min(2.1, Math.max(1.5, view.dist));
         } else {
           aimOverview();
           target.yaw = nearestYaw(target.yaw);
@@ -726,7 +868,7 @@ export function GlobeMap({
       if (pointers.size === 2) {
         const [a, b] = [...pointers.values()];
         const d = Math.hypot(a.x - b.x, a.y - b.y);
-        if (pinch) target.dist = Math.max(1.9, Math.min(6, target.dist * (pinch / d)));
+        if (pinch) target.dist = Math.max(1.3, Math.min(6, target.dist * (pinch / d)));
         view.dist = target.dist;
         pinch = d;
         return;
@@ -746,7 +888,7 @@ export function GlobeMap({
       if (!interactive) return;
       e.preventDefault();
       lastTouch = performance.now();
-      target.dist = Math.max(1.9, Math.min(6, target.dist * (1 + e.deltaY * 0.0012)));
+      target.dist = Math.max(1.3, Math.min(6, target.dist * (1 + e.deltaY * 0.0012)));
     };
     renderer.domElement.addEventListener('pointerdown', onDown);
     window.addEventListener('pointermove', onMove);
@@ -788,17 +930,75 @@ export function GlobeMap({
           target.pitch = view.pitch;
         }
         view.dist += (target.dist - view.dist) * (interactive && t < 3.5 ? 0.03 : 0.06);
-        // En reposo, el planeta se mece despacio alrededor de vuestras ciudades.
-        if (idle && !focused) target.yaw += Math.sin(t * 0.25) * 0.0009;
+        // Al alejarse de un grupo ampliado, se vuelve a la vista de todos.
+        if (focused === 'cluster' && target.dist > 2.9) focused = null;
+        if (idle && !focused) {
+          if (overview.spread > 1.15 && tourOrder.length > 1) {
+            // Tan repartidos que no se os ve a todos a la vez: el planeta va
+            // girando de uno a otro para que todos salgan en algún momento.
+            if (now - tourAt > 5200) {
+              tourAt = now;
+              tourIdx = (tourIdx + 1) % tourOrder.length;
+              const p = tourOrder[tourIdx];
+              const f = facing(p.lat, p.lng);
+              target.yaw = nearestYaw(f.yaw);
+              target.pitch = Math.max(-0.8, Math.min(0.8, f.pitch * 0.7));
+              target.dist = 3.6;
+            }
+          } else {
+            // Si cabéis todos, el planeta se mece despacio alrededor de vuestras ciudades.
+            target.yaw += Math.sin(t * 0.25) * 0.0009;
+          }
+        }
       }
 
       world.rotation.set(view.pitch, view.yaw, 0);
       clouds.rotation.y = t * 0.02;
+      // De cerca, las nubes se interpondrían entre la cámara y el suelo.
+      clouds.visible = view.dist > 1.95;
       // En vertical el campo de visión horizontal es estrecho: se aleja la cámara para que quepa.
       const fit = Math.max(1, 1.35 / camera.aspect);
       camera.position.set(0, 0, view.dist * (fit > 1 ? 0.62 + fit * 0.38 : 1));
       camera.lookAt(0, 0, 0);
       world.updateMatrixWorld();
+
+      // De cerca, un parche nítido de la zona que se ve (se repinta al pararse).
+      const close = view.dist < 2.35;
+      if (detail) detail.visible = close;
+      if (close && worldData) {
+        const settled =
+          pointers.size === 0 &&
+          Math.abs(target.yaw - view.yaw) + Math.abs(target.pitch - view.pitch) < 0.03 &&
+          Math.abs(target.dist - view.dist) < 0.08;
+        const lat = Math.max(-75, Math.min(75, view.pitch / DEG));
+        let lng = (Math.PI / 2 - view.yaw) / DEG - 180;
+        lng = ((((lng + 180) % 360) + 360) % 360) - 180;
+        const span = Math.max(14, Math.min(60, (view.dist - 1) * 42));
+        const moved =
+          Math.abs(lat - detailAt.lat) > detailAt.span * 0.22 ||
+          Math.abs(lng - detailAt.lng) > (detailAt.span * 0.22) / Math.cos(lat * DEG) ||
+          Math.abs(span - detailAt.span) > detailAt.span * 0.35;
+        if (settled && moved && now - detailTime > 500) {
+          detailTime = now;
+          const lngSpan = Math.min(120, span / Math.max(0.25, Math.cos(lat * DEG)));
+          const region = {
+            lat0: Math.max(-85, lat - span / 2),
+            lat1: Math.min(85, lat + span / 2),
+            lng0: Math.max(-180, lng - lngSpan / 2),
+            lng1: Math.min(180, lng + lngSpan / 2),
+          };
+          if (detail) {
+            world.remove(detail);
+            detail.geometry.dispose();
+            const old = detail.material as THREE.MeshStandardMaterial;
+            old.map?.dispose();
+            old.dispose();
+          }
+          detail = makeDetail(worldData, homeSet, region, renderer.capabilities.maxTextureSize);
+          world.add(detail);
+          detailAt = { lat, lng, span };
+        }
+      }
       // Dónde se ve el planeta (centro y radio en píxeles), para que la guía
       // pueda señalar su contorno exacto.
       if (Math.floor(t * 10) !== sphereTick) {
@@ -832,6 +1032,7 @@ export function GlobeMap({
 
       // Chinchetas: se proyectan sobre la pantalla y se ocultan al pasar por detrás.
       camera.getWorldDirection(camDir);
+      const placed: { p: (typeof pins)[number]; x: number; y: number; vis: number }[] = [];
       for (const p of pins) {
         proj.copy(p.pos).applyMatrix4(world.matrixWorld);
         const facingCam = proj
@@ -839,13 +1040,73 @@ export function GlobeMap({
           .normalize()
           .dot(camera.position.clone().sub(proj).normalize());
         proj.project(camera);
-        const x = (proj.x * 0.5 + 0.5) * w;
-        const y = (-proj.y * 0.5 + 0.5) * h;
-        const vis = Math.max(0, Math.min(1, (facingCam - 0.05) * 5));
-        p.el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) scale(${(0.75 + vis * 0.25).toFixed(3)})`;
-        p.el.style.opacity = vis.toFixed(2);
-        p.el.style.zIndex = String(Math.round(vis * 100));
-        p.el.style.pointerEvents = interactive && vis > 0.5 && peopleVisible ? 'auto' : 'none';
+        placed.push({
+          p,
+          x: (proj.x * 0.5 + 0.5) * w,
+          y: (-proj.y * 0.5 + 0.5) * h,
+          vis: Math.max(0, Math.min(1, (facingCam - 0.05) * 5)),
+        });
+      }
+      // Las que se pisan se juntan en una; de muy cerca, se abren en abanico.
+      const groups: (typeof placed)[] = [];
+      for (const it of placed) {
+        const g =
+          peopleVisible && it.vis > 0.4
+            ? groups.find(
+                (gr) => gr[0].vis > 0.4 && Math.hypot(gr[0].x - it.x, gr[0].y - it.y) < 50,
+              )
+            : undefined;
+        if (g) g.push(it);
+        else groups.push([it]);
+      }
+      const fan = view.dist < 1.5;
+      const used = new Set<string>();
+      for (const g of groups) {
+        if (g.length > 1 && fan) {
+          // Ya no se puede acercar más (misma ciudad): se reparten alrededor.
+          g.forEach((it, i) => {
+            const a = (i / g.length) * Math.PI * 2 - Math.PI / 2;
+            it.x += Math.cos(a) * 34;
+            it.y += Math.sin(a) * 26;
+          });
+        }
+        if (g.length > 1 && !fan) {
+          const ids = g.map((it) => it.p.id).sort();
+          const k = ids.join(',');
+          used.add(k);
+          let el = clusters.get(k);
+          if (!el) {
+            const list = ids
+              .map((id) => peopleRef.current.find((x) => x.id === id))
+              .filter((x): x is GlobePerson => !!x);
+            el = clusterElement(list, () => zoomTo(list));
+            pinLayer.appendChild(el);
+            clusters.set(k, el);
+          }
+          const x = g.reduce((a, it) => a + it.x, 0) / g.length;
+          const y = g.reduce((a, it) => a + it.y, 0) / g.length;
+          const vis = Math.max(...g.map((it) => it.vis));
+          el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
+          el.style.opacity = vis.toFixed(2);
+          el.style.zIndex = '120';
+          el.style.pointerEvents = interactive ? 'auto' : 'none';
+          for (const it of g) {
+            it.p.el.style.opacity = '0';
+            it.p.el.style.pointerEvents = 'none';
+          }
+          continue;
+        }
+        for (const { p, x, y, vis } of g) {
+          p.el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) scale(${(0.75 + vis * 0.25).toFixed(3)})`;
+          p.el.style.opacity = vis.toFixed(2);
+          p.el.style.zIndex = String(Math.round(vis * 100));
+          p.el.style.pointerEvents = interactive && vis > 0.5 && peopleVisible ? 'auto' : 'none';
+        }
+      }
+      for (const [k, el] of clusters) {
+        if (used.has(k)) continue;
+        el.remove();
+        clusters.delete(k);
       }
       for (const m of mems) {
         proj.copy(m.pos).applyMatrix4(world.matrixWorld);
@@ -863,7 +1124,10 @@ export function GlobeMap({
         m.el.style.zIndex = String(101 + Math.round(vis * 90));
         m.el.style.pointerEvents = interactive && vis > 0.5 ? 'auto' : 'none';
       }
-      if (!peopleVisible) for (const p of pins) p.el.style.opacity = '0';
+      if (!peopleVisible) {
+        for (const p of pins) p.el.style.opacity = '0';
+        for (const el of clusters.values()) el.style.opacity = '0';
+      }
       renderer.render(scene, camera);
     };
     frame = requestAnimationFrame(tick);

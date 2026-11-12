@@ -165,7 +165,6 @@ export function WhyJunti({ text, spoken }: { text: string; spoken: number }) {
   const said = text.slice(cur.start, Math.max(cur.start, Math.min(at + 2, cur.end)));
   const rest = text.slice(cur.start + said.length, cur.end);
 
-  const globeH = Math.min(height * 0.62, width * 1.25);
   const blur = is('chats', 'redes') ? 7 : is('missed') ? 2.5 : 0;
 
   return (
@@ -211,7 +210,7 @@ export function WhyJunti({ text, spoken }: { text: string; spoken: number }) {
       {/* El planeta: se desenfoca con el ruido y vuelve a enfocarse con Junti */}
       <View
         style={[
-          { position: 'absolute', left: 0, right: 0, top: height * 0.06, height: globeH },
+          StyleSheet.absoluteFill,
           web({
             filter: `blur(${blur}px) saturate(${blur ? 0.6 : 1})`,
             transform: `scale(${is('intro') ? 0.82 : is('together') ? 1.04 : blur ? 0.94 : 1})`,
@@ -220,7 +219,7 @@ export function WhyJunti({ text, spoken }: { text: string; spoken: number }) {
         ]}>
         <GlobeMap
           people={PEOPLE}
-          height={globeH}
+          height={height}
           interactive={false}
           transparent
           hidePeople={!after('people')}
