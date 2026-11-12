@@ -92,7 +92,10 @@ function paintMap(
 ) {
   const path = geoPath(proj, ctx);
 
-  const sea = ctx.createLinearGradient(0, 0, 0, H);
+  // El mar va por latitudes (igual en el mundo entero que en un trozo ampliado).
+  const top = proj([0, 90])?.[1] ?? 0;
+  const bottom = proj([0, -90])?.[1] ?? H;
+  const sea = ctx.createLinearGradient(0, top, 0, bottom);
   sea.addColorStop(0, PAL.oceanDeep);
   sea.addColorStop(0.5, PAL.ocean);
   sea.addColorStop(1, PAL.oceanDeep);
@@ -195,6 +198,24 @@ function makeDetail(world: World, homeIds: Set<string>, r: Region, maxTex: numbe
   // Grosor de líneas: algo más finas, en proporción, que en el mundo entero.
   const ppd = W / spanLng;
   paintMap(ctx, world, homeIds, proj, W, H, Math.min(3, (ppd / (4096 / 360)) * 0.45));
+  // Bordes que se difuminan: el parche se funde con el resto del planeta.
+  ctx.globalCompositeOperation = 'destination-in';
+  const fade = Math.min(W, H) * 0.18;
+  const gx = ctx.createLinearGradient(0, 0, W, 0);
+  gx.addColorStop(0, 'rgba(0,0,0,0)');
+  gx.addColorStop(fade / W, 'rgba(0,0,0,1)');
+  gx.addColorStop(1 - fade / W, 'rgba(0,0,0,1)');
+  gx.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = gx;
+  ctx.fillRect(0, 0, W, H);
+  const gy = ctx.createLinearGradient(0, 0, 0, H);
+  gy.addColorStop(0, 'rgba(0,0,0,0)');
+  gy.addColorStop(fade / H, 'rgba(0,0,0,1)');
+  gy.addColorStop(1 - fade / H, 'rgba(0,0,0,1)');
+  gy.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = gy;
+  ctx.fillRect(0, 0, W, H);
+  ctx.globalCompositeOperation = 'source-over';
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   const mesh = new THREE.Mesh(
@@ -207,7 +228,7 @@ function makeDetail(world: World, homeIds: Set<string>, r: Region, maxTex: numbe
       (90 - r.lat1) * DEG,
       spanLat * DEG,
     ),
-    new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, metalness: 0 }),
+    new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, metalness: 0, transparent: true }),
   );
   return mesh;
 }
@@ -1015,7 +1036,10 @@ export function GlobeMap({
       }
 
       // Arcos: se dibujan al empezar y luego una luz los recorre sin parar.
+      // De cerca se aclaran, para no tapar el mapa.
+      const arcAlpha = Math.max(0.25, Math.min(0.9, (view.dist - 1.3) / 1.2));
       arcs.forEach((a, i) => {
+        (a.tube.material as THREE.MeshBasicMaterial).opacity = arcAlpha;
         const grow = interactive ? ease((t - 1.6 - i * 0.15) / 1.2) : 1;
         const g = a.tube.geometry as THREE.BufferGeometry;
         g.setDrawRange(0, Math.floor((g.index?.count ?? 0) * grow));
