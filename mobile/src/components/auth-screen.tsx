@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { Spacing } from '@/constants/theme';
+import { Spacing, useTheme } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
 
 import type { Place } from '@/lib/geo';
 
 import { CityPicker } from './city-picker';
+import { type LegalKind, LegalView } from './legal-view';
 import { Button, Field, Lead, Notice, Screen, Title } from './ui';
 
 /** Entrar o crear cuenta con correo y contraseña. */
@@ -17,6 +18,8 @@ export function AuthScreen() {
   const [password, setPassword] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const [reading, setReading] = useState<LegalKind | null>(null);
+  const theme = useTheme();
 
   const submit = async () => {
     setNotice('');
@@ -34,6 +37,8 @@ export function AuthScreen() {
     }
     setBusy(false);
   };
+
+  if (reading) return <LegalView kind={reading} onClose={() => setReading(null)} />;
 
   return (
     <Screen>
@@ -64,6 +69,26 @@ export function AuthScreen() {
         disabled={busy || !email.trim() || password.length < 6}
         onPress={submit}
       />
+      {mode === 'up' && (
+        <Text
+          style={{ color: theme.textSecondary, fontSize: 13, lineHeight: 19, textAlign: 'center' }}>
+          Al crear tu cuenta aceptas las{' '}
+          <Text
+            accessibilityRole="link"
+            style={{ color: theme.text, textDecorationLine: 'underline' }}
+            onPress={() => setReading('condiciones')}>
+            condiciones de uso
+          </Text>{' '}
+          y la{' '}
+          <Text
+            accessibilityRole="link"
+            style={{ color: theme.text, textDecorationLine: 'underline' }}
+            onPress={() => setReading('privacidad')}>
+            política de privacidad
+          </Text>
+          . Hay que tener al menos 14 años.
+        </Text>
+      )}
       <Button
         variant="quiet"
         label={mode === 'in' ? 'No tengo cuenta todavía' : 'Ya tengo cuenta'}

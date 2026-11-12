@@ -171,6 +171,20 @@ export default function Settings() {
         )}
       </View>
 
+      <View style={{ gap: Spacing.two }}>
+        <Tag>Privacidad</Tag>
+        <Button
+          label="Política de privacidad"
+          variant="quiet"
+          onPress={() => router.push({ pathname: '/legal', params: { doc: 'privacidad' } })}
+        />
+        <Button
+          label="Condiciones de uso"
+          variant="quiet"
+          onPress={() => router.push({ pathname: '/legal', params: { doc: 'condiciones' } })}
+        />
+      </View>
+
       <Button label="Cerrar sesión" variant="quiet" onPress={signOut} />
 
       <View style={{ gap: Spacing.two }}>
