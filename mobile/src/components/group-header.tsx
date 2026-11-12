@@ -49,14 +49,16 @@ export function GroupHeader({ group }: { group: Group }) {
             label="Calendario"
             onPress={() => router.push({ pathname: '/calendar', params: { groupId: group.id } })}
           />
-          <Button
-            compact
-            variant="quiet"
-            label="Ajustes"
-            onPress={() =>
-              router.push({ pathname: '/group-settings', params: { groupId: group.id } })
-            }
-          />
+          <View testID="tour-ajustes">
+            <Button
+              compact
+              variant="quiet"
+              label="Ajustes"
+              onPress={() =>
+                router.push({ pathname: '/group-settings', params: { groupId: group.id } })
+              }
+            />
+          </View>
           <View testID="tour-invitar">
             <Button compact variant="quiet" label="Invitar" onPress={invite} />
           </View>

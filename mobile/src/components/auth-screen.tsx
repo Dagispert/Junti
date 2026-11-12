@@ -8,7 +8,7 @@ import type { Place } from '@/lib/geo';
 import { hasInvite } from '@/lib/invite';
 
 import { CityPicker } from './city-picker';
-import { LogoMark } from './logo';
+import { Logo } from './logo';
 import { Welcome } from './welcome';
 import { type LegalKind, LegalView } from './legal-view';
 import { Button, Field, Lead, Notice, Screen, Title } from './ui';
@@ -74,8 +74,7 @@ export function AuthScreen() {
           accessibilityLabel="Volver a la bienvenida"
           onPress={() => setWelcome(true)}
           style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <LogoMark size={52} />
-          <Title style={{ fontSize: 44, lineHeight: 52 }}>Junti</Title>
+          <Logo size={48} />
         </Pressable>
         <Lead strong="Un espacio privado">
           para seguir formando parte de la vida de quienes quieres.

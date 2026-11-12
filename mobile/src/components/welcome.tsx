@@ -14,7 +14,7 @@ import { SKY } from './cinematics';
 import { GlobeMap } from './globe-map';
 import type { GlobePerson } from './globe-map.types';
 import { Icon } from './icon';
-import { LogoMark } from './logo';
+import { Logo } from './logo';
 import { PolaroidPile, StickyNote } from './scrapbook';
 import { SkyBadge } from './sky-badge';
 import { Button } from './ui';
@@ -120,12 +120,7 @@ export function Welcome({
       <View style={{ minHeight: height }}>
         <LinearGradient colors={SKY} style={StyleSheet.absoluteFill} />
         <View style={[styles.column, { paddingTop: 48, gap: 12 }]}>
-          <View style={styles.brandRow}>
-            <LogoMark size={44} drawn={mark} />
-            <Animated.Text entering={FadeIn.delay(900).duration(600)} style={styles.wordmark}>
-              Junti
-            </Animated.Text>
-          </View>
+          <Logo size={40} drawn={mark} />
           <Animated.Text entering={FadeInDown.delay(1100).duration(600)} style={styles.headline}>
             Para quienes se quieren y viven lejos
           </Animated.Text>

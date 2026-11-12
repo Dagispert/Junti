@@ -754,6 +754,7 @@ export function GlobeMap({
     window.addEventListener('pointercancel', onUp);
     renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
 
+    let sphereTick = -1;
     const proj = new THREE.Vector3();
     const camDir = new THREE.Vector3();
     const tick = (now: number) => {
@@ -798,6 +799,20 @@ export function GlobeMap({
       camera.position.set(0, 0, view.dist * (fit > 1 ? 0.62 + fit * 0.38 : 1));
       camera.lookAt(0, 0, 0);
       world.updateMatrixWorld();
+      // Dónde se ve el planeta (centro y radio en píxeles), para que la guía
+      // pueda señalar su contorno exacto.
+      if (Math.floor(t * 10) !== sphereTick) {
+        sphereTick = Math.floor(t * 10);
+        const c = new THREE.Vector3(0, 0, 0).project(camera);
+        const edge = new THREE.Vector3()
+          .setFromMatrixColumn(camera.matrixWorld, 0)
+          .multiplyScalar(R)
+          .project(camera);
+        const cx = (c.x * 0.5 + 0.5) * w;
+        const cy = (-c.y * 0.5 + 0.5) * h;
+        const r = Math.abs((edge.x - c.x) * 0.5 * w);
+        root.dataset.sphere = `${cx.toFixed(0)} ${cy.toFixed(0)} ${r.toFixed(0)}`;
+      }
 
       // Arcos: se dibujan al empezar y luego una luz los recorre sin parar.
       arcs.forEach((a, i) => {

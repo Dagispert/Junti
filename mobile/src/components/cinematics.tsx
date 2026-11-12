@@ -8,7 +8,7 @@ import { progress, useClock } from '@/lib/clock';
 
 import { GlobeMap } from './globe-map';
 import type { GlobePerson } from './globe-map.types';
-import { LogoMark } from './logo';
+import { LogoMark, Wordmark } from './logo';
 import { WorldMap, type MapPerson } from './world-map';
 
 const NIGHT = ['#070A14', '#111830'] as const;
@@ -68,12 +68,12 @@ export function IntroCinematic({ onDone }: { onDone: () => void }) {
       </View>
       <View style={[styles.brand, { top: height * 0.09 }]}>
         <View style={{ transform: [{ scale: 0.6 + mark * 0.4 }], opacity: Math.min(1, mark * 3) }}>
-          <LogoMark size={76} drawn={mark} />
+          <LogoMark size={84} drawn={mark} />
         </View>
-        <Text
-          style={[styles.title, { opacity: title, transform: [{ translateY: (1 - title) * 12 }] }]}>
-          Junti
-        </Text>
+        <View
+          style={{ opacity: title, transform: [{ translateY: (1 - title) * 12 }], marginTop: 12 }}>
+          <Wordmark height={52} />
+        </View>
         <Text style={[styles.subtitle, { opacity: subtitle }]}>{TAGLINE}</Text>
       </View>
       {/* Un toque en cualquier sitio la salta. */}

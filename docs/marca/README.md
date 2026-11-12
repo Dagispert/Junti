@@ -2,25 +2,27 @@
 
 ![Identidad](identidad.png)
 
-**Idea.** Junti es el planeta de la app con un hilo que une a dos personas lejanas. La marca sale de ahí: un pequeño planeta y el arco naranja que lo cruza, igual que en el mapa de cada grupo.
+![Animación](logo-animado.gif)
 
-**Logo.** `logo.svg` (y el componente `mobile/src/components/logo.tsx`, que además sabe dibujarse: el arco se traza y los puntos aparecen). Junto al nombre «Junti» en la letra de la app, peso 600.
+**Idea.** Una «j» minúscula. Su punto es una persona, el final de la curva es otra, y el trazo es lo que las une. Va dentro de un *squircle* (superelipse), como el icono de una app. Solo blanco y negro.
+
+**Archivos**
+
+| Archivo | Uso |
+|---|---|
+| `icono-negro.svg` | El icono: j blanca sobre negro |
+| `icono-blanco.svg` | Invertido, para fondos oscuros |
+| `palabra.svg` | «junti» en Fraunces 600, pasado a trazos |
+| `logo-horizontal.svg` | Icono y palabra juntos |
+
+En la app: `mobile/src/components/logo.tsx` (`LogoMark`, `Wordmark`, `Logo`). Con `drawn` (0–1) se anima: aparece la forma, cae el punto, se traza la curva, aparece el otro punto y entra la palabra.
 
 **Lema.** *Cerca, aunque estéis lejos.*
 
-**Colores** (`mobile/src/constants/brand.ts`)
+**Colores** (`mobile/src/constants/brand.ts`). La marca es tinta `#111111` y blanco. El resto de colores es del planeta y de la interfaz, no del logo: océano `#58C3D6`, prado `#8CCB5B`, atardecer `#FF8A3D` (el hilo que une en el mapa) y letra a mano `#C2477A`.
 
-| Nombre | Color | Uso |
-|---|---|---|
-| Tinta | `#1D1F22` | Textos y botones principales |
-| Papel | `#F6F6F7` | Fondo |
-| Océano | `#58C3D6` | El mar del planeta |
-| Prado | `#8CCB5B` | La tierra |
-| Atardecer | `#FF8A3D` | El hilo que une: solo en momentos especiales (logo, arcos, la guía) |
-| Letra a mano | `#C2477A` | Las anotaciones escritas a mano |
+**Tipografía.** Fraunces solo para la palabra «junti»; la del sistema para la interfaz; Caveat (a mano) para notas y subtítulos de la narradora.
 
-**Tipografía.** La del sistema para la interfaz; Caveat (letra a mano) solo para notas, pies de foto y la voz del grupo.
+**Movimiento.** Una sola curva suave, sin rebotes. Las animaciones cuentan algo: el planeta que se acerca, el hilo que se dibuja, la j que se traza.
 
-**Movimiento.** Una sola curva suave, sin rebotes. Las animaciones cuentan algo: el planeta que se acerca, el hilo que se dibuja, la marca que se traza.
-
-Los iconos de la app (`mobile/public/icon-*.png`, `apple-touch-icon.png`, `assets/images/icon.png` y `favicon.png`) salen de `logo.svg`.
+Los iconos de la app (`mobile/public/icon-*.png`, `apple-touch-icon.png`, `logo.svg`, `assets/images/icon.png` y `favicon.png`) salen de `icono-negro.svg`.
