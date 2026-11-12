@@ -417,8 +417,8 @@ export function GuidedTour({ groupId, onClose }: { groupId: string; onClose: () 
         style={step.immersive ? [styles.bubble, styles.dock] : [styles.bubble, bubblePos]}>
         <View style={styles.head}>
           <View style={styles.speaker}>
-            <LogoMark size={28} inverted={step.immersive} />
-            <Text style={[styles.count, step.immersive && { color: 'rgba(255,255,255,0.7)' }]}>
+            <LogoMark size={28} />
+            <Text style={styles.count}>
               La narradora · {index + 1} de {STEPS.length}
             </Text>
           </View>
@@ -427,23 +427,15 @@ export function GuidedTour({ groupId, onClose }: { groupId: string; onClose: () 
               accessibilityRole="button"
               accessibilityLabel={paused ? 'Seguir escuchando' : 'Pausar'}
               onPress={togglePause}
-              style={[styles.round, step.immersive && styles.roundDark]}>
-              <Icon
-                icon={paused ? Play : Pause}
-                size={16}
-                color={step.immersive ? '#FFFFFF' : Brand.ink}
-              />
+              style={styles.round}>
+              <Icon icon={paused ? Play : Pause} size={16} color={Brand.ink} />
             </Pressable>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={muted ? 'Activar la voz' : 'Silenciar la voz'}
               onPress={() => setMuted(!muted)}
-              style={[styles.round, step.immersive && styles.roundDark]}>
-              <Icon
-                icon={muted ? VolumeX : Volume2}
-                size={16}
-                color={step.immersive ? '#FFFFFF' : Brand.ink}
-              />
+              style={styles.round}>
+              <Icon icon={muted ? VolumeX : Volume2} size={16} color={Brand.ink} />
             </Pressable>
           </View>
         </View>
@@ -483,11 +475,10 @@ export function GuidedTour({ groupId, onClose }: { groupId: string; onClose: () 
         )}
         <View style={styles.progress}>
           {STEPS.map((_, i) => (
-            <View key={i} style={[styles.track, step.immersive && styles.trackDark]}>
+            <View key={i} style={styles.track}>
               <View
                 style={[
                   styles.fill,
-                  step.immersive && { backgroundColor: '#FFFFFF' },
                   { width: `${i < index ? 100 : i > index ? 0 : Math.round(spoken * 100)}%` },
                 ]}
               />
@@ -497,9 +488,7 @@ export function GuidedTour({ groupId, onClose }: { groupId: string; onClose: () 
         <View style={styles.actions}>
           {!last ? (
             <Pressable accessibilityRole="button" onPress={onClose} hitSlop={8}>
-              <Text style={[styles.skip, step.immersive && { color: 'rgba(255,255,255,0.7)' }]}>
-                Saltar la guía
-              </Text>
+              <Text style={styles.skip}>Saltar la guía</Text>
             </Pressable>
           ) : (
             <View />
@@ -509,19 +498,12 @@ export function GuidedTour({ groupId, onClose }: { groupId: string; onClose: () 
               <Pressable
                 accessibilityRole="button"
                 onPress={() => setIndex(index - 1)}
-                style={[styles.btn, step.immersive ? styles.roundDark : styles.btnQuiet]}>
-                <Text style={[styles.btnText, { color: step.immersive ? '#FFFFFF' : Brand.ink }]}>
-                  Atrás
-                </Text>
+                style={[styles.btn, styles.btnQuiet]}>
+                <Text style={[styles.btnText, { color: Brand.ink }]}>Atrás</Text>
               </Pressable>
             )}
-            <Pressable
-              accessibilityRole="button"
-              onPress={next}
-              style={[styles.btn, step.immersive && { backgroundColor: '#FFFFFF' }]}>
-              <Text style={[styles.btnText, step.immersive && { color: Brand.ink }]}>
-                {last ? 'Entendido' : 'Siguiente'}
-              </Text>
+            <Pressable accessibilityRole="button" onPress={next} style={styles.btn}>
+              <Text style={styles.btnText}>{last ? 'Entendido' : 'Siguiente'}</Text>
             </Pressable>
           </View>
         </View>
@@ -546,14 +528,12 @@ const styles = StyleSheet.create({
   // En la escena a pantalla completa: solo los mandos, abajo y oscuros.
   dock: {
     bottom: 16,
-    backgroundColor: 'rgba(20,24,36,0.94)',
-    boxShadow: '0 -10px 40px rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(255,255,255,0.86)',
+    boxShadow: '0 14px 40px rgba(20,40,60,0.18)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(255,255,255,0.9)',
     paddingVertical: 14,
   },
-  roundDark: { backgroundColor: 'rgba(255,255,255,0.12)' },
-  trackDark: { backgroundColor: 'rgba(255,255,255,0.18)' },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   speaker: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   count: { color: '#686C73', fontSize: 13, fontWeight: '500' },
