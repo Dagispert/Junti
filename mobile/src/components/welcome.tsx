@@ -27,7 +27,7 @@ const base =
     : '';
 const photo = (i: number) => `${base}/bienvenida/${i}.jpg`;
 // Un grupo de ejemplo para enseñar la app sin cuenta: amigos de siempre que
-// hoy viven en Valladolid, Buenos Aires, Berlín y Tokio.
+// hoy viven en Valladolid, La Habana, Berlín y Tokio.
 const EXAMPLE: GlobePerson[] = [
   {
     id: 'tu',
@@ -42,14 +42,14 @@ const EXAMPLE: GlobePerson[] = [
     color: '#5B7DB1',
   },
   {
-    id: 'lu',
+    id: 'rey',
     photo: photo(1),
-    name: 'Lu',
-    lat: -34.6,
-    lng: -58.38,
-    tz: 'America/Argentina/Buenos_Aires',
-    city: 'Buenos Aires',
-    country: 'Argentina',
+    name: 'Rey',
+    lat: 23.13,
+    lng: -82.38,
+    tz: 'America/Havana',
+    city: 'La Habana',
+    country: 'Cuba',
     color: '#B8648F',
   },
   {
@@ -179,7 +179,7 @@ export function Welcome({
         <Section
           kicker="Un mismo mapa"
           title="Dónde está cada uno, y qué hora es allí"
-          text="Vuestras ciudades en el planeta, unidas por un hilo. Sabes si Lu está desayunando o si en Tokio ya es mañana.">
+          text="Vuestras ciudades en el planeta, unidas por un hilo. Sabes si Rey está desayunando o si en Tokio ya es mañana.">
           <View style={[styles.mock, { backgroundColor: theme.card, boxShadow: theme.shadow }]}>
             {EXAMPLE.map((p) => (
               <View key={p.id} style={styles.clockRow}>
@@ -205,8 +205,8 @@ export function Welcome({
           title="Una historia que se cuenta sola"
           text="Cada semana y cada mes, un resumen con vuestras fotos y vuestra música. Si queréis, una narradora os lo cuenta en voz alta.">
           <StickyNote rotate={-2} width={Math.min(width - 64, 300)} style={{ alignSelf: 'center' }}>
-            Mientras Lu tomaba mate en Buenos Aires, en Tokio Martuki ya iba por la cena. Y Tomi, en
-            Berlín, se apuntó a alemán… por cuarta vez.
+            Mientras Rey jugaba al dominó en La Habana, en Tokio Martuki ya desayunaba al día
+            siguiente. Y Tomi, en Berlín, se apuntó a alemán… por cuarta vez.
           </StickyNote>
         </Section>
 

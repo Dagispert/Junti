@@ -31,32 +31,32 @@ type Step = {
 const base =
   typeof window !== 'undefined' && window.location?.pathname.startsWith('/Junti') ? '/Junti' : '';
 
-// La narradora cuenta la guía con un caso ficticio: Lu en Buenos Aires, Tomi
+// La narradora cuenta la guía con un caso ficticio: Rey en La Habana, Tomi
 // en Berlín y Martuki en Tokio. Los audios se generaron una vez (voz de Gemini)
 // y van con la app, en public/guia: no se generan en cada inicio.
 const STEPS: Step[] = [
   {
     title: 'Hola, soy la narradora',
-    text: 'Hola, soy la narradora de Junti, la que cuenta vuestras historias. Antes de empezar, te enseño cómo funciona todo con un ejemplo: imagina un grupo con Lu, que vive en Buenos Aires; Tomi, en Berlín; y Martuki, en Tokio.',
+    text: 'Hola, soy la narradora de Junti, la que cuenta vuestras historias. Antes de empezar, te enseño cómo funciona todo con un ejemplo: imagina un grupo con Rey, que vive en La Habana; Tomi, en Berlín; y Martuki, en Tokio.',
   },
   {
     target: 'tour-mapa',
     shape: 'sphere',
     tab: 'hoy',
     title: 'Vuestro planeta',
-    text: 'Este es vuestro planeta. Aquí veis dónde vive cada uno y qué hora es allí. Cuando Lu se despierta en Buenos Aires, en Valladolid ya estáis comiendo. Si lo tocas, se abre el mapa entero.',
+    text: 'Este es vuestro planeta. Aquí veis dónde vive cada uno y qué hora es allí. Cuando Rey se despierta en La Habana, en Valladolid ya estáis comiendo. Si lo tocas, se abre el mapa entero.',
   },
   {
     target: 'tour-plus',
     shape: 'circle',
     tab: 'hoy',
     title: 'Compartir algo',
-    text: 'Con este botón compartes algo: una foto, un vídeo corto, una nota de voz o unas palabras. Lu, por ejemplo, acaba de subir los jacarandás en flor. Desde aquí también podéis añadir un recuerdo antiguo, un reto o una pregunta.',
+    text: 'Con este botón compartes algo: una foto, un vídeo corto, una nota de voz o unas palabras. Rey, por ejemplo, acaba de subir su partida de dominó en el portal. Desde aquí también podéis añadir un recuerdo antiguo, un reto o una pregunta.',
     example: {
       photo: 1,
-      who: 'Lu',
-      where: 'Buenos Aires · 08:12',
-      text: 'Los jacarandás ya están en flor',
+      who: 'Rey',
+      where: 'La Habana · 13:30',
+      text: 'Dominó en el portal con los vecinos',
     },
   },
   {
@@ -96,7 +96,7 @@ const STEPS: Step[] = [
       photo: 3,
       who: 'La narradora',
       where: 'Resumen de la semana',
-      text: 'Mientras Lu tomaba mate, Tomi se apuntaba a alemán… por cuarta vez',
+      text: 'Mientras Rey jugaba al dominó, Tomi se apuntaba a alemán… por cuarta vez',
     },
   },
   {
