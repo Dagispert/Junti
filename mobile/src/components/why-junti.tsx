@@ -280,7 +280,7 @@ export function WhyJunti({ text, spoken }: { text: string; spoken: number }) {
         const sharp = after('memories');
         const stacked = after('album');
         const x = stacked ? width / 2 - size / 2 + (i - 1.5) * 18 : width * s.x;
-        const y = stacked ? height * 0.6 - size * 0.4 + Math.abs(i - 1.5) * 6 : height * s.y;
+        const y = stacked ? height * 0.42 + Math.abs(i - 1.5) * 6 : height * s.y;
         const rot = stacked ? (i - 1.5) * 7 : s.rot;
         return (
           <View

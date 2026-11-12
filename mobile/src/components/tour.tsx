@@ -62,15 +62,15 @@ const STEPS: Step[] = [
     tab: 'hoy',
     voice: 'planeta',
     title: 'Vuestro planeta',
-    text: 'Este es vuestro planeta. Aquí veis dónde vive cada uno y qué hora es allí. Cuando Rey se despierta en La Habana, en Valladolid ya estáis comiendo. Si lo tocas, se abre el mapa entero.',
+    text: 'Este es vuestro planeta: dónde vive cada uno y qué hora es allí. Parece un detalle, pero cambia mucho: sabrás si Rey está desayunando antes de escribirle, y cada vez que lo abras verás que, aunque haya un océano en medio, seguís siendo un grupo.',
   },
   {
     target: 'tour-plus',
     voice: 'compartir',
     shape: 'circle',
     tab: 'hoy',
-    title: 'Compartir algo',
-    text: 'Con este botón compartes algo: una foto, un vídeo corto, una nota de voz o unas palabras. Rey, por ejemplo, acaba de subir su partida de dominó en el portal. Desde aquí también podéis añadir un recuerdo antiguo, un reto o una pregunta.',
+    title: 'Compartir lo pequeño',
+    text: 'Con este botón compartes algo pequeño: una foto, un vídeo, una nota de voz. No hace falta que sea especial; justo eso es lo que se pierde con la distancia: el café de esta mañana, la calle por la que vuelves a casa. Aquí no hay likes que perseguir: solo los tuyos, enterándose de tu vida.',
     example: {
       photo: 1,
       who: 'Rey',
@@ -83,8 +83,8 @@ const STEPS: Step[] = [
     voice: 'hoy',
     shape: 'rect',
     tab: 'hoy',
-    title: 'Una propuesta al día',
-    text: 'Los días que toque, os llegará una pregunta sencilla, a la hora que elija cada uno: ¿qué ves por tu ventana? Todo lo que compartáis aparece aquí, en Hoy.',
+    title: 'Una excusa para hablar',
+    text: 'Y para que nadie se quede en silencio, os propongo algo sencillo cada pocos días: qué ves por tu ventana, qué estás escuchando. Es la excusa perfecta para saber de los demás sin tener que pensar qué contar. Todo se reúne aquí, en Hoy.',
     example: {
       photo: 2,
       who: 'Martuki',
@@ -97,16 +97,16 @@ const STEPS: Step[] = [
     voice: 'mapa',
     shape: 'rect',
     tab: 'mapa',
-    title: 'El mapa de recuerdos',
-    text: 'Si añadís el lugar a un momento, se queda en el planeta. Con el tiempo veréis ese viaje a Iguazú, o la playa de cada verano.',
+    title: 'El mapa de vuestra vida',
+    text: 'Cada momento con lugar se queda en el mapa. Con el tiempo, se convierte en el mapa de vuestra vida: el viaje a Iguazú, la playa de cada verano, la ciudad donde vive cada uno. Un recuerdo que crece solo, sin que tengáis que ordenarlo.',
   },
   {
     target: 'tab-retos',
     voice: 'retos',
     shape: 'rect',
     tab: 'retos',
-    title: 'Retos y preguntas',
-    text: 'Aquí van los retos y las preguntas: una encuesta para elegir destino, o un quiz de quién de nosotros. Las respuestas de los demás se ven al responder.',
+    title: 'Jugar juntos',
+    text: 'Los retos y las preguntas son para jugar juntos aunque estéis lejos: el cielo de cada uno esta semana, una encuesta para elegir el próximo destino, un quiz de quién de nosotros. Os sacan de la rutina, os hacen reír, y os dan de qué hablar más allá del qué tal.',
   },
   {
     target: 'tour-calendario',
@@ -114,7 +114,7 @@ const STEPS: Step[] = [
     shape: 'rect',
     tab: 'hoy',
     title: 'Los días que faltan',
-    text: 'Arriba tenéis el calendario del grupo: cumpleaños, aniversarios, viajes y, sobre todo, reencuentros. Si Rey viene a España en verano, lo apuntáis y en Hoy veréis la cuenta atrás. Os aviso una semana antes, la víspera y el mismo día. Porque estar lejos también es contar los días que faltan para veros.',
+    text: 'Arriba está el calendario del grupo: cumpleaños, viajes y, sobre todo, reencuentros. Si Rey viene en verano, lo apuntáis y en Hoy veréis la cuenta atrás; os aviso una semana antes, la víspera y el mismo día. Nadie se olvida de un cumpleaños, y la espera para veros se vive juntos.',
     example: {
       who: 'Rey vuelve a casa',
       where: 'Reencuentro · faltan 23 días',
@@ -127,7 +127,7 @@ const STEPS: Step[] = [
     shape: 'rect',
     tab: 'memoria',
     title: 'Vuestra memoria',
-    text: 'Y esta es vuestra memoria: cada semana, un resumen con vuestras fotos y vuestra música; álbumes, y un carrete por cada mes.',
+    text: 'Aquí se guarda todo, sin que tengas que hacer nada: cada semana, un resumen con vuestras fotos y vuestra música, y álbumes para los viajes. Lo que en un chat se pierde entre mensajes, aquí se queda: vuestra memoria, para volver a ella cuando queráis.',
     example: {
       photo: 3,
       who: 'La narradora',
@@ -141,7 +141,7 @@ const STEPS: Step[] = [
     shape: 'rect',
     tab: 'memoria',
     title: 'Un carrete cada mes',
-    text: 'Y cada mes se revela un carrete, como los de antes: una tira de película con las fotos de ese mes. Los emojis que más habéis usado se convierten en pegatinas. Dale al play y lo veréis como una pequeña película, con música; y si me habéis activado, os lo cuento yo.',
+    text: 'Y cada mes se revela un carrete, como los de antes: las fotos del mes en una tira de película, con vuestros emojis convertidos en pegatinas. Dale al play y verás vuestro mes como una pequeña película. Es el momento de mirar atrás y daros cuenta de todo lo que habéis compartido.',
     example: {
       photo: 4,
       who: 'Carrete de octubre',
@@ -155,7 +155,7 @@ const STEPS: Step[] = [
     shape: 'rect',
     tab: 'hoy',
     title: 'Y aquí entro yo',
-    text: 'Y aquí entro yo. Para que pueda contar vuestra historia en voz alta, quien administra el grupo tiene que activarme en los ajustes. Solo uso lo que compartís, y cada uno puede pedirme que no use lo suyo.',
+    text: 'Y aquí entro yo. Si quien administra me activa en los ajustes, cada semana y cada mes os cuento vuestra historia en voz alta, en el tono que elijáis. Así, lo que comparte cada uno se convierte en la historia de todos. Solo uso lo que compartís, y cada uno puede pedirme que no use lo suyo.',
   },
   {
     target: 'tour-invitar',
@@ -163,7 +163,7 @@ const STEPS: Step[] = [
     shape: 'rect',
     tab: 'hoy',
     title: 'Ahora te toca a ti',
-    text: 'Ahora te toca a ti: invita a los tuyos con un enlace. Si quieres volver a escucharme, me encontrarás en tu perfil, en Ayuda. Hasta pronto.',
+    text: 'Ahora te toca a ti: Junti cobra vida cuando entran los tuyos. Invítalos con un enlace y empezad hoy a guardar lo que os une. Si quieres volver a escucharme, estoy en tu perfil, en Ayuda. Hasta pronto.',
   },
 ];
 
