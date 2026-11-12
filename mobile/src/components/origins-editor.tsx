@@ -26,7 +26,13 @@ const empty = (): Draft => ({ place: null, year: '', story: '', memberIds: [] })
  * comienzos (no todos se conocieron igual) y cada uno dice a quién incluye.
  * Lo puede contar cualquiera del grupo; «de dónde sois» lo fija quien administra.
  */
-export function OriginsEditor({ group }: { group: Group }) {
+export function OriginsEditor({
+  group,
+  bare,
+}: {
+  group: Group;
+  /** Sin título (dentro de otra sección). */ bare?: boolean;
+}) {
   const theme = useTheme();
   const store = useStore();
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -104,11 +110,15 @@ export function OriginsEditor({ group }: { group: Group }) {
 
   return (
     <>
-      <Tag>Dónde empezó todo</Tag>
-      <Lead strong="Vuestro punto de partida.">
-        Dónde os conocisteis. Si no todos os conocisteis igual, añadid un comienzo para cada
-        historia. La narradora lo usa para contar de dónde venís.
-      </Lead>
+      {!bare && (
+        <>
+          <Tag>Dónde empezó todo</Tag>
+          <Lead strong="Vuestro punto de partida.">
+            Dónde os conocisteis. Si no todos os conocisteis igual, añadid un comienzo para cada
+            historia. La narradora lo usa para contar de dónde venís.
+          </Lead>
+        </>
+      )}
 
       {group.origins.map((o) => (
         <Card key={o.id} style={styles.card}>

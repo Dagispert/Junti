@@ -44,6 +44,9 @@ export const Fonts = Platform.select({
 /** Letra manuscrita para notas, pies de foto y pegatinas (Caveat, licencia OFL). */
 export const Hand = 'Caveat_600SemiBold';
 export const HandBold = 'Caveat_700Bold';
+/** Letra con serifa (Fraunces, la de la palabra «junti»), para momentos especiales. */
+export const Serif = 'Fraunces_500Medium';
+export const SerifItalic = 'Fraunces_400Regular_Italic';
 
 export const Spacing = { half: 2, one: 4, two: 8, three: 16, four: 24, five: 32 } as const;
 /** frame: marco exterior de las tarjetas · inner: la foto que va dentro · pill: botones. */

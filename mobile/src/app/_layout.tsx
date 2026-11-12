@@ -1,4 +1,5 @@
 import { Caveat_600SemiBold, Caveat_700Bold, useFonts } from '@expo-google-fonts/caveat';
+import { Fraunces_400Regular_Italic, Fraunces_500Medium } from '@expo-google-fonts/fraunces';
 import { DarkTheme, DefaultTheme, router, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
@@ -14,7 +15,7 @@ import { markIntroDone } from '@/lib/tour';
 
 export default function RootLayout() {
   const dark = useColorScheme() === 'dark';
-  useFonts({ Caveat_600SemiBold, Caveat_700Bold });
+  useFonts({ Caveat_600SemiBold, Caveat_700Bold, Fraunces_400Regular_Italic, Fraunces_500Medium });
   useEffect(setupInstallable, []);
   useEffect(rememberInvite, []);
   return (

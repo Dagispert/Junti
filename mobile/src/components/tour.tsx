@@ -11,6 +11,7 @@ import { Hand, Radius } from '@/constants/theme';
 import { Icon } from './icon';
 import { LogoMark } from './logo';
 import { EASE } from './motion';
+import { WhyJunti } from './why-junti';
 
 type Tab = 'hoy' | 'mapa' | 'retos' | 'memoria';
 /** rect: rectángulo redondeado · circle: círculo · sphere: el contorno del planeta */
@@ -22,8 +23,12 @@ type Step = {
   shape?: Shape;
   tab?: Tab;
   title: string;
-  /** Lo que dice la narradora (y se lee como subtítulo). Su audio es /guia/<n>.mp3. */
+  /** Lo que dice la narradora (y se lee como subtítulo). */
   text: string;
+  /** Su audio: /guia/<voice>.mp3. */
+  voice: string;
+  /** A pantalla completa, sin bocadillo (por qué existe Junti). */
+  immersive?: boolean;
   /** Un ejemplo del caso ficticio, dentro del bocadillo. */
   example?: { photo?: number; who: string; where: string; text: string };
 };
@@ -31,27 +36,37 @@ type Step = {
 const base =
   typeof window !== 'undefined' && window.location?.pathname.startsWith('/Junti') ? '/Junti' : '';
 
-// La narradora cuenta la guía con un caso ficticio: Rey en La Habana, Tomi
-// en Berlín y Martuki en Tokio. Los audios se generaron una vez (voz de Gemini)
+// La narradora se presenta, cuenta por qué existe Junti y luego lo enseña
+// con un caso ficticio: Rey en La Habana, Tomi en Berlín y Martuki en Tokio. Los audios se generaron una vez (voz de Gemini)
 // y van con la app, en public/guia: no se generan en cada inicio.
 const STEPS: Step[] = [
   {
     title: 'Hola, soy la narradora',
-    text: 'Hola, soy la narradora de Junti, la que cuenta vuestras historias. Antes de empezar, te enseño cómo funciona todo con un ejemplo: imagina un grupo con Rey, que vive en La Habana; Tomi, en Berlín; y Martuki, en Tokio.',
+    voice: 'hola',
+    text: 'Hola. Soy la narradora de Junti: la voz que cuenta vuestras historias.',
   },
   {
     title: 'Por qué existe Junti',
+    voice: 'porque',
+    immersive: true,
     text: 'Antes, te cuento por qué existo. Cuando la gente que quieres vive lejos, la vida se va quedando en chats que se pierden, y en redes hechas para enseñar, no para compartir. Y sin darnos cuenta, nos perdemos los días pequeños de los demás. Junti no es una red social más: aquí no hay likes, ni seguidores, ni nadie mirando. Es vuestro rincón para crear recuerdos sin estar juntos, y para ir guardando la memoria de todo lo que os une. Seáis amigos, familia o pareja: estéis donde estéis, seguís estando juntos.',
+  },
+  {
+    title: 'Un grupo de ejemplo',
+    voice: 'ejemplo',
+    text: 'Ahora te enseño cómo funciona todo con un ejemplo. Imagina un grupo con Rey, que vive en La Habana; Tomi, en Berlín; y Martuki, en Tokio.',
   },
   {
     target: 'tour-mapa',
     shape: 'sphere',
     tab: 'hoy',
+    voice: 'planeta',
     title: 'Vuestro planeta',
     text: 'Este es vuestro planeta. Aquí veis dónde vive cada uno y qué hora es allí. Cuando Rey se despierta en La Habana, en Valladolid ya estáis comiendo. Si lo tocas, se abre el mapa entero.',
   },
   {
     target: 'tour-plus',
+    voice: 'compartir',
     shape: 'circle',
     tab: 'hoy',
     title: 'Compartir algo',
@@ -65,6 +80,7 @@ const STEPS: Step[] = [
   },
   {
     target: 'tab-hoy',
+    voice: 'hoy',
     shape: 'rect',
     tab: 'hoy',
     title: 'Una propuesta al día',
@@ -78,6 +94,7 @@ const STEPS: Step[] = [
   },
   {
     target: 'tab-mapa',
+    voice: 'mapa',
     shape: 'rect',
     tab: 'mapa',
     title: 'El mapa de recuerdos',
@@ -85,13 +102,28 @@ const STEPS: Step[] = [
   },
   {
     target: 'tab-retos',
+    voice: 'retos',
     shape: 'rect',
     tab: 'retos',
     title: 'Retos y preguntas',
     text: 'Aquí van los retos y las preguntas: una encuesta para elegir destino, o un quiz de quién de nosotros. Las respuestas de los demás se ven al responder.',
   },
   {
+    target: 'tour-calendario',
+    voice: 'calendario',
+    shape: 'rect',
+    tab: 'hoy',
+    title: 'Los días que faltan',
+    text: 'Arriba tenéis el calendario del grupo: cumpleaños, aniversarios, viajes y, sobre todo, reencuentros. Si Rey viene a España en verano, lo apuntáis y en Hoy veréis la cuenta atrás. Os aviso una semana antes, la víspera y el mismo día. Porque estar lejos también es contar los días que faltan para veros.',
+    example: {
+      who: 'Rey vuelve a casa',
+      where: 'Reencuentro · faltan 23 días',
+      text: 'Del 2 al 16 de julio, en Valladolid',
+    },
+  },
+  {
     target: 'tab-memoria',
+    voice: 'memoria',
     shape: 'rect',
     tab: 'memoria',
     title: 'Vuestra memoria',
@@ -105,6 +137,7 @@ const STEPS: Step[] = [
   },
   {
     target: 'tab-memoria',
+    voice: 'carrete',
     shape: 'rect',
     tab: 'memoria',
     title: 'Un carrete cada mes',
@@ -118,6 +151,7 @@ const STEPS: Step[] = [
   },
   {
     target: 'tour-ajustes',
+    voice: 'narradora',
     shape: 'rect',
     tab: 'hoy',
     title: 'Y aquí entro yo',
@@ -125,6 +159,7 @@ const STEPS: Step[] = [
   },
   {
     target: 'tour-invitar',
+    voice: 'invitar',
     shape: 'rect',
     tab: 'hoy',
     title: 'Ahora te toca a ti',
@@ -294,7 +329,7 @@ export function GuidedTour({ groupId, onClose }: { groupId: string; onClose: () 
   useEffect(() => {
     if (!audio.current) audio.current = new Audio();
     const a = audio.current;
-    a.src = `${base}/guia/${index}.mp3`;
+    a.src = `${base}/guia/${step.voice}.mp3`;
     a.muted = muted;
     setSpoken(0);
     let advance: ReturnType<typeof setTimeout> | undefined;
@@ -366,14 +401,24 @@ export function GuidedTour({ groupId, onClose }: { groupId: string; onClose: () 
         style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(10,12,16,0.62)' }]}
       />
 
+      {step.immersive && (
+        <Animated.View
+          key={`escena-${index}`}
+          entering={FadeIn.duration(700)}
+          exiting={FadeOut.duration(400)}
+          style={StyleSheet.absoluteFill}>
+          <WhyJunti text={step.text} spoken={muted || needsTap ? 1 : spoken} />
+        </Animated.View>
+      )}
+
       <Animated.View
         key={index}
         entering={FadeInDown.duration(420).easing(EASE)}
-        style={[styles.bubble, bubblePos]}>
+        style={step.immersive ? [styles.bubble, styles.dock] : [styles.bubble, bubblePos]}>
         <View style={styles.head}>
           <View style={styles.speaker}>
-            <LogoMark size={28} />
-            <Text style={styles.count}>
+            <LogoMark size={28} inverted={step.immersive} />
+            <Text style={[styles.count, step.immersive && { color: 'rgba(255,255,255,0.7)' }]}>
               La narradora · {index + 1} de {STEPS.length}
             </Text>
           </View>
@@ -382,23 +427,35 @@ export function GuidedTour({ groupId, onClose }: { groupId: string; onClose: () 
               accessibilityRole="button"
               accessibilityLabel={paused ? 'Seguir escuchando' : 'Pausar'}
               onPress={togglePause}
-              style={styles.round}>
-              <Icon icon={paused ? Play : Pause} size={16} color={Brand.ink} />
+              style={[styles.round, step.immersive && styles.roundDark]}>
+              <Icon
+                icon={paused ? Play : Pause}
+                size={16}
+                color={step.immersive ? '#FFFFFF' : Brand.ink}
+              />
             </Pressable>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={muted ? 'Activar la voz' : 'Silenciar la voz'}
               onPress={() => setMuted(!muted)}
-              style={styles.round}>
-              <Icon icon={muted ? VolumeX : Volume2} size={16} color={Brand.ink} />
+              style={[styles.round, step.immersive && styles.roundDark]}>
+              <Icon
+                icon={muted ? VolumeX : Volume2}
+                size={16}
+                color={step.immersive ? '#FFFFFF' : Brand.ink}
+              />
             </Pressable>
           </View>
         </View>
-        <Text style={styles.title}>{step.title}</Text>
-        <Text style={styles.text}>
-          {step.text.slice(0, visible)}
-          <Text style={{ color: 'transparent' }}>{step.text.slice(visible)}</Text>
-        </Text>
+        {!step.immersive && (
+          <>
+            <Text style={styles.title}>{step.title}</Text>
+            <Text style={styles.text}>
+              {step.text.slice(0, visible)}
+              <Text style={{ color: 'transparent' }}>{step.text.slice(visible)}</Text>
+            </Text>
+          </>
+        )}
         {needsTap && !muted && (
           <Pressable accessibilityRole="button" onPress={listen} style={styles.listen}>
             <Icon icon={Play} size={16} color="#FFFFFF" />
@@ -426,10 +483,11 @@ export function GuidedTour({ groupId, onClose }: { groupId: string; onClose: () 
         )}
         <View style={styles.progress}>
           {STEPS.map((_, i) => (
-            <View key={i} style={styles.track}>
+            <View key={i} style={[styles.track, step.immersive && styles.trackDark]}>
               <View
                 style={[
                   styles.fill,
+                  step.immersive && { backgroundColor: '#FFFFFF' },
                   { width: `${i < index ? 100 : i > index ? 0 : Math.round(spoken * 100)}%` },
                 ]}
               />
@@ -439,7 +497,9 @@ export function GuidedTour({ groupId, onClose }: { groupId: string; onClose: () 
         <View style={styles.actions}>
           {!last ? (
             <Pressable accessibilityRole="button" onPress={onClose} hitSlop={8}>
-              <Text style={styles.skip}>Saltar la guía</Text>
+              <Text style={[styles.skip, step.immersive && { color: 'rgba(255,255,255,0.7)' }]}>
+                Saltar la guía
+              </Text>
             </Pressable>
           ) : (
             <View />
@@ -449,12 +509,19 @@ export function GuidedTour({ groupId, onClose }: { groupId: string; onClose: () 
               <Pressable
                 accessibilityRole="button"
                 onPress={() => setIndex(index - 1)}
-                style={[styles.btn, styles.btnQuiet]}>
-                <Text style={[styles.btnText, { color: Brand.ink }]}>Atrás</Text>
+                style={[styles.btn, step.immersive ? styles.roundDark : styles.btnQuiet]}>
+                <Text style={[styles.btnText, { color: step.immersive ? '#FFFFFF' : Brand.ink }]}>
+                  Atrás
+                </Text>
               </Pressable>
             )}
-            <Pressable accessibilityRole="button" onPress={next} style={styles.btn}>
-              <Text style={styles.btnText}>{last ? 'Entendido' : 'Siguiente'}</Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={next}
+              style={[styles.btn, step.immersive && { backgroundColor: '#FFFFFF' }]}>
+              <Text style={[styles.btnText, step.immersive && { color: Brand.ink }]}>
+                {last ? 'Entendido' : 'Siguiente'}
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -476,6 +543,17 @@ const styles = StyleSheet.create({
     gap: 8,
     boxShadow: '0 24px 60px rgba(0,0,0,0.35)',
   },
+  // En la escena a pantalla completa: solo los mandos, abajo y oscuros.
+  dock: {
+    bottom: 16,
+    backgroundColor: 'rgba(20,24,36,0.94)',
+    boxShadow: '0 -10px 40px rgba(0,0,0,0.5)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    paddingVertical: 14,
+  },
+  roundDark: { backgroundColor: 'rgba(255,255,255,0.12)' },
+  trackDark: { backgroundColor: 'rgba(255,255,255,0.18)' },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   speaker: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   count: { color: '#686C73', fontSize: 13, fontWeight: '500' },

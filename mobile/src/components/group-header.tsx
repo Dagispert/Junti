@@ -43,12 +43,14 @@ export function GroupHeader({ group }: { group: Group }) {
           </View>
         </Pressable>
         <View style={{ flexDirection: 'row' }}>
-          <Button
-            compact
-            variant="quiet"
-            label="Calendario"
-            onPress={() => router.push({ pathname: '/calendar', params: { groupId: group.id } })}
-          />
+          <View testID="tour-calendario">
+            <Button
+              compact
+              variant="quiet"
+              label="Calendario"
+              onPress={() => router.push({ pathname: '/calendar', params: { groupId: group.id } })}
+            />
+          </View>
           <View testID="tour-ajustes">
             <Button
               compact
