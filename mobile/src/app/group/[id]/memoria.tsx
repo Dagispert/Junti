@@ -1,6 +1,7 @@
 import { useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { AlbumShelf } from '@/components/album-shelf';
 import { FilmRoll } from '@/components/film-roll';
 import { RecapCard } from '@/components/recap-card';
 import { GroupHeader } from '@/components/group-header';
@@ -67,6 +68,7 @@ export default function Memory() {
       {featured != null && <RecapCard groupId={group.id} kind="week" from={featured} />}
 
       <Soundtrack groupId={group.id} />
+      <AlbumShelf groupId={group.id} />
 
       {months.map((m, i) => (
         <FilmRoll key={m.key} moments={m.items} label={m.label} index={i} groupId={group.id} />

@@ -21,6 +21,10 @@ export type Group = {
   name: string;
   description: string;
   color: string;
+  /** Foto de portada (dirección temporal firmada) y la pegatina del grupo. */
+  coverUri?: string;
+  coverPath?: string;
+  sticker?: string;
   memberIds: string[];
   /** Si soy administrador de este grupo. */
   isAdmin: boolean;
@@ -134,6 +138,18 @@ export type GroupEvent = {
   endsOn?: string;
   yearly: boolean;
   personId?: string;
+};
+
+/** Un álbum temático del grupo («Viaje a Roma»). */
+export type Album = {
+  id: string;
+  groupId: string;
+  createdBy?: string;
+  title: string;
+  description?: string;
+  createdAt: number;
+  /** Momentos del álbum, del más antiguo al más reciente según cuándo pasaron. */
+  momentIds: string[];
 };
 
 export type QuestionKind = 'poll' | 'quiz' | 'open';

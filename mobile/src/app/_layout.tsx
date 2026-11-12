@@ -63,6 +63,7 @@ function Gate() {
         <Stack.Screen name="add" options={{ presentation: 'modal' }} />
         <Stack.Screen name="new-challenge" options={{ presentation: 'modal' }} />
         <Stack.Screen name="ask" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="new-album" options={{ presentation: 'modal' }} />
         <Stack.Screen
           name="recap"
           options={{ presentation: 'fullScreenModal', animation: 'fade' }}

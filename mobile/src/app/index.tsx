@@ -1,7 +1,9 @@
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Appear, PressScale } from '@/components/motion';
+import { Sticker } from '@/components/scrapbook';
 import {
   Avatar,
   AvatarRow,
@@ -77,17 +79,38 @@ export default function MyGroups() {
                 ]}
               />
               <Card>
-                {cover ? (
+                {group.coverUri || cover ? (
                   <View style={styles.cover}>
-                    <Photo moment={cover} style={StyleSheet.absoluteFill} />
+                    {group.coverUri ? (
+                      <Image
+                        source={{ uri: group.coverUri }}
+                        style={StyleSheet.absoluteFill}
+                        contentFit="cover"
+                      />
+                    ) : (
+                      <Photo moment={cover!} style={StyleSheet.absoluteFill} />
+                    )}
                     <Scrim edge="top" height="40%" />
                     <Text style={[styles.groupName, { color: '#fff' }]}>{group.name}</Text>
                     <Text style={[styles.groupMeta, { color: 'rgba(255,255,255,0.85)' }]}>
                       {people}
                     </Text>
+                    {group.sticker && (
+                      <Sticker
+                        emoji={group.sticker}
+                        size={56}
+                        rotate={-8}
+                        style={{ position: 'absolute', right: 16, bottom: 16 }}
+                      />
+                    )}
                   </View>
                 ) : (
-                  <View style={[styles.cover, styles.coverEmpty, { backgroundColor: theme.soft }]}>
+                  <View
+                    style={[
+                      styles.cover,
+                      styles.coverEmpty,
+                      { backgroundColor: `${group.color}26` },
+                    ]}>
                     <Text style={[styles.groupName, { color: theme.text }]}>{group.name}</Text>
                     <Text style={[styles.groupMeta, { color: theme.textSecondary }]}>{people}</Text>
                   </View>

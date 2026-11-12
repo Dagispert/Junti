@@ -11,13 +11,13 @@ import { Photo, Screen } from '@/components/ui';
 import { Hand, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import { clockIn } from '@/lib/time';
-import { ArrowLeft } from 'lucide-react-native';
+import { ArrowLeft, Check, Plus } from 'lucide-react-native';
 
 /** Un momento a lo grande, como una foto pegada en un álbum. */
 export default function MomentView() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
-  const { moments, user, proposals } = useStore();
+  const { moments, user, proposals, albums, setAlbumMoments } = useStore();
   const moment = moments.find((m) => m.id === id);
   if (!moment) return null;
   const author = user(moment.authorId);
@@ -111,11 +111,59 @@ export default function MomentView() {
           {c.text}
         </Text>
       ))}
+
+      {/* Guardarlo en un álbum del grupo. */}
+      <View style={{ gap: 8, marginTop: 16 }}>
+        <Text style={{ color: theme.textSecondary, fontSize: 13 }}>En los álbumes</Text>
+        <View style={styles.albums}>
+          {albums
+            .filter((a) => a.groupId === moment.groupId)
+            .map((a) => {
+              const on = a.momentIds.includes(moment.id);
+              return (
+                <Pressable
+                  key={a.id}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: on }}
+                  accessibilityLabel={`Álbum ${a.title}`}
+                  onPress={() =>
+                    setAlbumMoments(a.id, on ? [] : [moment.id], on ? [moment.id] : []).catch(
+                      () => {},
+                    )
+                  }
+                  style={[styles.albumChip, { backgroundColor: on ? theme.accent : theme.card }]}>
+                  {on && <Icon icon={Check} size={16} color={theme.onAccent} />}
+                  <Text style={{ color: on ? theme.onAccent : theme.text, fontSize: 15 }}>
+                    {a.title}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() =>
+              router.push({ pathname: '/new-album', params: { groupId: moment.groupId } })
+            }
+            style={[styles.albumChip, { backgroundColor: theme.soft }]}>
+            <Icon icon={Plus} size={16} color={theme.text} />
+            <Text style={{ color: theme.text, fontSize: 15 }}>Nuevo álbum</Text>
+          </Pressable>
+        </View>
+      </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  albums: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  albumChip: {
+    height: 40,
+    paddingHorizontal: 16,
+    borderRadius: 999,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   header: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
   round: {
     width: 44,

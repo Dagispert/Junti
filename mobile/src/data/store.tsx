@@ -7,6 +7,7 @@ import { disablePush } from '@/lib/push';
 import { AVATAR_BUCKET, MEDIA_BUCKET, supabase } from '@/lib/supabase';
 
 import type {
+  Album,
   Group,
   GroupEvent,
   Moment,
@@ -78,6 +79,11 @@ type Store = {
   /** Un reto para el grupo; «days» = cuántos días dura (sin fecha si se omite). */
   addChallenge: (groupId: string, title: string, body: string, days?: number) => Promise<void>;
   questions: Question[];
+  albums: Album[];
+  createAlbum: (groupId: string, title: string, description?: string) => Promise<string>;
+  /** Pone o quita momentos de un álbum. */
+  setAlbumMoments: (albumId: string, add: string[], remove: string[]) => Promise<void>;
+  deleteAlbum: (albumId: string) => Promise<void>;
   askQuestion: (q: {
     groupId: string;
     kind: QuestionKind;
@@ -92,6 +98,11 @@ type Store = {
   /** Borra mis archivos y mi cuenta. No se puede deshacer. */
   deleteAccount: () => Promise<void>;
   updateGroup: (groupId: string, name: string, description: string) => Promise<void>;
+  /** Solo administradores: color, pegatina y foto de portada (null la quita). */
+  styleGroup: (
+    groupId: string,
+    look: { color?: string; sticker?: string | null; coverUri?: string | null },
+  ) => Promise<void>;
   /** Mi preferencia: cuántas propuestas por semana me gustaría recibir. */
   voteFrequency: (groupId: string, perWeek: number) => Promise<void>;
   /** Solo administradores: fija los días con propuesta (1 = lunes … 7 = domingo). */
@@ -195,7 +206,7 @@ const inFlight = new Map<string, Promise<{ narration: Narration | null; reason?:
 
 const StoreContext = createContext<Store | null>(null);
 
-const PALETTE = ['#D9663F', '#4E8D7C', '#5B7DB1', '#B8648F', '#C9A227', '#7A6FB0', '#3F8FA8'];
+export const PALETTE = ['#D9663F', '#4E8D7C', '#5B7DB1', '#B8648F', '#C9A227', '#7A6FB0', '#3F8FA8'];
 const colorFor = (id: string) =>
   PALETTE[[...id].reduce((sum, ch) => sum + ch.charCodeAt(0), 0) % PALETTE.length];
 
@@ -223,6 +234,7 @@ type Data = {
   songs: Song[];
   events: GroupEvent[];
   questions: Question[];
+  albums: Album[];
 };
 const EMPTY: Data = {
   users: {},
@@ -233,6 +245,7 @@ const EMPTY: Data = {
   songs: [],
   events: [],
   questions: [],
+  albums: [],
 };
 
 async function load(me: string): Promise<Data> {
@@ -247,6 +260,7 @@ async function load(me: string): Promise<Data> {
     eventRows,
     questionRows,
     keyRows,
+    albumRows,
   ] = await Promise.all([
     supabase
       .from('memberships')
@@ -257,7 +271,9 @@ async function load(me: string): Promise<Data> {
       .then(check),
     supabase
       .from('groups')
-      .select('id, name, description, color, cadence_days, narrative_enabled, narrative_style')
+      .select(
+        'id, name, description, color, cover_path, sticker, cadence_days, narrative_enabled, narrative_style',
+      )
       .order('created_at')
       .then(check),
     supabase
@@ -306,6 +322,11 @@ async function load(me: string): Promise<Data> {
       .limit(100)
       .then(check) as PromiseLike<any[]>,
     supabase.from('question_keys').select('question_id, correct').then(check),
+    supabase
+      .from('albums')
+      .select('id, group_id, created_by, title, description, created_at, album_moments(moment_id)')
+      .order('created_at', { ascending: false })
+      .then(check) as PromiseLike<any[]>,
   ]);
 
   // Fotos de perfil: también privadas, con dirección temporal firmada.
@@ -348,6 +369,8 @@ async function load(me: string): Promise<Data> {
         name: g.name,
         description: g.description ?? '',
         color: g.color,
+        coverPath: g.cover_path ?? undefined,
+        sticker: g.sticker ?? undefined,
         memberIds: members.map((m) => m.user_id),
         isAdmin: members.some((m) => m.user_id === me && m.role === 'admin'),
         myHour: members.find((m) => m.user_id === me)?.preferred_hour ?? 19,
@@ -384,6 +407,7 @@ async function load(me: string): Promise<Data> {
     ...new Set(
       (momentRows ?? [])
         .flatMap((row) => assetsOf(row).flatMap((a) => [a.storage_path, a.thumb_path]))
+        .concat(groups.map((g) => g.coverPath))
         .filter(Boolean),
     ),
   ] as string[];
@@ -395,6 +419,8 @@ async function load(me: string): Promise<Data> {
     for (const item of data ?? [])
       if (item.path && item.signedUrl) signed[item.path] = item.signedUrl;
   }
+
+  for (const g of groups) g.coverUri = g.coverPath ? signed[g.coverPath] : undefined;
 
   const moments: Moment[] = (momentRows ?? []).map((row) => {
     const assets = assetsOf(row);
@@ -502,6 +528,20 @@ async function load(me: string): Promise<Data> {
     correct: keys.get(q.id),
   }));
 
+  const when = new Map(moments.map((m) => [m.id, m.createdAt]));
+  const albums: Album[] = (albumRows ?? []).map((a) => ({
+    id: a.id,
+    groupId: a.group_id,
+    createdBy: a.created_by ?? undefined,
+    title: a.title,
+    description: a.description ?? undefined,
+    createdAt: Date.parse(a.created_at),
+    momentIds: (a.album_moments ?? [])
+      .map((x: any) => x.moment_id as string)
+      .filter((id: string) => when.has(id))
+      .sort((x: string, y: string) => when.get(x)! - when.get(y)!),
+  }));
+
   return {
     users,
     groups,
@@ -511,6 +551,7 @@ async function load(me: string): Promise<Data> {
     songs,
     events,
     questions,
+    albums,
   };
 }
 
@@ -598,6 +639,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     songs: data.songs,
     events: data.events,
     questions: data.questions,
+    albums: data.albums,
     user: (id) => data.users[id] ?? { id, ...FORMER_MEMBER },
     group: (id) => data.groups.find((g) => g.id === id),
     refresh,
@@ -850,6 +892,43 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       );
       await refresh();
     },
+    createAlbum: async (groupId, title, description) => {
+      const row = check(
+        await supabase
+          .from('albums')
+          .insert({ group_id: groupId, title, description: description || null })
+          .select('id')
+          .single(),
+      );
+      await refresh();
+      return row!.id as string;
+    },
+    setAlbumMoments: async (albumId, add, remove) => {
+      if (add.length) {
+        check(
+          await supabase
+            .from('album_moments')
+            .upsert(
+              add.map((moment_id) => ({ album_id: albumId, moment_id })),
+              { onConflict: 'album_id,moment_id', ignoreDuplicates: true },
+            ),
+        );
+      }
+      if (remove.length) {
+        check(
+          await supabase
+            .from('album_moments')
+            .delete()
+            .eq('album_id', albumId)
+            .in('moment_id', remove),
+        );
+      }
+      await refresh();
+    },
+    deleteAlbum: async (albumId) => {
+      check(await supabase.from('albums').delete().eq('id', albumId));
+      await refresh();
+    },
     askQuestion: async ({ groupId, kind, title, options, correct, days }) => {
       const q = check(
         await supabase
@@ -923,6 +1002,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           .update({ name, description: description || null })
           .eq('id', groupId),
       );
+      await refresh();
+    },
+    styleGroup: async (groupId, { color, sticker, coverUri }) => {
+      const change: Record<string, string | null> = {};
+      if (color !== undefined) change.color = color;
+      if (sticker !== undefined) change.sticker = sticker;
+      if (coverUri === null) change.cover_path = null;
+      if (coverUri) {
+        const blob = await (await fetch(coverUri)).blob();
+        const path = `${groupId}/${me}/portada-${Date.now()}.jpg`;
+        const upload = await supabase.storage
+          .from(MEDIA_BUCKET)
+          .upload(path, blob, { contentType: 'image/jpeg' });
+        if (upload.error) throw new Error(upload.error.message);
+        change.cover_path = path;
+      }
+      check(await supabase.from('groups').update(change).eq('id', groupId));
       await refresh();
     },
     voteFrequency: async (groupId, perWeek) => {

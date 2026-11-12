@@ -391,7 +391,12 @@ export default function RecapScreen() {
                   size={Math.min(width - 60, 320)}
                 />
               ) : (
-                <Sticker emoji="🗺️" size={84} rotate={-8} delay={200} />
+                <Sticker
+                  emoji={group(groupId)?.sticker ?? '🗺️'}
+                  size={84}
+                  rotate={-8}
+                  delay={200}
+                />
               )}
               {!!story?.title && <Text style={styles.narrationTitle}>{story.title}</Text>}
             </View>
@@ -488,7 +493,7 @@ export default function RecapScreen() {
 
           {slide.type === 'end' && (
             <View style={[styles.center, { gap: 20 }, !!line && { paddingBottom: 168 }]}>
-              <Sticker emoji="💌" size={84} rotate={-8} delay={200} />
+              <Sticker emoji={group(groupId)?.sticker ?? '💌'} size={84} rotate={-8} delay={200} />
               <Text style={styles.big}>
                 {recap.ongoing ? 'Y la semana sigue…' : 'Hasta la próxima'}
               </Text>

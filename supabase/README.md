@@ -16,6 +16,7 @@ Esquema de PostgreSQL para [Supabase](https://supabase.com), con las reglas de p
 - `migrations/0013_avisos_de_actividad.sql`: avisos agrupados de momentos nuevos, comentarios en tus momentos y gente nueva; respetan el silencio y las horas de descanso.
 - `migrations/0014_mas_propuestas.sql`: biblioteca de 153 propuestas por temas y `daily_prompt()`, con la que la app crea la propuesta del día sin repetir.
 - `migrations/0015_recuerdos_y_preguntas.sql`: recuerdos fechados en el pasado (`memory`, `shared_at`), encuestas, quiz y preguntas abiertas (las respuestas ajenas se ven al responder; la solución del quiz, aparte), y sus avisos.
+- `migrations/0016_grupo_y_albumes.sql`: pegatina del grupo (la portada usa `cover_path`) y álbumes temáticos con sus momentos.
 - `functions/narrate/`: escribe la crónica de una semana o un mes con Gemini. Necesita el secreto `GEMINI_API_KEY` en *Edge Functions → Secrets* (opcional `GEMINI_MODEL`). Solo envía textos, nunca fotos, vídeos ni audios.
 - `functions/send-proposals/`: programa del servidor que envía esos avisos y los recordatorios del calendario. Genera sus propias claves la primera vez.
 - `programar_avisos.sql`: lo ejecuta cada 15 minutos. Se lanza una vez, a mano, tras desplegar la función.

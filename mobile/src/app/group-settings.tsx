@@ -1,12 +1,35 @@
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar, Button, Card, Field, Lead, Notice, Screen, Tag, Title } from '@/components/ui';
 import { Radius, Spacing, useTheme } from '@/constants/theme';
 import { frequencies } from '@/data/library';
-import { errorText, useStore } from '@/data/store';
+import { errorText, PALETTE, useStore } from '@/data/store';
+import { exportMemory } from '@/lib/export';
 import { NARRATIVE_STYLES } from '@/lib/narrative';
+
+// Pegatinas para el grupo: salen en sus historias y en la lista de grupos.
+const STICKERS = [
+  '🍍',
+  '🌻',
+  '🌊',
+  '🏔️',
+  '🌙',
+  '☕',
+  '🎈',
+  '🧡',
+  '🐾',
+  '🌵',
+  '🍋',
+  '🌍',
+  '✈️',
+  '🎶',
+  '🏡',
+  '📮',
+];
 
 const sameDays = (a: number[], b: number[]) =>
   a.length === b.length && [...a].sort().join() === [...b].sort().join();
@@ -23,6 +46,7 @@ export default function GroupSettings() {
   const [busy, setBusy] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [removing, setRemoving] = useState('');
+  const [exporting, setExporting] = useState('');
 
   if (!group) return null;
   const { me } = store;
@@ -83,6 +107,104 @@ export default function GroupSettings() {
             }
           />
         </Card>
+      )}
+
+      {group.isAdmin && (
+        <View style={{ gap: Spacing.two }}>
+          <Tag>Aspecto</Tag>
+          <Card style={styles.card}>
+            {/* Portada */}
+            <View style={styles.coverRow}>
+              <View style={[styles.cover, { backgroundColor: group.color }]}>
+                {group.coverUri && (
+                  <Image
+                    source={{ uri: group.coverUri }}
+                    style={StyleSheet.absoluteFill}
+                    contentFit="cover"
+                  />
+                )}
+              </View>
+              <View style={{ flex: 1, gap: 8 }}>
+                <Text style={{ color: theme.text, fontSize: 17 }}>Portada</Text>
+                <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                  <Button
+                    compact
+                    label={group.coverUri ? 'Cambiar' : 'Elegir foto'}
+                    disabled={busy}
+                    onPress={async () => {
+                      const result = await ImagePicker.launchImageLibraryAsync({
+                        mediaTypes: ['images'],
+                        quality: 0.8,
+                      }).catch(() => null);
+                      const uri = result && !result.canceled ? result.assets[0].uri : null;
+                      if (uri)
+                        run(() => store.styleGroup(group.id, { coverUri: uri }), 'Portada lista');
+                    }}
+                  />
+                  {group.coverUri && (
+                    <Button
+                      compact
+                      variant="quiet"
+                      label="Quitar"
+                      disabled={busy}
+                      onPress={() => run(() => store.styleGroup(group.id, { coverUri: null }))}
+                    />
+                  )}
+                </View>
+              </View>
+            </View>
+
+            {/* Color */}
+            <View style={{ gap: 8 }}>
+              <Text style={{ color: theme.textSecondary, fontSize: 13 }}>Color</Text>
+              <View style={styles.swatches}>
+                {PALETTE.map((c) => (
+                  <Pressable
+                    key={c}
+                    accessibilityRole="radio"
+                    accessibilityLabel={`Color ${c}`}
+                    accessibilityState={{ checked: group.color === c }}
+                    disabled={busy}
+                    onPress={() => run(() => store.styleGroup(group.id, { color: c }))}
+                    style={[
+                      styles.swatch,
+                      { backgroundColor: c },
+                      group.color === c && { borderColor: theme.text },
+                    ]}
+                  />
+                ))}
+              </View>
+            </View>
+
+            {/* Pegatina */}
+            <View style={{ gap: 8 }}>
+              <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
+                Pegatina (aparece en vuestras historias)
+              </Text>
+              <View style={styles.swatches}>
+                {STICKERS.map((e) => (
+                  <Pressable
+                    key={e}
+                    accessibilityRole="radio"
+                    accessibilityLabel={`Pegatina ${e}`}
+                    accessibilityState={{ checked: group.sticker === e }}
+                    disabled={busy}
+                    onPress={() =>
+                      run(() =>
+                        store.styleGroup(group.id, { sticker: group.sticker === e ? null : e }),
+                      )
+                    }
+                    style={[
+                      styles.sticker,
+                      { backgroundColor: group.sticker === e ? theme.soft : 'transparent' },
+                    ]}>
+                    <Text style={{ fontSize: 24 }}>{e}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          </Card>
+        </View>
       )}
 
       <View style={{ gap: Spacing.two }}>
@@ -379,6 +501,37 @@ export default function GroupSettings() {
 
       <Notice>{notice}</Notice>
 
+      {Platform.OS === 'web' && (
+        <View style={{ gap: Spacing.two }}>
+          <Tag>Vuestra memoria</Tag>
+          <Lead strong="Descárgala entera:">
+            fotos, vídeos y notas de voz ordenados por meses, y una página para verlo todo sin la
+            app.
+          </Lead>
+          <Button
+            label={exporting || 'Descargar la memoria'}
+            variant="light"
+            disabled={!!exporting}
+            onPress={async () => {
+              setExporting('Preparando…');
+              try {
+                await exportMemory({
+                  group,
+                  moments: store.moments.filter((m) => m.groupId === group.id),
+                  albums: store.albums.filter((a) => a.groupId === group.id),
+                  user: store.user,
+                  onProgress: (done, total) => setExporting(`Preparando ${done} de ${total}…`),
+                });
+                setNotice('Descarga lista');
+              } catch (error) {
+                setNotice(errorText(error));
+              }
+              setExporting('');
+            }}
+          />
+        </View>
+      )}
+
       <View style={{ gap: Spacing.two }}>
         <Tag>Salir</Tag>
         {leaving ? (
@@ -410,6 +563,17 @@ export default function GroupSettings() {
 const styles = StyleSheet.create({
   header: { alignItems: 'flex-start', paddingVertical: Spacing.two },
   card: { padding: 20, gap: Spacing.three },
+  coverRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  cover: { width: 72, height: 88, borderRadius: Radius.small, overflow: 'hidden' },
+  swatches: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  swatch: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: 'transparent' },
+  sticker: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.small,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   option: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16 },
   styles: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   style: {
