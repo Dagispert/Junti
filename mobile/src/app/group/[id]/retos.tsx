@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { GroupHeader } from '@/components/group-header';
+import { QuestionCard } from '@/components/question-card';
 import { AvatarRow, Button, Card, PhotoFan, Screen, Tag } from '@/components/ui';
 import { Spacing, useTheme } from '@/constants/theme';
 import { challengeLibrary } from '@/data/library';
@@ -14,7 +15,7 @@ import { Missing } from './index';
 export default function Challenges() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
-  const { group: groupById, moments, proposals, addChallenge } = useStore();
+  const { group: groupById, moments, proposals, questions, addChallenge } = useStore();
   const group = groupById(id);
   if (!group) return <Missing />;
 
@@ -22,7 +23,12 @@ export default function Challenges() {
   const challenges = proposals.filter((p) => p.groupId === id && p.kind === 'challenge');
   const active = challenges.filter((p) => !p.endsAt || p.endsAt > now);
   const finished = challenges.filter((p) => p.endsAt && p.endsAt <= now);
-  const ideas = challengeLibrary.filter((idea) => !challenges.some((p) => p.title === idea.title));
+  const ideas = challengeLibrary
+    .filter((idea) => !challenges.some((p) => p.title === idea.title))
+    .slice(0, 4);
+  const asked = questions.filter((q) => q.groupId === id);
+  const openQuestions = asked.filter((q) => !q.closesAt || q.closesAt > now);
+  const closedQuestions = asked.filter((q) => q.closesAt && q.closesAt <= now);
 
   const card = (challenge: (typeof challenges)[number], open: boolean) => {
     const answers = moments.filter((m) => m.proposalId === challenge.id);
@@ -67,7 +73,26 @@ export default function Challenges() {
 
   return (
     <Screen header={<GroupHeader group={group} />}>
+      <View style={styles.actions}>
+        <Button
+          compact
+          label="🏁 Nuevo reto"
+          onPress={() => router.push({ pathname: '/new-challenge', params: { groupId: id } })}
+        />
+        <Button
+          compact
+          variant="light"
+          label="📊 Preguntar algo"
+          onPress={() => router.push({ pathname: '/add', params: { groupId: id } })}
+        />
+      </View>
+
       {active.map((c) => card(c, true))}
+
+      {openQuestions.length > 0 && <Tag>Preguntas</Tag>}
+      {openQuestions.map((q) => (
+        <QuestionCard key={q.id} question={q} />
+      ))}
 
       {ideas.length > 0 && (
         <View style={{ gap: Spacing.two }}>
@@ -97,7 +122,11 @@ export default function Challenges() {
         </View>
       )}
 
+      {(finished.length > 0 || closedQuestions.length > 0) && <Tag>Terminados</Tag>}
       {finished.map((c) => card(c, false))}
+      {closedQuestions.map((q) => (
+        <QuestionCard key={q.id} question={q} />
+      ))}
     </Screen>
   );
 }
@@ -119,4 +148,5 @@ const styles = StyleSheet.create({
     minHeight: 36,
   },
   idea: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, padding: 14 },
+  actions: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
 });

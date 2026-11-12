@@ -6,11 +6,14 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { SendCinematic } from '@/components/cinematics';
 import { CityPicker } from '@/components/city-picker';
-import { InlineVideo, VoiceNote } from '@/components/media-players';
 import { useGroupPeople } from '@/components/connection-card';
-import { Button, Card, Notice, Screen, Tag, Title } from '@/components/ui';
+import { DatePick } from '@/components/date-pick';
+import { InlineVideo, VoiceNote } from '@/components/media-players';
+import { PressScale } from '@/components/motion';
+import { Button, Notice, Screen, Tag, Title } from '@/components/ui';
 import { Radius, Spacing, useTheme } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
+import { dateFromFile, dateFromPickerExif } from '@/lib/exif';
 import type { Place } from '@/lib/geo';
 import { secondsOf, videoPoster } from '@/lib/media';
 import { mmss } from '@/lib/music';
@@ -18,12 +21,25 @@ import { useVoiceRecorder } from '@/lib/recorder';
 
 const MAX_VIDEO = 30;
 
-/** Compartir un momento: foto y/o texto, en el grupo desde el que se abre. */
+type Media = {
+  uri: string;
+  kind: 'photo' | 'video';
+  mime?: string;
+  duration?: number;
+  poster?: string;
+};
+
+/**
+ * Compartir un momento (foto, vídeo, voz y/o texto) o, con «memory», añadir un
+ * recuerdo de antes que se guarda en su fecha.
+ */
 export default function Publish() {
-  const { groupId, proposalId } = useLocalSearchParams<{
+  const { groupId, proposalId, memory } = useLocalSearchParams<{
     groupId: string;
     proposalId?: string;
+    memory?: string;
   }>();
+  const remembering = memory === '1';
   const theme = useTheme();
   const { group: groupById, proposals, addMoment, me, user } = useStore();
   const meUser = user(me);
@@ -32,20 +48,21 @@ export default function Publish() {
       ? { name: meUser.city, country: meUser.country, lat: meUser.lat, lng: meUser.lng }
       : null;
   const [busy, setBusy] = useState(false);
-  // Foto o vídeo (con su portada) y, opcionalmente, una nota de voz.
-  const [media, setMedia] = useState<{
-    uri: string;
-    kind: 'photo' | 'video';
-    mime?: string;
-    duration?: number;
-    poster?: string;
-  }>();
+  const [media, setMedia] = useState<Media>();
   const [preparing, setPreparing] = useState(false);
   const voice = useVoiceRecorder();
   const [text, setText] = useState('');
   const [notice, setNotice] = useState('');
   const [place, setPlace] = useState<Place | null>(null);
   const [picking, setPicking] = useState(false);
+  // Recuerdo: cuándo fue (por defecto, hace un año) y si la fecha salió de la foto.
+  const [when, setWhen] = useState(() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 1);
+    d.setHours(12, 0, 0, 0);
+    return d;
+  });
+  const [dateFromPhoto, setDateFromPhoto] = useState(false);
 
   const group = groupById(groupId);
   const proposal = proposals.find((p) => p.id === proposalId);
@@ -78,6 +95,7 @@ export default function Publish() {
         mediaTypes:
           want === 'photo' ? ['images'] : want === 'video' ? ['videos'] : ['images', 'videos'],
         quality: 0.8,
+        exif: remembering,
         videoMaxDuration: MAX_VIDEO,
         videoQuality: ImagePicker.UIImagePickerControllerQualityType.Medium,
       };
@@ -87,6 +105,14 @@ export default function Publish() {
           : await ImagePicker.launchImageLibraryAsync(options);
       if (result.canceled) return;
       const asset = result.assets[0];
+      if (remembering && asset.type !== 'video') {
+        // La fecha en que se hizo la foto, si la guarda.
+        const taken = dateFromPickerExif(asset.exif) ?? (await dateFromFile(asset.uri));
+        if (taken) {
+          setWhen(new Date(taken));
+          setDateFromPhoto(true);
+        } else setDateFromPhoto(false);
+      }
       if (asset.type !== 'video') {
         setMedia({ uri: asset.uri, kind: 'photo', mime: 'image/jpeg' });
         return;
@@ -129,6 +155,7 @@ export default function Publish() {
         voice: voice.result,
         text: text.trim() || undefined,
         place: place ?? undefined,
+        rememberedAt: remembering ? when.getTime() : undefined,
       });
       setSent(true);
     } catch (error) {
@@ -137,6 +164,25 @@ export default function Publish() {
     }
   };
 
+  const recording = voice.state === 'recording';
+  const empty = !media && !preparing;
+  const canSend = !busy && !preparing && !recording && (!!media || !!text.trim() || !!voice.result);
+
+  // Las fuentes, como botones grandes dentro del marco vacío.
+  const sources = remembering
+    ? [
+        { icon: '🖼️', label: 'Galería', onPress: () => pick('library', 'any') },
+        { icon: '📷', label: 'Hacer foto', onPress: () => pick('camera', 'photo') },
+      ]
+    : [
+        { icon: '📷', label: 'Foto', onPress: () => pick('camera', 'photo') },
+        { icon: '🎥', label: 'Vídeo', onPress: () => pick('camera', 'video') },
+        { icon: '🖼️', label: 'Galería', onPress: () => pick('library', 'any') },
+        ...(voice.supported && !voice.result
+          ? [{ icon: '🎙️', label: 'Voz', onPress: voice.start }]
+          : []),
+      ];
+
   return (
     <Screen
       header={
@@ -144,13 +190,8 @@ export default function Publish() {
           <Button compact label="Cancelar" variant="quiet" onPress={() => router.back()} />
           <Button
             compact
-            label={busy ? 'Publicando…' : 'Publicar'}
-            disabled={
-              busy ||
-              preparing ||
-              voice.state === 'recording' ||
-              (!media && !text.trim() && !voice.result)
-            }
+            label={busy ? 'Guardando…' : remembering ? 'Guardar recuerdo' : 'Publicar'}
+            disabled={!canSend}
             onPress={publish}
           />
         </View>
@@ -158,10 +199,19 @@ export default function Publish() {
       <View style={{ gap: 10 }}>
         {/* El destino siempre a la vista antes de publicar. */}
         <Tag>Para {group.name}</Tag>
-        <Title>{proposal ? proposal.title : 'Comparte un momento'}</Title>
+        <Title>
+          {proposal ? proposal.title : remembering ? 'Un recuerdo' : 'Comparte un momento'}
+        </Title>
+        {remembering && (
+          <Text style={{ color: theme.textSecondary, fontSize: 15, lineHeight: 21 }}>
+            Una foto o un vídeo de antes. Se guardará en su fecha y aparecerá en la memoria, en el
+            mapa y en «tal día como hoy».
+          </Text>
+        )}
       </View>
 
-      <Card>
+      {/* El marco: vacío con las fuentes grandes, o con la foto/vídeo elegido. */}
+      <View style={[styles.stage, { backgroundColor: theme.card, boxShadow: theme.shadow }]}>
         {media?.kind === 'video' ? (
           <View style={[styles.preview, { overflow: 'hidden', backgroundColor: '#000' }]}>
             <InlineVideo uri={media.uri} />
@@ -173,73 +223,102 @@ export default function Publish() {
           <Image source={{ uri: media.uri }} style={styles.preview} contentFit="cover" />
         ) : (
           <View style={[styles.preview, styles.empty, { backgroundColor: theme.soft }]}>
-            <Text style={{ color: theme.textSecondary, fontSize: 15 }}>
-              {preparing ? 'Preparando el vídeo…' : 'Sin foto ni vídeo todavía'}
-            </Text>
+            {preparing ? (
+              <Text style={{ color: theme.textSecondary, fontSize: 15 }}>Preparando el vídeo…</Text>
+            ) : recording ? (
+              <Text style={{ color: theme.textSecondary, fontSize: 15 }}>Grabando tu voz…</Text>
+            ) : (
+              <View style={styles.sourceGrid}>
+                {sources.map((s) => (
+                  <View key={s.label} style={styles.sourceCell}>
+                    <PressScale
+                      accessibilityRole="button"
+                      accessibilityLabel={s.label}
+                      onPress={s.onPress}
+                      style={[styles.source, { backgroundColor: theme.card }]}>
+                      <Text style={styles.sourceIcon}>{s.icon}</Text>
+                      <Text style={[styles.sourceLabel, { color: theme.text }]}>{s.label}</Text>
+                    </PressScale>
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
         )}
-        <View style={styles.sources}>
-          <Button compact label="Foto" variant="quiet" onPress={() => pick('camera', 'photo')} />
-          <Button compact label="Vídeo" variant="quiet" onPress={() => pick('camera', 'video')} />
-          <Button compact label="Galería" variant="quiet" onPress={() => pick('library', 'any')} />
-          {media && (
-            <Button compact label="Quitar" variant="quiet" onPress={() => setMedia(undefined)} />
-          )}
-        </View>
-      </Card>
+        {media && (
+          <View style={styles.floating}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Cambiar"
+              onPress={() => pick('library', 'any')}
+              style={styles.floatButton}>
+              <Text style={styles.floatText}>Cambiar</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Quitar"
+              onPress={() => setMedia(undefined)}
+              style={styles.floatButton}>
+              <Text style={styles.floatText}>✕</Text>
+            </Pressable>
+          </View>
+        )}
+      </View>
       <Notice>{notice}</Notice>
+
+      {/* Nota de voz: grabando, o ya grabada. */}
+      {recording && (
+        <View style={[styles.recording, { backgroundColor: theme.card }]}>
+          <View style={styles.redDot} />
+          <View style={styles.liveBars}>
+            {Array.from(
+              { length: 48 },
+              (_, i) => voice.levels[i - (48 - voice.levels.length)] ?? 0,
+            ).map((v, i) => (
+              <View
+                key={i}
+                style={{
+                  flex: 1,
+                  height: Math.max(3, (v / 100) * 30),
+                  borderRadius: 2,
+                  backgroundColor: '#E2703A',
+                }}
+              />
+            ))}
+          </View>
+          <Text style={{ color: theme.text, fontVariant: ['tabular-nums'], fontSize: 14 }}>
+            {mmss(voice.seconds)} / 2:00
+          </Text>
+          <Button compact label="Parar" onPress={voice.stop} />
+        </View>
+      )}
+      {voice.result && !recording && (
+        <View style={{ gap: 6 }}>
+          <VoiceNote voice={voice.result} />
+          <Button compact variant="quiet" label="Quitar la nota de voz" onPress={voice.reset} />
+        </View>
+      )}
+      {!!voice.error && <Notice>{voice.error}</Notice>}
 
       <TextInput
         value={text}
         onChangeText={setText}
-        placeholder="Unas palabras, si te apetece…"
+        placeholder={remembering ? '¿Qué pasó aquel día?' : 'Cuéntalo, si te apetece…'}
         placeholderTextColor={theme.textSecondary}
         multiline
         style={[styles.input, { color: theme.text, backgroundColor: theme.card }]}
       />
 
-      {/* Nota de voz */}
-      {voice.supported &&
-        (voice.state === 'recording' ? (
-          <View style={[styles.recording, { backgroundColor: theme.card }]}>
-            <View style={styles.redDot} />
-            <View style={styles.liveBars}>
-              {Array.from(
-                { length: 48 },
-                (_, i) => voice.levels[i - (48 - voice.levels.length)] ?? 0,
-              ).map((v, i) => (
-                <View
-                  key={i}
-                  style={{
-                    flex: 1,
-                    height: Math.max(3, (v / 100) * 30),
-                    borderRadius: 2,
-                    backgroundColor: '#E2703A',
-                  }}
-                />
-              ))}
-            </View>
-            <Text style={{ color: theme.text, fontVariant: ['tabular-nums'], fontSize: 14 }}>
-              {mmss(voice.seconds)} / 2:00
+      {remembering && (
+        <View style={{ gap: 6 }}>
+          <DatePick value={when} onChange={(d) => setWhen(d)} label="¿Cuándo fue?" />
+          {dateFromPhoto && (
+            <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
+              📸 Fecha leída de la foto. Cámbiala si no es esa.
             </Text>
-            <Button compact label="Parar" onPress={voice.stop} />
-          </View>
-        ) : voice.result ? (
-          <View style={{ gap: 6 }}>
-            <VoiceNote voice={voice.result} />
-            <Button compact variant="quiet" label="Quitar la nota de voz" onPress={voice.reset} />
-          </View>
-        ) : (
-          <View style={styles.placeRow}>
-            <Pressable
-              accessibilityRole="button"
-              onPress={voice.start}
-              style={[styles.placeChip, { backgroundColor: theme.card }]}>
-              <Text style={{ color: theme.text, fontSize: 15 }}>🎙 Grabar nota de voz</Text>
-            </Pressable>
-          </View>
-        ))}
-      {!!voice.error && <Notice>{voice.error}</Notice>}
+          )}
+        </View>
+      )}
 
       {/* Lugar: solo si se quiere, y a nivel de ciudad. */}
       {picking ? (
@@ -249,40 +328,50 @@ export default function Publish() {
             setPlace(p);
             setPicking(false);
           }}
-          label="¿Dónde estás?"
+          label={remembering ? '¿Dónde fue?' : '¿Dónde estás?'}
           clear="Sin lugar"
           startOpen
           onClose={() => setPicking(false)}
         />
-      ) : place ? (
-        <View style={styles.placeRow}>
-          <View style={[styles.placeChip, { backgroundColor: theme.card }]}>
-            <Text style={{ color: theme.text, fontSize: 15 }}>
-              📍 {place.name}
-              {place.country ? `, ${place.country}` : ''}
-            </Text>
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Quitar el lugar"
-            onPress={() => setPlace(null)}>
-            <Text style={{ color: theme.textSecondary, fontSize: 14 }}>Quitar</Text>
-          </Pressable>
-        </View>
       ) : (
-        <View style={styles.placeRow}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => setPicking(true)}
-            style={[styles.placeChip, { backgroundColor: theme.card }]}>
-            <Text style={{ color: theme.text, fontSize: 15 }}>📍 Añadir lugar</Text>
-          </Pressable>
-          {home && (
+        <View style={styles.chips}>
+          {place ? (
             <Pressable
               accessibilityRole="button"
-              onPress={() => setPlace(home)}
-              style={[styles.placeChip, { backgroundColor: theme.soft }]}>
-              <Text style={{ color: theme.textSecondary, fontSize: 15 }}>En {home.name}</Text>
+              accessibilityLabel="Quitar el lugar"
+              onPress={() => setPlace(null)}
+              style={[styles.chip, { backgroundColor: theme.card }]}>
+              <Text style={{ color: theme.text, fontSize: 15 }}>
+                📍 {place.name}
+                {place.country ? `, ${place.country}` : ''} ✕
+              </Text>
+            </Pressable>
+          ) : (
+            <>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setPicking(true)}
+                style={[styles.chip, { backgroundColor: theme.card }]}>
+                <Text style={{ color: theme.text, fontSize: 15 }}>
+                  📍 {remembering ? '¿Dónde fue?' : 'Añadir lugar'}
+                </Text>
+              </Pressable>
+              {home && !remembering && (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setPlace(home)}
+                  style={[styles.chip, { backgroundColor: theme.soft }]}>
+                  <Text style={{ color: theme.textSecondary, fontSize: 15 }}>En {home.name}</Text>
+                </Pressable>
+              )}
+            </>
+          )}
+          {!empty && voice.supported && !voice.result && !recording && !remembering && (
+            <Pressable
+              accessibilityRole="button"
+              onPress={voice.start}
+              style={[styles.chip, { backgroundColor: theme.card }]}>
+              <Text style={{ color: theme.text, fontSize: 15 }}>🎙️ Añadir voz</Text>
             </Pressable>
           )}
         </View>
@@ -292,6 +381,40 @@ export default function Publish() {
 }
 
 const styles = StyleSheet.create({
+  header: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: Spacing.two },
+  stage: { borderRadius: Radius.frame, padding: 10 },
+  preview: { width: '100%', aspectRatio: 4 / 5, borderRadius: Radius.inner },
+  empty: { alignItems: 'center', justifyContent: 'center', padding: 18 },
+  sourceGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    justifyContent: 'center',
+    width: '100%',
+  },
+  sourceCell: { width: '45%' },
+  source: {
+    width: '100%',
+    aspectRatio: 1.15,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    boxShadow: '0 8px 20px rgba(20,22,26,0.06)',
+  },
+  sourceIcon: { fontSize: 34 },
+  sourceLabel: { fontSize: 16, fontWeight: '500' },
+  floating: { position: 'absolute', top: 22, right: 22, flexDirection: 'row', gap: 8 },
+  floatButton: {
+    height: 36,
+    minWidth: 36,
+    paddingHorizontal: 12,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(20,22,26,0.55)',
+  },
+  floatText: { color: '#fff', fontSize: 14, fontWeight: '600' },
   videoTag: {
     position: 'absolute',
     right: 12,
@@ -315,14 +438,10 @@ const styles = StyleSheet.create({
   },
   redDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#E5484D' },
   liveBars: { flex: 1, height: 30, flexDirection: 'row', alignItems: 'center', gap: 2 },
-  placeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
-  placeChip: { height: 42, paddingHorizontal: 16, borderRadius: 999, justifyContent: 'center' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: Spacing.two },
-  preview: { width: '100%', aspectRatio: 4 / 5, borderRadius: Radius.inner },
-  empty: { alignItems: 'center', justifyContent: 'center' },
-  sources: { flexDirection: 'row', justifyContent: 'center', paddingTop: 6 },
+  chips: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
+  chip: { height: 42, paddingHorizontal: 16, borderRadius: 999, justifyContent: 'center' },
   input: {
-    minHeight: 110,
+    minHeight: 100,
     fontSize: 17,
     lineHeight: 24,
     borderRadius: Radius.inner,

@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { ConnectionCard } from '@/components/connection-card';
 import { GroupHeader } from '@/components/group-header';
 import { MomentCard } from '@/components/moment-card';
+import { QuestionCard } from '@/components/question-card';
 import { OnThisDay } from '@/components/on-this-day';
 import { UpcomingCard } from '@/components/upcoming-card';
 import { RecapCard } from '@/components/recap-card';
@@ -17,7 +18,15 @@ import { featuredWeek, weekStart } from '@/lib/recap';
 export default function Today() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
-  const { me, group: groupById, moments, proposals, dismissed, dismissProposal } = useStore();
+  const {
+    me,
+    group: groupById,
+    moments,
+    proposals,
+    questions,
+    dismissed,
+    dismissProposal,
+  } = useStore();
   const group = groupById(id);
   if (!group) return <Missing />;
 
@@ -74,6 +83,19 @@ export default function Today() {
           </View>
         </Card>
       )}
+      {/* Preguntas del grupo que aún no he respondido (las dos más recientes). */}
+      {questions
+        .filter(
+          (q) =>
+            q.groupId === id &&
+            q.createdBy !== me &&
+            !q.answers.some((a) => a.userId === me) &&
+            (!q.closesAt || q.closesAt > Date.now()),
+        )
+        .slice(0, 2)
+        .map((q) => (
+          <QuestionCard key={q.id} question={q} />
+        ))}
       <UpcomingCard groupId={group.id} />
       <OnThisDay groupId={group.id} />
       {lastWeekReady != null && (

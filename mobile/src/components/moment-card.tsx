@@ -33,7 +33,11 @@ export function MomentCard({ moment }: { moment: Moment }) {
   const hidden = moment.comments.length - comments.length;
   // La hora local del autor forma parte del recuerdo.
   const placeName = moment.place?.name.split(',')[0];
-  const where = `${clockIn(moment.authorTz, moment.createdAt)}${placeName ? ` · 📍 ${placeName}` : author.city ? ` en ${author.city}` : ''}`;
+  // Un recuerdo lleva su fecha; un momento, la hora local de quien lo compartió.
+  const when = moment.memory
+    ? `📼 ${new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }).format(moment.createdAt)}`
+    : clockIn(moment.authorTz, moment.createdAt);
+  const where = `${when}${placeName ? ` · 📍 ${placeName}` : !moment.memory && author.city ? ` en ${author.city}` : ''}`;
 
   const send = () => {
     const text = draft.trim();
@@ -63,7 +67,7 @@ export function MomentCard({ moment }: { moment: Moment }) {
           </Text>
           {/* El cielo que tenía cuando lo compartió. */}
           <View pointerEvents="none" style={styles.overMeta}>
-            <SkyBadge tz={moment.authorTz} at={moment.createdAt} size={16} />
+            {!moment.memory && <SkyBadge tz={moment.authorTz} at={moment.createdAt} size={16} />}
             <Text style={styles.overMetaText}>{where}</Text>
           </View>
           {(!!moment.text || !!proposal) && (
@@ -96,7 +100,9 @@ export function MomentCard({ moment }: { moment: Moment }) {
           <Text style={{ color: theme.text, fontSize: 15, fontWeight: '500' }}>{author.name}</Text>
           <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
             {moment.imageUri ? '' : `${where} · `}
-            {relative(moment.createdAt)}
+            {moment.memory
+              ? `recuerdo añadido ${relative(moment.sharedAt)}`
+              : relative(moment.createdAt)}
           </Text>
         </View>
         <View style={styles.reactions}>

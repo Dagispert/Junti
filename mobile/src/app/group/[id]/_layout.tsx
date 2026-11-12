@@ -38,8 +38,8 @@ export default function GroupLayout() {
           </TabTrigger>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Compartir un momento"
-            onPress={() => router.push({ pathname: '/publish', params: { groupId: id } })}
+            accessibilityLabel="Añadir"
+            onPress={() => router.push({ pathname: '/add', params: { groupId: id } })}
             style={[styles.plus, { backgroundColor: theme.accent }]}>
             <Text style={[styles.plusText, { color: theme.onAccent }]}>+</Text>
           </Pressable>

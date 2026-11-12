@@ -82,7 +82,12 @@ export type Moment = {
   videoDuration?: number;
   /** Nota de voz: audio, duración en segundos y forma de onda (0–100). */
   voice?: { uri: string; duration: number; waveform: number[] };
+  /** Cuándo pasó (en un recuerdo, su fecha real). */
   createdAt: number;
+  /** Cuándo se compartió en el grupo. */
+  sharedAt: number;
+  /** Un recuerdo de antes, guardado en su fecha. */
+  memory?: boolean;
   /** Zona horaria del autor cuando lo publicó. */
   authorTz: string;
   /** Si responde a una propuesta o reto. */
@@ -122,4 +127,22 @@ export type GroupEvent = {
   endsOn?: string;
   yearly: boolean;
   personId?: string;
+};
+
+export type QuestionKind = 'poll' | 'quiz' | 'open';
+
+/** Una pregunta al grupo: encuesta, quiz o pregunta abierta. */
+export type Question = {
+  id: string;
+  groupId: string;
+  createdBy: string;
+  kind: QuestionKind;
+  title: string;
+  options?: string[];
+  closesAt?: number;
+  createdAt: number;
+  /** Solo llegan las de los demás después de haber respondido (o si la pregunta es mía). */
+  answers: { userId: string; choice?: number; text?: string; createdAt: number }[];
+  /** La respuesta correcta de un quiz, cuando ya se puede ver. */
+  correct?: number;
 };

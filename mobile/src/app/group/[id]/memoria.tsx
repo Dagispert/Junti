@@ -23,7 +23,8 @@ export default function Memory() {
   const group = groupById(id);
   if (!group) return <Missing />;
 
-  const all = moments.filter((m) => m.groupId === id);
+  // Por fecha de lo que pasó (los recuerdos, en la suya).
+  const all = moments.filter((m) => m.groupId === id).sort((a, b) => b.createdAt - a.createdAt);
   const months: { key: string; label: string; items: Moment[] }[] = [];
   for (const moment of all) {
     const { key, label } = monthOf(moment.createdAt);
@@ -32,7 +33,7 @@ export default function Memory() {
     else months.push({ key, label, items: [moment] });
   }
 
-  const week = all.filter((m) => m.createdAt > Date.now() - 7 * 86_400_000);
+  const week = all.filter((m) => m.sharedAt > Date.now() - 7 * 86_400_000);
   const who = [...new Set(week.map((m) => user(m.authorId).name.split(' ')[0]))];
   const whoText =
     who.length > 1 ? `${who.slice(0, -1).join(', ')} y ${who[who.length - 1]}` : who[0];

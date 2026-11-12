@@ -6,7 +6,17 @@ import { extensionFor } from '@/lib/media';
 import { disablePush } from '@/lib/push';
 import { AVATAR_BUCKET, MEDIA_BUCKET, supabase } from '@/lib/supabase';
 
-import type { Group, GroupEvent, Moment, Narration, Proposal, Song, User } from './types';
+import type {
+  Group,
+  GroupEvent,
+  Moment,
+  Narration,
+  Proposal,
+  Question,
+  QuestionKind,
+  Song,
+  User,
+} from './types';
 
 // Estado de la app, respaldado por Supabase. Todo lo que se lee aquí ya viene
 // filtrado por las políticas de la base de datos: solo los grupos a los que pertenezco.
@@ -52,12 +62,26 @@ type Store = {
     voice?: { uri: string; mime: string; duration: number; waveform: number[] };
     /** Lugar elegido voluntariamente (a nivel de ciudad). */
     place?: Place;
+    /** Si es un recuerdo: cuándo pasó. */
+    rememberedAt?: number;
   }) => Promise<void>;
   deleteMoment: (momentId: string) => Promise<void>;
   toggleReaction: (momentId: string, emoji: string) => Promise<void>;
   addComment: (momentId: string, text: string) => Promise<void>;
   dismissProposal: (proposalId: string, state: 'snoozed' | 'skipped') => Promise<void>;
-  addChallenge: (groupId: string, title: string, body: string) => Promise<void>;
+  /** Un reto para el grupo; «days» = cuántos días dura (sin fecha si se omite). */
+  addChallenge: (groupId: string, title: string, body: string, days?: number) => Promise<void>;
+  questions: Question[];
+  askQuestion: (q: {
+    groupId: string;
+    kind: QuestionKind;
+    title: string;
+    options?: string[];
+    correct?: number;
+    days?: number;
+  }) => Promise<void>;
+  answerQuestion: (questionId: string, answer: { choice?: number; text?: string }) => Promise<void>;
+  deleteQuestion: (questionId: string) => Promise<void>;
   setAvatar: (imageUri: string) => Promise<void>;
   /** Borra mis archivos y mi cuenta. No se puede deshacer. */
   deleteAccount: () => Promise<void>;
@@ -190,6 +214,7 @@ type Data = {
   dismissed: string[];
   songs: Song[];
   events: GroupEvent[];
+  questions: Question[];
 };
 const EMPTY: Data = {
   users: {},
@@ -199,60 +224,81 @@ const EMPTY: Data = {
   dismissed: [],
   songs: [],
   events: [],
+  questions: [],
 };
 
 async function load(me: string): Promise<Data> {
-  const [memberships, groupRows, profiles, momentRows, proposalRows, states, songRows, eventRows] =
-    await Promise.all([
-      supabase
-        .from('memberships')
-        .select(
-          'group_id, user_id, role, frequency_vote, preferred_hour, muted_until, narrative_opt_out',
-        )
-        .eq('status', 'active')
-        .then(check),
-      supabase
-        .from('groups')
-        .select('id, name, description, color, cadence_days, narrative_enabled, narrative_style')
-        .order('created_at')
-        .then(check),
-      supabase
-        .from('profiles')
-        .select(
-          'id, name, home_city, home_country, home_lat, home_lng, home_visible, timezone, avatar_path',
-        )
-        .then(check),
-      supabase
-        .from('moments')
-        .select(
-          'id, group_id, author_id, text, created_at, author_tz, proposal_id, place_name, lat, lng, ' +
-            'reactions(emoji, user_id), comments(id, user_id, text, created_at, deleted_at), ' +
-            'moment_media(position, media_assets(storage_path, kind, thumb_path, duration_s, waveform))',
-        )
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false })
-        .limit(300)
-        .then(check) as PromiseLike<any[]>,
-      supabase
-        .from('proposals')
-        .select('id, group_id, kind, title, body, starts_at, ends_at')
-        .then(check),
-      supabase.from('proposal_states').select('proposal_id, state').eq('user_id', me).then(check),
-      supabase
-        .from('songs')
-        .select(
-          'id, group_id, added_by, title, artist, artwork_url, preview_url, external_url, note, created_at',
-        )
-        .order('created_at', { ascending: false })
-        .then(check),
-      supabase
-        .from('events')
-        .select(
-          'id, group_id, created_by, kind, title, description, place, starts_on, ends_on, yearly, person_id',
-        )
-        .order('starts_on')
-        .then(check),
-    ]);
+  const [
+    memberships,
+    groupRows,
+    profiles,
+    momentRows,
+    proposalRows,
+    states,
+    songRows,
+    eventRows,
+    questionRows,
+    keyRows,
+  ] = await Promise.all([
+    supabase
+      .from('memberships')
+      .select(
+        'group_id, user_id, role, frequency_vote, preferred_hour, muted_until, narrative_opt_out',
+      )
+      .eq('status', 'active')
+      .then(check),
+    supabase
+      .from('groups')
+      .select('id, name, description, color, cadence_days, narrative_enabled, narrative_style')
+      .order('created_at')
+      .then(check),
+    supabase
+      .from('profiles')
+      .select(
+        'id, name, home_city, home_country, home_lat, home_lng, home_visible, timezone, avatar_path',
+      )
+      .then(check),
+    supabase
+      .from('moments')
+      .select(
+        'id, group_id, author_id, text, created_at, shared_at, memory, author_tz, proposal_id, place_name, lat, lng, ' +
+          'reactions(emoji, user_id), comments(id, user_id, text, created_at, deleted_at), ' +
+          'moment_media(position, media_assets(storage_path, kind, thumb_path, duration_s, waveform))',
+      )
+      .is('deleted_at', null)
+      .order('shared_at', { ascending: false })
+      .limit(300)
+      .then(check) as PromiseLike<any[]>,
+    supabase
+      .from('proposals')
+      .select('id, group_id, kind, title, body, starts_at, ends_at')
+      .then(check),
+    supabase.from('proposal_states').select('proposal_id, state').eq('user_id', me).then(check),
+    supabase
+      .from('songs')
+      .select(
+        'id, group_id, added_by, title, artist, artwork_url, preview_url, external_url, note, created_at',
+      )
+      .order('created_at', { ascending: false })
+      .then(check),
+    supabase
+      .from('events')
+      .select(
+        'id, group_id, created_by, kind, title, description, place, starts_on, ends_on, yearly, person_id',
+      )
+      .order('starts_on')
+      .then(check),
+    supabase
+      .from('questions')
+      .select(
+        'id, group_id, created_by, kind, title, options, closes_at, created_at, ' +
+          'question_answers(user_id, choice, text, created_at)',
+      )
+      .order('created_at', { ascending: false })
+      .limit(100)
+      .then(check) as PromiseLike<any[]>,
+    supabase.from('question_keys').select('question_id, correct').then(check),
+  ]);
 
   // Fotos de perfil: también privadas, con dirección temporal firmada.
   const avatarPaths = (profiles ?? []).map((p) => p.avatar_path).filter(Boolean) as string[];
@@ -366,6 +412,8 @@ async function load(me: string): Promise<Data> {
           }
         : undefined,
       createdAt: Date.parse(row.created_at),
+      sharedAt: Date.parse(row.shared_at ?? row.created_at),
+      memory: !!row.memory,
       authorTz: row.author_tz,
       proposalId: row.proposal_id ?? undefined,
       place:
@@ -422,6 +470,25 @@ async function load(me: string): Promise<Data> {
     personId: e.person_id ?? undefined,
   }));
 
+  const keys = new Map((keyRows ?? []).map((k) => [k.question_id, k.correct as number]));
+  const questions: Question[] = (questionRows ?? []).map((q) => ({
+    id: q.id,
+    groupId: q.group_id,
+    createdBy: q.created_by,
+    kind: q.kind,
+    title: q.title,
+    options: q.options ?? undefined,
+    closesAt: q.closes_at ? Date.parse(q.closes_at) : undefined,
+    createdAt: Date.parse(q.created_at),
+    answers: (q.question_answers ?? []).map((a: any) => ({
+      userId: a.user_id,
+      choice: a.choice ?? undefined,
+      text: a.text ?? undefined,
+      createdAt: Date.parse(a.created_at),
+    })),
+    correct: keys.get(q.id),
+  }));
+
   return {
     users,
     groups,
@@ -430,6 +497,7 @@ async function load(me: string): Promise<Data> {
     dismissed: (states ?? []).map((s) => s.proposal_id),
     songs,
     events,
+    questions,
   };
 }
 
@@ -516,6 +584,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     dismissed: data.dismissed,
     songs: data.songs,
     events: data.events,
+    questions: data.questions,
     user: (id) => data.users[id] ?? { id, ...FORMER_MEMBER },
     group: (id) => data.groups.find((g) => g.id === id),
     refresh,
@@ -575,7 +644,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return row!.code;
     },
 
-    addMoment: async ({ groupId, text, imageUri, media, voice, proposalId, place }) => {
+    addMoment: async ({
+      groupId,
+      text,
+      imageUri,
+      media,
+      voice,
+      proposalId,
+      place,
+      rememberedAt,
+    }) => {
       const visual = media ?? (imageUri ? { uri: imageUri, kind: 'photo' as const } : undefined);
       const stamp = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const put = async (uri: string, name: string, mime: string) => {
@@ -650,6 +728,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             text: text || null,
             proposal_id: proposalId ?? null,
             author_tz: deviceTz(),
+            // Un recuerdo se guarda en su fecha real.
+            ...(rememberedAt && {
+              memory: true,
+              created_at: new Date(rememberedAt).toISOString(),
+            }),
             place_name: place ? [place.name, place.country].filter(Boolean).join(', ') : null,
             lat: place?.lat ?? null,
             lng: place?.lng ?? null,
@@ -705,16 +788,50 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setData((d) => ({ ...d, dismissed: [...d.dismissed, proposalId] }));
       check(await supabase.from('proposal_states').upsert({ proposal_id: proposalId, state }));
     },
-    addChallenge: async (groupId, title, body) => {
+    addChallenge: async (groupId, title, body, days) => {
       check(
         await supabase.from('proposals').insert({
           group_id: groupId,
           kind: 'challenge',
           title,
-          body,
-          ends_at: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+          body: body || null,
+          ends_at: days ? new Date(Date.now() + days * 86_400_000).toISOString() : null,
         }),
       );
+      await refresh();
+    },
+    askQuestion: async ({ groupId, kind, title, options, correct, days }) => {
+      const q = check(
+        await supabase
+          .from('questions')
+          .insert({
+            group_id: groupId,
+            kind,
+            title,
+            options: kind === 'open' ? null : options,
+            closes_at: days ? new Date(Date.now() + days * 86_400_000).toISOString() : null,
+          })
+          .select('id')
+          .single(),
+      );
+      if (kind === 'quiz' && correct !== undefined) {
+        check(await supabase.from('question_keys').insert({ question_id: q!.id, correct }));
+      }
+      await refresh();
+    },
+    answerQuestion: async (questionId, { choice, text }) => {
+      check(
+        await supabase
+          .from('question_answers')
+          .upsert(
+            { question_id: questionId, user_id: me, choice: choice ?? null, text: text ?? null },
+            { onConflict: 'question_id,user_id' },
+          ),
+      );
+      await refresh();
+    },
+    deleteQuestion: async (questionId) => {
+      check(await supabase.from('questions').delete().eq('id', questionId));
       await refresh();
     },
 
