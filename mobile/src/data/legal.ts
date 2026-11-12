@@ -4,7 +4,7 @@
 //
 // Quién gestiona Junti y cómo contactar (aparecen en los textos):
 export const RESPONSIBLE = 'FuFūStudio';
-export const CONTACT = 'fufuestudio@gmail.es';
+export const CONTACT = 'fufustudio@gmail.com';
 export const UPDATED = '12 de noviembre de 2026';
 
 export type LegalDoc = {
