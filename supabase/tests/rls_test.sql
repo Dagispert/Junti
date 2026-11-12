@@ -292,3 +292,52 @@ set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000c';
 select pg_temp.fails($$select daily_prompt('10000000-0000-0000-0000-0000000000ae', '2030-01-02')$$, 'alguien ajeno no puede crear propuestas en el grupo');
 reset role;
 \echo PROPUESTAS DE LA BIBLIOTECA CORRECTAS
+
+-- ── Preguntas, quiz y recuerdos ──
+-- (grupo «Actividad»: Eva e1, Félix e2, Gema e3; Carlos «c» es ajeno)
+reset role;
+update memberships set muted_until = null, quiet_from = 0, quiet_to = 0 where group_id = '10000000-0000-0000-0000-0000000000ae';
+update activity_queue set sent_at = now() where sent_at is null;
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000e1';
+insert into questions (id, group_id, kind, title, options) values
+  ('40000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-0000000000ae', 'poll', '¿Dónde quedamos en verano?', '{Lisboa,Roma}'),
+  ('40000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-0000000000ae', 'quiz', '¿Quién vivió en Berlín?', '{Eva,Félix,Gema}');
+insert into questions (id, group_id, kind, title) values
+  ('40000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-0000000000ae', 'open', '¿Qué recuerdas de nuestro primer viaje?');
+insert into question_keys (question_id, correct) values ('40000000-0000-0000-0000-000000000002', 2);
+select pg_temp.fails($$insert into question_answers (question_id, choice) values ('40000000-0000-0000-0000-000000000002', 1)$$, 'quien crea el quiz no juega');
+insert into question_answers (question_id, choice) values ('40000000-0000-0000-0000-000000000001', 0);
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000e2';
+select pg_temp.expect((select count(*) = 3 from questions), 'el grupo ve sus preguntas');
+select pg_temp.expect((select count(*) = 0 from question_answers), 'no se ven las respuestas ajenas antes de responder');
+select pg_temp.expect((select count(*) = 0 from question_keys), 'la solución del quiz no se ve antes de responder');
+select pg_temp.fails($$insert into question_answers (question_id, choice) values ('40000000-0000-0000-0000-000000000001', 5)$$, 'no se puede votar una opción que no existe');
+select pg_temp.fails($$insert into question_answers (question_id, text) values ('40000000-0000-0000-0000-000000000001', 'hola')$$, 'en una encuesta no se responde con texto');
+insert into question_answers (question_id, choice) values ('40000000-0000-0000-0000-000000000001', 1);
+select pg_temp.expect((select count(*) = 2 from question_answers where question_id = '40000000-0000-0000-0000-000000000001'), 'tras votar se ven los votos de los demás');
+update question_answers set choice = 0 where question_id = '40000000-0000-0000-0000-000000000001' and user_id = auth.uid();
+select pg_temp.expect((select choice = 0 from question_answers where question_id = '40000000-0000-0000-0000-000000000001' and user_id = auth.uid()), 'se puede cambiar el voto');
+insert into question_answers (question_id, choice) values ('40000000-0000-0000-0000-000000000002', 1);
+select pg_temp.expect((select correct = 2 from question_keys where question_id = '40000000-0000-0000-0000-000000000002'), 'tras responder el quiz se ve la solución');
+update question_answers set choice = 2 where question_id = '40000000-0000-0000-0000-000000000002' and user_id = auth.uid();
+select pg_temp.expect((select choice = 1 from question_answers where question_id = '40000000-0000-0000-0000-000000000002' and user_id = auth.uid()), 'en el quiz no se puede cambiar la respuesta después de ver la solución');
+insert into question_answers (question_id, text) values ('40000000-0000-0000-0000-000000000003', 'La tormenta en la playa');
+select pg_temp.fails($$insert into question_keys (question_id, correct) values ('40000000-0000-0000-0000-000000000001', 0)$$, 'solo quien crea un quiz pone su solución');
+-- Un recuerdo de hace años: se guarda en su fecha.
+insert into moments (group_id, text, author_tz, memory, created_at) values
+  ('10000000-0000-0000-0000-0000000000ae', 'Aquel verano', 'Europe/Madrid', true, now() - interval '5 years');
+select pg_temp.fails($$insert into moments (group_id, text, author_tz, created_at) values ('10000000-0000-0000-0000-0000000000ae', 'del futuro', 'Europe/Madrid', now() + interval '5 days')$$, 'nada fechado en el futuro');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000c';
+select pg_temp.expect((select count(*) = 0 from questions), 'alguien ajeno no ve las preguntas');
+select pg_temp.fails($$insert into question_answers (question_id, choice) values ('40000000-0000-0000-0000-000000000001', 0)$$, 'alguien ajeno no puede votar');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000e1';
+insert into proposals (group_id, kind, title, body) values ('10000000-0000-0000-0000-0000000000ae', 'challenge', 'El cielo de cada uno', 'Una foto del cielo');
+reset role;
+update activity_queue set created_at = now() - interval '2 minutes' where sent_at is null;
+set role service_role;
+create temp table actividad2 as select * from claim_activity() where g_name = 'Actividad';
+reset role;
+select pg_temp.expect((select body from actividad2 where sub_endpoint = 'https://push.example/e3') =
+  'Félix ha añadido un recuerdo 📼 · Eva propone un reto: «El cielo de cada uno» · 3 preguntas nuevas (Eva)', 'avisos de recuerdos, retos y preguntas');
+\echo PREGUNTAS Y RECUERDOS CORRECTOS
