@@ -491,6 +491,7 @@ export function GlobeMap({
   focusId = null,
   onSelect,
   rounded,
+  transparent,
   memories = [],
   onMemories,
   focusPoint = null,
@@ -912,7 +913,9 @@ export function GlobeMap({
       style={{
         height: height ?? '100%',
         borderRadius: rounded ? 26 : 0,
-        background: 'radial-gradient(circle at 50% 42%, #FFFFFF 0%, #EEF3F2 55%, #E4ECEC 100%)',
+        background: transparent
+          ? 'transparent'
+          : 'radial-gradient(circle at 50% 42%, #FFFFFF 0%, #EEF3F2 55%, #E4ECEC 100%)',
         pointerEvents: interactive ? 'auto' : 'none',
       }}
     />

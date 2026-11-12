@@ -2,6 +2,7 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { Logo } from '@/components/logo';
 import { Appear, PressScale } from '@/components/motion';
 import { Sticker } from '@/components/scrapbook';
 import {
@@ -13,7 +14,6 @@ import {
   Photo,
   Scrim,
   Screen,
-  Title,
 } from '@/components/ui';
 import { Radius, Spacing, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
@@ -28,7 +28,7 @@ export default function MyGroups() {
     <Screen
       header={
         <View style={styles.header}>
-          <Title>Junti</Title>
+          <Logo size={30} />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Tu perfil"

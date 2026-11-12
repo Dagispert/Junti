@@ -31,4 +31,6 @@ export type GlobeMapProps = {
   hidePeople?: boolean;
   /** Esquinas redondeadas (cuando va dentro de una tarjeta). */
   rounded?: boolean;
+  /** Sin fondo propio: el planeta flota sobre lo que haya detrás. */
+  transparent?: boolean;
 };

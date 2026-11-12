@@ -12,12 +12,14 @@ import { Avatar, Button, Card, Field, Lead, Notice, Screen, Tag, Title } from '@
 import { Spacing, useTheme } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
 import type { Place } from '@/lib/geo';
+import { requestTour } from '@/lib/tour';
 import { disablePush, enablePush, pushState, type PushState } from '@/lib/push';
 
 /** Ajustes personales: cómo me ven los demás, cerrar sesión y borrar la cuenta. */
 export default function Settings() {
   const theme = useTheme();
-  const { me, user, saveProfile, saveAbout, setAvatar, signOut, deleteAccount } = useStore();
+  const { me, user, groups, saveProfile, saveAbout, setAvatar, signOut, deleteAccount } =
+    useStore();
   const profile = user(me);
   const [name, setName] = useState(profile.name);
   const current: Place | null =
@@ -356,6 +358,24 @@ export default function Settings() {
             Prueba desde el móvil, con la app añadida a la pantalla de inicio.
           </Lead>
         )}
+      </View>
+
+      <View style={{ gap: Spacing.two }}>
+        <Tag>Ayuda</Tag>
+        <Button
+          label="Ver la guía de Junti"
+          variant="light"
+          onPress={() => {
+            const first = groups[0];
+            if (!first) {
+              setNotice('Crea un grupo o únete a uno para ver la guía dentro de él');
+              return;
+            }
+            requestTour();
+            router.dismissAll();
+            router.push({ pathname: '/group/[id]', params: { id: first.id } });
+          }}
+        />
       </View>
 
       <View style={{ gap: Spacing.two }}>

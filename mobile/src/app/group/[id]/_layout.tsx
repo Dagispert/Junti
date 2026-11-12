@@ -1,15 +1,27 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { TabList, TabSlot, TabTrigger, Tabs, type TabTriggerSlotProps } from 'expo-router/ui';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, type PressableProps } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { GuidedTour } from '@/components/tour';
 import { Radius, useTheme } from '@/constants/theme';
+import { markTourSeen, shouldShowTour, subscribeTour } from '@/lib/tour';
 
 /** Nivel 1: el espacio de un grupo. Hoy · Mapa · Retos · Memoria · (+). */
 export default function GroupLayout() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  // La guía de primer uso (o pedida desde «Ayuda»).
+  const [touring, setTouring] = useState(false);
+  useEffect(() => {
+    const check = () => {
+      if (shouldShowTour()) setTimeout(() => setTouring(true), 600);
+    };
+    check();
+    return subscribeTour(check);
+  }, []);
 
   return (
     <Tabs style={{ flex: 1, backgroundColor: theme.background }}>
@@ -25,18 +37,19 @@ export default function GroupLayout() {
             marginBottom: insets.bottom + 12,
           }}>
           <TabTrigger name="hoy" href={`/group/${id}`} asChild>
-            <TabButton>Hoy</TabButton>
+            <TabButton testID="tab-hoy">Hoy</TabButton>
           </TabTrigger>
           <TabTrigger name="mapa" href={`/group/${id}/mapa`} asChild>
-            <TabButton>Mapa</TabButton>
+            <TabButton testID="tab-mapa">Mapa</TabButton>
           </TabTrigger>
           <TabTrigger name="retos" href={`/group/${id}/retos`} asChild>
-            <TabButton>Retos</TabButton>
+            <TabButton testID="tab-retos">Retos</TabButton>
           </TabTrigger>
           <TabTrigger name="memoria" href={`/group/${id}/memoria`} asChild>
-            <TabButton>Memoria</TabButton>
+            <TabButton testID="tab-memoria">Memoria</TabButton>
           </TabTrigger>
           <Pressable
+            testID="tour-plus"
             accessibilityRole="button"
             accessibilityLabel="Añadir"
             onPress={() => router.push({ pathname: '/add', params: { groupId: id } })}
@@ -45,6 +58,15 @@ export default function GroupLayout() {
           </Pressable>
         </View>
       </TabList>
+      {touring && (
+        <GuidedTour
+          groupId={id}
+          onClose={() => {
+            markTourSeen();
+            setTouring(false);
+          }}
+        />
+      )}
     </Tabs>
   );
 }

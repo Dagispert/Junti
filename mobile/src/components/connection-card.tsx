@@ -56,7 +56,7 @@ export function ConnectionCard({ group }: { group: Group }) {
   const iMiss = missing.includes(me);
 
   return (
-    <View style={{ gap: Spacing.two }}>
+    <View testID="tour-mapa" style={{ gap: Spacing.two }}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Abrir el mapa del grupo"

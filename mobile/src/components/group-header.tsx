@@ -57,7 +57,9 @@ export function GroupHeader({ group }: { group: Group }) {
               router.push({ pathname: '/group-settings', params: { groupId: group.id } })
             }
           />
-          <Button compact variant="quiet" label="Invitar" onPress={invite} />
+          <View testID="tour-invitar">
+            <Button compact variant="quiet" label="Invitar" onPress={invite} />
+          </View>
         </View>
       </View>
       <Title>{group.name}</Title>

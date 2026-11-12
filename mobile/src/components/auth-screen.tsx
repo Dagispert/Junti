@@ -1,12 +1,15 @@
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { Spacing, useTheme } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
 
 import type { Place } from '@/lib/geo';
+import { hasInvite } from '@/lib/invite';
 
 import { CityPicker } from './city-picker';
+import { LogoMark } from './logo';
+import { Welcome } from './welcome';
 import { type LegalKind, LegalView } from './legal-view';
 import { Button, Field, Lead, Notice, Screen, Title } from './ui';
 
@@ -14,6 +17,8 @@ import { Button, Field, Lead, Notice, Screen, Title } from './ui';
 export function AuthScreen() {
   const { signIn, signUp, sendLoginLink } = useStore();
   const [mode, setMode] = useState<'in' | 'up' | 'link'>('in');
+  // Primero, la bienvenida: qué es Junti. Los botones llevan al formulario.
+  const [welcome, setWelcome] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [notice, setNotice] = useState('');
@@ -44,11 +49,34 @@ export function AuthScreen() {
   };
 
   if (reading) return <LegalView kind={reading} onClose={() => setReading(null)} />;
+  if (welcome) {
+    return (
+      <Welcome
+        invited={hasInvite()}
+        onCreate={() => {
+          setMode('up');
+          setWelcome(false);
+        }}
+        onSignIn={() => {
+          setMode('in');
+          setWelcome(false);
+        }}
+        onLegal={setReading}
+      />
+    );
+  }
 
   return (
     <Screen>
       <View style={{ paddingTop: 72, gap: Spacing.three }}>
-        <Title style={{ fontSize: 48, lineHeight: 54 }}>Junti</Title>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Volver a la bienvenida"
+          onPress={() => setWelcome(true)}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <LogoMark size={52} />
+          <Title style={{ fontSize: 44, lineHeight: 52 }}>Junti</Title>
+        </Pressable>
         <Lead strong="Un espacio privado">
           para seguir formando parte de la vida de quienes quieres.
         </Lead>

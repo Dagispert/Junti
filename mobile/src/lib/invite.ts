@@ -26,6 +26,16 @@ export function rememberInvite() {
   }
 }
 
+/** ¿Hay una invitación esperando? (sin olvidarla) */
+export function hasInvite(): boolean {
+  if (!web) return false;
+  try {
+    return !!localStorage.getItem(KEY);
+  } catch {
+    return false;
+  }
+}
+
 /** La invitación pendiente, si la hay (y la olvida). */
 export function takeInvite(): string | null {
   if (!web) return null;

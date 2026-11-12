@@ -10,6 +10,7 @@ import { useTheme } from '@/constants/theme';
 import { StoreProvider, useStore } from '@/data/store';
 import { rememberInvite, takeInvite } from '@/lib/invite';
 import { setupInstallable } from '@/lib/push';
+import { markIntroDone } from '@/lib/tour';
 
 export default function RootLayout() {
   const dark = useColorScheme() === 'dark';
@@ -30,7 +31,10 @@ export default function RootLayout() {
 function Gate() {
   const { status } = useStore();
   const [intro, setIntro] = useState(true);
-  const endIntro = useCallback(() => setIntro(false), []);
+  const endIntro = useCallback(() => {
+    setIntro(false);
+    markIntroDone();
+  }, []);
   const theme = useTheme();
   // Una invitación que llegó por enlace antes de entrar: se abre al estar dentro.
   useEffect(() => {

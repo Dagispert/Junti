@@ -2,15 +2,19 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
+import { Brand, TAGLINE } from '@/constants/brand';
 import { useStore } from '@/data/store';
 import { progress, useClock } from '@/lib/clock';
 
+import { GlobeMap } from './globe-map';
+import type { GlobePerson } from './globe-map.types';
+import { LogoMark } from './logo';
 import { WorldMap, type MapPerson } from './world-map';
 
 const NIGHT = ['#070A14', '#111830'] as const;
 
-/** Todas las personas de mis grupos que tienen ciudad (sin repetir). */
-export function useAllPeople(): MapPerson[] {
+/** Todas las personas de mis grupos con ciudad, con su foto, para el planeta. */
+export function useAllGlobePeople(): GlobePerson[] {
   const { me, user, groups } = useStore();
   const ids = [...new Set(groups.flatMap((g) => g.memberIds))];
   if (!ids.includes(me)) ids.push(me);
@@ -24,58 +28,62 @@ export function useAllPeople(): MapPerson[] {
       lng: u.lng!,
       tz: u.tz,
       isMe: u.id === me,
+      city: u.city,
+      country: u.country,
+      color: u.color,
+      photo: u.avatarUri,
     }));
 }
 
+/** El cielo claro de la marca, detrás del planeta. */
+export const SKY = ['#FFFFFF', '#EAF6F8', '#D8EEF2'] as const;
+
 /**
- * Entrada de la app: la Tierra se enciende en puntos de luz, aparecen las
- * ciudades de los tuyos y se trazan los hilos entre ellas. Se salta con un toque.
+ * Entrada de la app: nuestro planeta se acerca desde lejos, se trazan los
+ * arcos entre las ciudades de los tuyos y la marca se dibuja sola. Se salta
+ * con un toque.
  */
 export function IntroCinematic({ onDone }: { onDone: () => void }) {
-  const people = useAllPeople();
+  const people = useAllGlobePeople();
   const { height, width } = useWindowDimensions();
-  const t = useClock(true, 3600);
-  const END = 3300;
+  const t = useClock(true, 4600);
+  const END = 4300;
 
   useEffect(() => {
     const id = setTimeout(onDone, END);
     return () => clearTimeout(id);
   }, [onDone]);
 
-  const title = progress(t, 1250, 800);
-  const subtitle = progress(t, 1650, 800);
-  const fadeOut = 1 - progress(t, END - 550, 550);
+  const mark = progress(t, 500, 1300);
+  const title = progress(t, 1300, 700);
+  const subtitle = progress(t, 1900, 700);
+  const fadeOut = 1 - progress(t, END - 500, 500);
+  const globe = Math.min(height * 0.56, width * 1.05);
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Saltar la entrada"
-      onPress={onDone}
-      style={[StyleSheet.absoluteFill, { opacity: fadeOut, zIndex: 100 }]}>
-      <LinearGradient colors={NIGHT} style={StyleSheet.absoluteFill} />
-      <View style={{ position: 'absolute', top: height * 0.16, left: 0, right: 0 }}>
-        <WorldMap
-          people={people}
-          height={Math.min(height * 0.48, width * 0.95)}
-          mode="intro"
-          framed={false}
-        />
+    <View style={[StyleSheet.absoluteFill, { opacity: fadeOut, zIndex: 100 }]}>
+      <LinearGradient colors={SKY} style={StyleSheet.absoluteFill} />
+      <View style={{ position: 'absolute', top: height * 0.3, left: 0, right: 0, height: globe }}>
+        <GlobeMap people={people} height={globe} interactive transparent />
       </View>
-      <View style={[styles.titles, { bottom: height * 0.14 }]}>
+      <View style={[styles.brand, { top: height * 0.09 }]}>
+        <View style={{ transform: [{ scale: 0.6 + mark * 0.4 }], opacity: Math.min(1, mark * 3) }}>
+          <LogoMark size={76} drawn={mark} />
+        </View>
         <Text
-          style={[
-            styles.title,
-            {
-              opacity: title,
-              letterSpacing: 2 + (1 - title) * 10,
-              transform: [{ translateY: (1 - title) * 10 }],
-            },
-          ]}>
+          style={[styles.title, { opacity: title, transform: [{ translateY: (1 - title) * 12 }] }]}>
           Junti
         </Text>
-        <Text style={[styles.subtitle, { opacity: subtitle }]}>Cerca, aunque estéis lejos.</Text>
+        <Text style={[styles.subtitle, { opacity: subtitle }]}>{TAGLINE}</Text>
       </View>
-    </Pressable>
+      {/* Un toque en cualquier sitio la salta. */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Saltar la entrada"
+        onPress={onDone}
+        style={StyleSheet.absoluteFill}
+      />
+    </View>
   );
 }
 
@@ -134,9 +142,10 @@ export function SendCinematic({
 }
 
 const styles = StyleSheet.create({
+  brand: { position: 'absolute', left: 24, right: 24, alignItems: 'center', gap: 4 },
   titles: { position: 'absolute', left: 24, right: 24, alignItems: 'center', gap: 8 },
-  title: { color: '#FBF4E8', fontSize: 54, fontWeight: '500' },
-  subtitle: { color: '#E8C48F', fontSize: 17, textAlign: 'center' },
+  title: { color: Brand.ink, fontSize: 48, fontWeight: '600', letterSpacing: -1 },
+  subtitle: { color: '#686C73', fontSize: 17, textAlign: 'center' },
   sent: {
     color: '#FBF4E8',
     fontSize: 28,
