@@ -2,9 +2,9 @@
 // Borrador redactado a partir de lo que la app hace de verdad. Antes de abrir
 // Junti a personas de fuera conviene que lo revise un profesional.
 //
-// Rellena estos dos datos (aparecen en los textos):
-export const RESPONSIBLE = '[nombre y apellidos de quien gestiona Junti]';
-export const CONTACT = '[correo de contacto]';
+// Quién gestiona Junti y cómo contactar (aparecen en los textos):
+export const RESPONSIBLE = 'FuFūStudio';
+export const CONTACT = 'fufuestudio@gmail.es';
 export const UPDATED = '12 de noviembre de 2026';
 
 export type LegalDoc = {
