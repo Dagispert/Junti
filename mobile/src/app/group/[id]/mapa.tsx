@@ -267,7 +267,8 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     boxShadow: '0 8px 20px rgba(20,22,26,0.12)',
   },
-  bottom: { position: 'absolute', left: 0, right: 0, bottom: 104, gap: 12 },
+  // Pegado abajo (la barra de pestañas va debajo, fuera de esta pantalla): más sitio para el planeta.
+  bottom: { position: 'absolute', left: 0, right: 0, bottom: 10, gap: 10 },
   sheet: {
     marginHorizontal: 12,
     borderRadius: 26,
