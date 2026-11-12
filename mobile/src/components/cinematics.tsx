@@ -54,9 +54,9 @@ export function IntroCinematic({ onDone }: { onDone: () => void }) {
     return () => clearTimeout(id);
   }, [onDone]);
 
-  const mark = progress(t, 500, 1300);
-  const title = progress(t, 1300, 700);
-  const subtitle = progress(t, 1900, 700);
+  const mark = progress(t, 400, 1900);
+  const title = progress(t, 1700, 700);
+  const subtitle = progress(t, 2200, 700);
   const fadeOut = 1 - progress(t, END - 500, 500);
   const globe = Math.min(height * 0.56, width * 1.05);
 

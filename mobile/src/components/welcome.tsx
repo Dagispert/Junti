@@ -109,7 +109,7 @@ export function Welcome({
   const theme = useTheme();
   const { width, height } = useWindowDimensions();
   const t = useClock(true, 3000);
-  const mark = progress(t, 300, 1300);
+  const mark = progress(t, 300, 1800);
   const globe = Math.min(height * 0.46, width * 1.05, 460);
 
   return (

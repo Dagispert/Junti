@@ -4,7 +4,7 @@
 
 ![Animación](logo-animado.gif)
 
-**Idea.** Una «j» minúscula. Su punto es una persona, el final de la curva es otra, y el trazo es lo que las une. Va dentro de un *squircle* (superelipse), como el icono de una app. Solo blanco y negro.
+**Idea.** Vuestro planeta, grabado con líneas horizontales como un linóleo: el grosor de cada línea le da volumen (la luz llega de arriba a la derecha y la otra mitad se va quedando en sombra, como cuando aquí es de día y allí de noche). Un surco recortado une a dos personas que están lejos. Va dentro de un *squircle* (superelipse), como el icono de una app. Solo blanco y negro.
 
 **Archivos**
 
@@ -15,7 +15,7 @@
 | `palabra.svg` | «junti» en Fraunces 600, pasado a trazos |
 | `logo-horizontal.svg` | Icono y palabra juntos |
 
-En la app: `mobile/src/components/logo.tsx` (`LogoMark`, `Wordmark`, `Logo`). Con `drawn` (0–1) se anima: aparece la forma, cae el punto, se traza la curva, aparece el otro punto y entra la palabra.
+En la app: `mobile/src/components/logo.tsx` (`LogoMark`, `Wordmark`, `Logo`). Con `drawn` (0–1) se anima: aparece la forma, las líneas del planeta entran desde la luz una tras otra, aparece una persona, el surco viaja hasta la otra y entra la palabra. Las líneas se generan con un pequeño cálculo de luz sobre una esfera (12 franjas, radio 20 en una cuadrícula de 64).
 
 **Lema.** *Cerca, aunque estéis lejos.*
 
@@ -23,6 +23,6 @@ En la app: `mobile/src/components/logo.tsx` (`LogoMark`, `Wordmark`, `Logo`). Co
 
 **Tipografía.** Fraunces solo para la palabra «junti»; la del sistema para la interfaz; Caveat (a mano) para notas y subtítulos de la narradora.
 
-**Movimiento.** Una sola curva suave, sin rebotes. Las animaciones cuentan algo: el planeta que se acerca, el hilo que se dibuja, la j que se traza.
+**Movimiento.** Una sola curva suave, sin rebotes. Las animaciones cuentan algo: el planeta que se acerca, el hilo que se dibuja, el planeta que se enciende línea a línea.
 
 Los iconos de la app (`mobile/public/icon-*.png`, `apple-touch-icon.png`, `logo.svg`, `assets/images/icon.png` y `favicon.png`) salen de `icono-negro.svg`.
