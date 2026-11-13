@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { feature, mesh } from 'topojson-client';
 import type { GeometryCollection, Topology } from 'topojson-specification';
 
-import { localHour, skyPhase } from '@/lib/geo';
+import { localHour, skyPhase, subsolarPoint } from '@/lib/geo';
 
 import type { GlobeMapProps, GlobeMemory, GlobePerson } from './globe-map.types';
 
@@ -573,51 +573,55 @@ function softTexture(inner: string, outer: string) {
 }
 
 /**
- * Nubes esponjosas: cada una, un racimo de manchas suaves (más blancas
- * arriba, algo grises abajo) y su sombra leve sobre el suelo.
+ * Nubes de algodón: un racimo de bolas lisas (ni facetadas ni borrosas), más
+ * blancas arriba y algo grises abajo, con su sombra leve sobre el suelo.
  */
 function makeClouds(n: number) {
   const group = new THREE.Group();
-  const puffTex = softTexture('rgba(255,255,255,1)', 'rgba(255,255,255,0)');
   const shadowTex = softTexture('rgba(20,50,60,0.5)', 'rgba(20,50,60,0)');
-  const top = new THREE.SpriteMaterial({
-    map: puffTex,
-    transparent: true,
-    depthWrite: false,
-    opacity: 0.95,
+  // Un poco de luz propia: de noche siguen pareciendo nubes, no manchas oscuras.
+  const top = new THREE.MeshStandardMaterial({
+    color: '#FFFFFF',
+    roughness: 1,
+    metalness: 0,
+    emissive: '#8E9BB5',
+    emissiveIntensity: 0.45,
   });
-  const low = new THREE.SpriteMaterial({
-    map: puffTex,
-    transparent: true,
-    depthWrite: false,
-    opacity: 0.9,
-    color: '#E6EEF2',
+  const low = new THREE.MeshStandardMaterial({
+    color: '#E3EAF0',
+    roughness: 1,
+    metalness: 0,
+    emissive: '#7A879F',
+    emissiveIntensity: 0.4,
   });
   const shadowMat = new THREE.MeshBasicMaterial({
     map: shadowTex,
     transparent: true,
     depthWrite: false,
-    opacity: 0.35,
+    opacity: 0.3,
   });
+  const ball = new THREE.SphereGeometry(1, 18, 12);
   const shadowGeo = new THREE.CircleGeometry(0.1, 24);
   const height = R * 1.11;
   let seed = 3;
   const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   for (let i = 0; i < n; i++) {
     const cloud = new THREE.Group();
-    const puffs = 10 + Math.floor(rand() * 7);
-    const long = 0.09 + rand() * 0.08;
+    const puffs = 5 + Math.floor(rand() * 4);
+    const long = 0.05 + rand() * 0.04;
     for (let j = 0; j < puffs; j++) {
       const k = j / (puffs - 1) - 0.5;
-      const up = rand() * 0.03;
-      const sp = new THREE.Sprite(up > 0.01 ? top : low);
-      sp.position.set(k * long * 2 + (rand() - 0.5) * 0.03, up, (rand() - 0.5) * 0.05);
-      sp.scale.setScalar(0.075 + rand() * 0.06 + (1 - Math.abs(k) * 2) * 0.05);
-      cloud.add(sp);
+      const middle = 1 - Math.abs(k) * 2;
+      const r = 0.018 + middle * 0.016 + rand() * 0.008;
+      const up = middle * 0.012 + rand() * 0.006;
+      const m = new THREE.Mesh(ball, up > 0.008 ? top : low);
+      m.position.set(k * long * 2, up, (rand() - 0.5) * 0.025);
+      m.scale.set(r * 1.15, r * 0.85, r);
+      cloud.add(m);
     }
     const shadow = new THREE.Mesh(shadowGeo, shadowMat);
     shadow.rotation.x = -Math.PI / 2;
-    shadow.scale.set(1.6 + long * 7, 1.2, 1);
+    shadow.scale.set(1 + long * 8, 0.8, 1);
     shadow.position.y = -(height - R * 1.003);
     cloud.add(shadow);
     const lat = (rand() * 2 - 1) * 65;
@@ -775,10 +779,13 @@ export function GlobeMap({
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
-    scene.add(new THREE.HemisphereLight('#FFFFFF', '#6E9AA8', 1.25));
-    const sun = new THREE.DirectionalLight('#FFF3DC', 1.9);
-    sun.position.set(-3, 3, 4);
+    // La luz es la del sol de verdad: se ve dónde es de día y dónde de noche.
+    // La parte de noche queda azulada y en penumbra, pero se sigue leyendo.
+    scene.add(new THREE.HemisphereLight('#B8CCFF', '#22325A', 0.8));
+    const sun = new THREE.DirectionalLight('#FFF1D6', 2.7);
     scene.add(sun);
+    const sunDir = new THREE.Vector3();
+    let sunAt = 0;
 
     const world = new THREE.Group();
     world.rotation.order = 'XYZ';
@@ -1102,9 +1109,16 @@ export function GlobeMap({
       }
 
       world.rotation.set(view.pitch, view.yaw, 0);
+      // El sol, sobre el punto de la Tierra donde ahora es mediodía (se recalcula cada minuto).
+      if (now - sunAt > 60_000 || !sunAt) {
+        sunAt = now;
+        const ss = subsolarPoint();
+        sunDir.copy(toVec(ss.lat, ss.lng, 1));
+      }
+      sun.position.copy(sunDir).applyEuler(world.rotation).multiplyScalar(10);
       clouds.rotation.y = t * 0.02;
       // De cerca, las nubes se interpondrían entre la cámara y el suelo.
-      clouds.visible = view.dist > 1.95;
+      clouds.visible = view.dist > 2.25;
       // En vertical el campo de visión horizontal es estrecho: se aleja la cámara para que quepa.
       const fit = Math.max(1, 1.35 / camera.aspect);
       camera.position.set(
