@@ -14,9 +14,12 @@ import { Hand, Radius, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import { distanceKm, formatKm } from '@/lib/geo';
 import { clockIn } from '@/lib/time';
+import { useWeather } from '@/lib/weather';
 
 import { Missing } from './index';
-import { ChevronLeft, MapPin, Users, type LucideIcon } from 'lucide-react-native';
+import { ChevronLeft, MapPin, SunMoon, Users, type LucideIcon } from 'lucide-react-native';
+
+const DAYLIGHT_KEY = 'junti-dia-y-noche';
 
 type Period = 'all' | 'year' | 'month';
 const PERIODS: { key: Period; label: string }[] = [
@@ -43,6 +46,22 @@ export default function MapScreen() {
   const showMemories = layer === 'memories';
   const [period, setPeriod] = useState<Period>('all');
   const [picked, setPicked] = useState<string[]>([]);
+  // Día y noche reales, o todo de día. Se recuerda en este dispositivo.
+  const [daylight, setDaylightState] = useState(() => {
+    try {
+      return globalThis.localStorage?.getItem(DAYLIGHT_KEY) !== '0';
+    } catch {
+      return true;
+    }
+  });
+  const setDaylight = (on: boolean) => {
+    setDaylightState(on);
+    try {
+      globalThis.localStorage?.setItem(DAYLIGHT_KEY, on ? '1' : '0');
+    } catch {
+      // sin almacenamiento: solo para esta vez
+    }
+  };
   if (!group) return <Missing />;
 
   const since =
@@ -88,6 +107,7 @@ export default function MapScreen() {
       {/* Sin fondo propio: el del planeta se cortaba al llegar a la barra de abajo. */}
       <GlobeMap
         transparent
+        daylight={daylight}
         people={people}
         focusId={focus}
         onSelect={(pid) => {
@@ -147,6 +167,7 @@ export default function MapScreen() {
           )}
           {showMemories &&
             PERIODS.map((p) => chip(period === p.key, p.label, () => setPeriod(p.key)))}
+          {chip(daylight, 'Día y noche', () => setDaylight(!daylight), SunMoon)}
         </ScrollView>
         {showMemories && placed.length === 0 && (
           <View style={[styles.tip, { backgroundColor: theme.card }]}>
@@ -227,7 +248,7 @@ export default function MapScreen() {
                   <Text style={{ color: theme.text, fontSize: 15, fontWeight: '600' }}>
                     {p.id === me ? 'Tú' : p.name.split(' ')[0]}
                   </Text>
-                  <Text style={{ color: theme.textSecondary, fontSize: 13 }}>{p.city}</Text>
+                  <CityWeather city={p.city} lat={p.lat} lng={p.lng} />
                 </View>
               </Pressable>
             ))}
@@ -241,6 +262,28 @@ export default function MapScreen() {
           </ScrollView>
         )}
       </View>
+    </View>
+  );
+}
+
+/** La ciudad y el tiempo que hace allí ahora (si se sabe). */
+function CityWeather({ city, lat, lng }: { city?: string; lat: number; lng: number }) {
+  const theme = useTheme();
+  const weather = useWeather(lat, lng);
+  return (
+    <View
+      style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+      accessibilityLabel={`${city ?? ''}${weather ? `, ${weather.label}, ${weather.temp} grados` : ''}`}>
+      <Text style={{ color: theme.textSecondary, fontSize: 13 }}>{city}</Text>
+      {weather && (
+        <>
+          <Text style={{ color: theme.textSecondary, fontSize: 13 }}>·</Text>
+          <Icon icon={weather.icon} size={14} color={theme.text} />
+          <Text style={{ color: theme.text, fontSize: 13, fontVariant: ['tabular-nums'] }}>
+            {weather.temp}°
+          </Text>
+        </>
+      )}
     </View>
   );
 }

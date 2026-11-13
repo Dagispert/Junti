@@ -37,4 +37,6 @@ export type GlobeMapProps = {
   distScale?: number;
   /** Desplaza el planeta en vertical (fracción del alto; negativo = más arriba). */
   shiftY?: number;
+  /** true (por defecto): la luz del sol de verdad, con día y noche. false: todo de día. */
+  daylight?: boolean;
 };

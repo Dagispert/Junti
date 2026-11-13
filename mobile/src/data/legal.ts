@@ -67,7 +67,7 @@ export const PRIVACY: LegalDoc = {
         'Google (Gemini), solo para la narradora y solo si está activada.',
         'GitHub Pages, que sirve la versión web de la app (no recibe tus datos de Junti).',
         'Servicios de avisos de tu navegador o teléfono (Apple, Google o Mozilla), que reciben el aviso para entregártelo.',
-        'Para buscar ciudades y canciones, la app consulta directamente servicios públicos (Open-Meteo y el catálogo de iTunes de Apple) con lo que escribes en el buscador, sin datos de tu cuenta.',
+        'Para buscar ciudades y canciones, la app consulta directamente servicios públicos (Open-Meteo y el catálogo de iTunes de Apple) con lo que escribes en el buscador, sin datos de tu cuenta. Para enseñar el tiempo que hace en la ciudad de cada miembro, consulta a Open-Meteo solo con las coordenadas de esa ciudad, sin nombres ni datos de nadie.',
       ],
     },
     {
