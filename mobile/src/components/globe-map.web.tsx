@@ -912,7 +912,20 @@ export function GlobeMap({
         for (let j = i + 1; j < people.length; j++)
           if (people.length <= 4 || people[i] === me || people[j] === me)
             pairs.push([people[i], people[j]]);
-      const at = (p: GlobePerson) => proj([p.lng, p.lat]) ?? [0, 0];
+      // Dónde va cada uno; si dos quedan tan cerca que se tapan, se apartan un poco.
+      const spot = new Map<string, [number, number]>();
+      for (const p of people) {
+        let [x, y] = proj([p.lng, p.lat]) ?? [0, 0];
+        for (let k = 0; k < 6; k++) {
+          const near = [...spot.values()].find(([a, b]) => Math.hypot(a - x, b - y) < 58);
+          if (!near) break;
+          const ang = Math.atan2(y - near[1], x - near[0]) || 0;
+          x = near[0] + Math.cos(ang) * 60;
+          y = near[1] + Math.sin(ang) * 60;
+        }
+        spot.set(p.id, [x, y]);
+      }
+      const at = (p: GlobePerson) => spot.get(p.id) ?? [0, 0];
       const lines = pairs
         .map(([a, b]) => {
           const [x1, y1] = at(a);
@@ -924,10 +937,15 @@ export function GlobeMap({
         <g class="jc-land">${fills}</g>
         <path d="${path(reg.lines as never) ?? ''}" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1.1" stroke-dasharray="3 4"/>
         ${lines}${labels}</svg>`;
+      const placedKm: [number, number][] = [];
       for (const [a, b] of pairs) {
         const [x1, y1] = at(a);
         const [x2, y2] = at(b);
         if (Math.hypot(x2 - x1, y2 - y1) < 110) continue; // muy juntos: la cifra taparía las caras
+        const mx = (x1 + x2) / 2;
+        const my = (y1 + y2) / 2;
+        if (placedKm.some(([a, b]) => Math.abs(a - mx) < 70 && Math.abs(b - my) < 26)) continue;
+        placedKm.push([mx, my]);
         const km = document.createElement('div');
         km.className = 'jc-km';
         km.textContent = formatKm(distanceKm(a, b));
