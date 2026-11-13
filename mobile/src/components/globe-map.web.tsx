@@ -1,11 +1,18 @@
-import { geoContains, geoEquirectangular, geoPath } from 'd3-geo';
-import type { FeatureCollection, Geometry } from 'geojson';
+import {
+  geoCentroid,
+  geoContains,
+  geoDistance,
+  geoEquirectangular,
+  geoMercator,
+  geoPath,
+} from 'd3-geo';
+import type { Feature, FeatureCollection, Geometry } from 'geojson';
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { feature, mesh } from 'topojson-client';
 import type { GeometryCollection, Topology } from 'topojson-specification';
 
-import { localHour, skyPhase, subsolarPoint } from '@/lib/geo';
+import { distanceKm, formatKm, localHour, skyPhase, subsolarPoint } from '@/lib/geo';
 
 import type { GlobeMapProps, GlobeMemory, GlobePerson } from './globe-map.types';
 
@@ -59,16 +66,31 @@ function loadWorld(): Promise<World> {
   return worldPromise;
 }
 
-// Provincias (o estados, regiones…) de un país: solo las líneas que las
-// separan. Se descargan solo para los países donde vive alguien del grupo.
-type Lines = { type: 'MultiLineString'; coordinates: [number, number][][] };
-const regionCache = new Map<string, Promise<Lines | null>>();
-function loadRegions(id: string): Promise<Lines | null> {
+// Provincias (o estados, regiones…) de un país, con su nombre. Se descargan
+// solo para los países donde vive alguien del grupo: sus líneas se dibujan al
+// acercarse, y sus formas, en el «modo país».
+type Lines = ReturnType<typeof mesh>;
+type Province = { name: string; feature: Feature<Geometry, { nombre?: string }> };
+type Regions = { lines: Lines; provinces: Province[] };
+const regionCache = new Map<string, Promise<Regions | null>>();
+function loadRegions(id: string): Promise<Regions | null> {
   if (!regionCache.has(id)) {
     regionCache.set(
       id,
       fetch(`${BASE}/regiones/${id}.json`)
-        .then((r) => (r.ok ? (r.json() as Promise<Lines>) : null))
+        .then((r) => (r.ok ? (r.json() as Promise<Topology>) : null))
+        .then((topo) => {
+          const obj = topo?.objects.regiones as GeometryCollection<{ nombre?: string }> | undefined;
+          if (!topo || !obj) return null;
+          const fc = feature(topo, obj) as unknown as FeatureCollection<
+            Geometry,
+            { nombre?: string }
+          >;
+          return {
+            lines: mesh(topo, obj, (a, b) => a !== b),
+            provinces: fc.features.map((f) => ({ name: f.properties?.nombre ?? '', feature: f })),
+          };
+        })
         .catch(() => null),
     );
   }
@@ -305,6 +327,19 @@ const CSS = `
   font:700 12px Inter,system-ui,sans-serif;display:flex;align-items:center;justify-content:center;border:2px solid #fff}
 .jclu-label{margin-top:4px;white-space:nowrap;background:rgba(255,255,255,.94);color:#1D1F22;font:600 11px Inter,system-ui,sans-serif;
   padding:2px 9px;border-radius:999px;box-shadow:0 3px 10px rgba(20,40,30,.18)}
+.jglobe canvas{transition:opacity .45s}
+.jcountry{position:absolute;inset:0;opacity:0;transform:scale(.94);transition:opacity .45s,transform .7s cubic-bezier(.2,.8,.2,1);touch-action:none}
+.jcountry.on{opacity:1;transform:none}
+.jc-land{filter:drop-shadow(0 18px 28px rgba(30,70,60,.22))}
+.jc-prov{transition:fill .3s}
+.jc-label{font:600 11px Inter,system-ui,sans-serif;fill:#3F5320;paint-order:stroke;stroke:#F4FAE6;stroke-width:3px;stroke-linejoin:round;text-anchor:middle}
+.jc-km{position:absolute;left:0;top:0;white-space:nowrap;background:#fff;color:#C2571B;font:600 11px Inter,system-ui,sans-serif;
+  padding:2px 8px;border-radius:999px;box-shadow:0 4px 12px rgba(20,40,30,.16)}
+.jc-head{position:absolute;left:0;right:0;display:flex;flex-direction:column;align-items:center;gap:4px;font-family:Inter,system-ui,sans-serif;pointer-events:none}
+.jc-title{font:600 22px Inter,system-ui,sans-serif;color:#1D1F22;letter-spacing:-.4px}
+.jc-sub{font:500 12px Inter,system-ui,sans-serif;color:#6B7076}
+.jc-back{pointer-events:auto;margin-top:6px;border:0;background:#fff;color:#1D1F22;font:600 13px Inter,system-ui,sans-serif;padding:8px 14px;
+  border-radius:999px;box-shadow:0 6px 16px rgba(20,22,26,.14);cursor:pointer}
 @keyframes jmem-pop{0%{opacity:0;transform:translate(-50%,-100%) scale(.6)}100%{opacity:1;transform:translate(-50%,-100%) scale(1)}}
 .jmem{position:absolute;left:0;top:0;cursor:pointer;will-change:transform,opacity;transition:opacity .25s}
 .jmem-in{transform:translate(-50%,-50%);animation:jmem-in .7s cubic-bezier(.2,1.6,.4,1) both;animation-delay:var(--d,0s)}
@@ -771,6 +806,10 @@ export function GlobeMap({
     let homeKey = '';
     let homeSet = new Set<string>();
     let regionLines: Lines[] = [];
+    const regionData = new Map<string, Regions>();
+    // «Modo país»: el país en plano, ajustado a la pantalla, con sus provincias.
+    let country: { id: string; el: HTMLDivElement; people: GlobePerson[] } | null = null;
+    let countryArmed = true; // tras salir, no se vuelve a entrar hasta alejarse un poco
     // Grupos de personas que se pisan en pantalla.
     const clusters = new Map<string, HTMLDivElement>();
     // Parche de alta resolución para cuando la cámara se acerca.
@@ -808,6 +847,168 @@ export function GlobeMap({
       target.pitch = Math.max(-0.9, Math.min(0.9, f.pitch * (c.spread < 0.5 ? 1 : 0.8)));
       target.dist = fitDist(c.spread);
     }
+    /** El país (con provincias cargadas) que hay en un punto, si lo hay. */
+    function countryAt(lat: number, lng: number): string | null {
+      if (!worldData) return null;
+      for (const f of worldData.countries.features) {
+        const id = String(f.id ?? f.properties?.name);
+        if (regionData.has(id) && geoContains(f as never, [lng, lat])) return id;
+      }
+      return null;
+    }
+    /** Entrar en el país: en plano, ajustado a la pantalla, con sus provincias. */
+    function enterCountry(id: string) {
+      const reg = regionData.get(id);
+      const shape = worldData?.countries.features.find(
+        (f) => String(f.id ?? f.properties?.name) === id,
+      );
+      if (!reg || !shape) return;
+      const w = root.clientWidth;
+      const h = root.clientHeight;
+      const people = peopleRef.current.filter((p) => geoContains(shape as never, [p.lng, p.lat]));
+      const box = { top: h * 0.27, bottom: h * 0.2 };
+      const where = (p: GlobePerson) =>
+        reg.provinces.find((x) => geoContains(x.feature as never, [p.lng, p.lat]));
+      const homes = new Set(people.map(where).filter(Boolean));
+      // Se encuadra la parte principal del país: las islas o territorios lejanos
+      // (Canarias, Alaska…) solo entran si vive alguien allí.
+      const centers = reg.provinces.map((x) => geoCentroid(x.feature as never));
+      const mid: [number, number] = [
+        [...centers.map((c) => c[0])].sort((a, b) => a - b)[centers.length >> 1],
+        [...centers.map((c) => c[1])].sort((a, b) => a - b)[centers.length >> 1],
+      ];
+      const far = centers.map((c) => geoDistance(c, mid));
+      const typical = [...far].sort((a, b) => a - b)[far.length >> 1] || 0.01;
+      const shown = reg.provinces.filter((x, i) => far[i] <= typical * 2.6 || homes.has(x));
+      const all = { type: 'FeatureCollection', features: shown.map((x) => x.feature) };
+      const proj = geoMercator().fitExtent(
+        [
+          [22, box.top],
+          [w - 22, h - box.bottom],
+        ],
+        all as never,
+      );
+      // Lo que queda fuera del recuadro (islas lejanas sin nadie) no se dibuja.
+      proj.clipExtent([
+        [0, box.top - 30],
+        [w, h - box.bottom + 30],
+      ]);
+      const path = geoPath(proj);
+      const esc = (t: string) => t.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+
+      const el = document.createElement('div');
+      el.className = 'jcountry';
+      const fills = shown
+        .map(
+          (x) =>
+            `<path class="jc-prov" d="${path(x.feature as never) ?? ''}" fill="${homes.has(x) ? '#E1F0A8' : PAL.home}"/>`,
+        )
+        .join('');
+      const labels = '';
+      // Lo que os separa dentro del país: líneas y kilómetros.
+      const me = people.find((p) => p.isMe);
+      const pairs: [GlobePerson, GlobePerson][] = [];
+      for (let i = 0; i < people.length; i++)
+        for (let j = i + 1; j < people.length; j++)
+          if (people.length <= 4 || people[i] === me || people[j] === me)
+            pairs.push([people[i], people[j]]);
+      const at = (p: GlobePerson) => proj([p.lng, p.lat]) ?? [0, 0];
+      const lines = pairs
+        .map(([a, b]) => {
+          const [x1, y1] = at(a);
+          const [x2, y2] = at(b);
+          return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#FF8A3D" stroke-width="2" stroke-linecap="round" stroke-dasharray="0.1 7"/>`;
+        })
+        .join('');
+      el.innerHTML = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="position:absolute;inset:0">
+        <g class="jc-land">${fills}</g>
+        <path d="${path(reg.lines as never) ?? ''}" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1.1" stroke-dasharray="3 4"/>
+        ${lines}${labels}</svg>`;
+      for (const [a, b] of pairs) {
+        const [x1, y1] = at(a);
+        const [x2, y2] = at(b);
+        if (Math.hypot(x2 - x1, y2 - y1) < 110) continue; // muy juntos: la cifra taparía las caras
+        const km = document.createElement('div');
+        km.className = 'jc-km';
+        km.textContent = formatKm(distanceKm(a, b));
+        km.style.transform = `translate(${(x1 + x2) / 2}px, ${(y1 + y2) / 2}px) translate(-50%, -50%)`;
+        el.appendChild(km);
+      }
+      people.forEach((p, i) => {
+        const pin = pinElement(p, i, () => pin.classList.toggle('is-focus'));
+        pin.dataset.id = p.id;
+        const [x, y] = at(p);
+        pin.style.transform = `translate(${x}px, ${y}px)`;
+        pin.style.zIndex = '5';
+        el.appendChild(pin);
+      });
+      const head = document.createElement('div');
+      head.className = 'jc-head';
+      const [[, mapTop]] = path.bounds(all as never);
+      head.style.top = `${Math.max(box.top - 96, Math.min(mapTop - 104, h * 0.5))}px`;
+      const name = people.find((p) => p.country)?.country ?? shape.properties?.name ?? '';
+      const nProv = homes.size;
+      head.innerHTML = `<div class="jc-title">${esc(name)}</div><div class="jc-sub">${people.length} ${
+        people.length === 1 ? 'persona' : 'personas'
+      }${nProv ? ` · ${nProv} ${nProv === 1 ? 'provincia' : 'provincias'}` : ''}</div>`;
+      const back = document.createElement('button');
+      back.className = 'jc-back';
+      back.textContent = 'Volver al planeta';
+      back.addEventListener('click', (e) => {
+        e.stopPropagation();
+        exitCountry();
+      });
+      head.appendChild(back);
+      el.appendChild(head);
+      // Alejar (rueda o pellizco) devuelve al planeta.
+      const touches = new Map<number, { x: number; y: number }>();
+      let start = 0;
+      el.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        if (e.deltaY > 8) exitCountry();
+      });
+      el.addEventListener('pointerdown', (e) => {
+        touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (touches.size === 2) {
+          const [a, b] = [...touches.values()];
+          start = Math.hypot(a.x - b.x, a.y - b.y);
+        }
+      });
+      el.addEventListener('pointermove', (e) => {
+        if (!touches.has(e.pointerId)) return;
+        touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (touches.size === 2 && start) {
+          const [a, b] = [...touches.values()];
+          if (Math.hypot(a.x - b.x, a.y - b.y) < start * 0.8) exitCountry();
+        }
+      });
+      const up = (e: PointerEvent) => {
+        touches.delete(e.pointerId);
+        if (touches.size < 2) start = 0;
+      };
+      el.addEventListener('pointerup', up);
+      el.addEventListener('pointercancel', up);
+      root.appendChild(el);
+      requestAnimationFrame(() => el.classList.add('on'));
+      renderer.domElement.style.opacity = '0';
+      pinLayer.style.opacity = '0';
+      dof.style.display = 'none';
+      dofLevel = -1;
+      country = { id, el, people };
+    }
+    function exitCountry() {
+      if (!country) return;
+      const el = country.el;
+      el.classList.remove('on');
+      setTimeout(() => el.remove(), 500);
+      country = null;
+      countryArmed = false;
+      renderer.domElement.style.opacity = '1';
+      pinLayer.style.opacity = '1';
+      target.dist = 1.85;
+      lastTouch = performance.now();
+    }
+
     /** Acercarse a un grupo de personas para verlas por separado. */
     function zoomTo(list: GlobePerson[]) {
       const c = centerOf(list);
@@ -860,7 +1061,9 @@ export function GlobeMap({
       // Las provincias de esos países, para cuando se acerque la cámara.
       Promise.all([...homes].map(loadRegions)).then((list) => {
         if (disposed || homeKey !== k) return;
-        regionLines = list.filter((x): x is Lines => !!x);
+        regionData.clear();
+        [...homes].forEach((id, i) => list[i] && regionData.set(id, list[i]!));
+        regionLines = list.filter((x): x is Regions => !!x).map((x) => x.lines);
         detailAt = { lat: 999, lng: 999, span: 0 };
       });
       const size = Math.min(4096, renderer.capabilities.maxTextureSize);
@@ -931,6 +1134,15 @@ export function GlobeMap({
         if (!focused) aimOverview();
       },
       focus: (id) => {
+        if (country) {
+          // Dentro del país: si la persona está aquí, se destaca; si no, se sale.
+          const here = country.people.some((p) => p.id === id);
+          country.el
+            .querySelectorAll<HTMLElement>('.jpin')
+            .forEach((el) => el.classList.toggle('is-focus', el.dataset.id === id));
+          if (here || id === null) return;
+          exitCountry();
+        }
         focused = id;
         pins.forEach((p) => p.el.classList.toggle('is-focus', p.id === id));
         const p = peopleRef.current.find((x) => x.id === id);
@@ -1005,6 +1217,7 @@ export function GlobeMap({
       const w = root.clientWidth;
       const h = root.clientHeight;
       if (!w || !h) return; // pantalla oculta: no se dibuja
+      if (country) return; // en el modo país, el planeta descansa
       const shift = frameRef.current.shiftY;
       if (
         renderer.domElement.width !== Math.round(w * renderer.getPixelRatio()) ||
@@ -1094,6 +1307,20 @@ export function GlobeMap({
       );
       camera.lookAt(0, 0, 0);
       world.updateMatrixWorld();
+
+      // Muy cerca de un país con provincias: se entra en el modo país.
+      if (interactive && worldData) {
+        if (view.dist > 1.6) countryArmed = true;
+        if (countryArmed && view.dist < 1.42 && target.dist < 1.42 && pointers.size === 0) {
+          let clng = (Math.PI / 2 - view.yaw) / DEG - 180;
+          clng = ((((clng + 180) % 360) + 360) % 360) - 180;
+          const id = countryAt(view.pitch / DEG, clng);
+          if (id) {
+            enterCountry(id);
+            return;
+          }
+        }
+      }
 
       const level = Math.round(Math.max(0, Math.min(1, (2.7 - view.dist) / 1.2)) * 10) / 10;
       if (level !== dofLevel) {
@@ -1298,6 +1525,7 @@ export function GlobeMap({
         (Array.isArray(mat) ? mat : mat ? [mat] : []).forEach((m) => m.dispose());
       });
       earthMat.map?.dispose();
+      country?.el.remove();
       renderer.dispose();
       root.innerHTML = '';
       api.current = null;
