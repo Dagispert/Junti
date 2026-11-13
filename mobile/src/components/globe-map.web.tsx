@@ -448,7 +448,13 @@ function clusterElement(list: GlobePerson[], onTap: () => void) {
   el.className = 'jclu';
   el.setAttribute('role', 'button');
   const countries = [...new Set(list.map((p) => p.country).filter(Boolean))];
-  const where = countries.length === 1 ? countries[0] : (list[0].city ?? '');
+  // Un país, o dos («España y Alemania»); si son más, sin nombre.
+  const where =
+    countries.length === 1
+      ? countries[0]
+      : countries.length === 2
+        ? `${countries[0]} y ${countries[1]}`
+        : '';
   el.setAttribute('aria-label', `${list.length} personas${where ? ` en ${where}` : ''}. Acercar`);
   const inner = document.createElement('div');
   inner.className = 'jclu-in';
@@ -475,7 +481,7 @@ function clusterElement(list: GlobePerson[], onTap: () => void) {
   }
   const label = document.createElement('div');
   label.className = 'jclu-label';
-  label.textContent = `${where || 'Aquí'} · ${list.length}`;
+  label.textContent = where ? `${where} · ${list.length}` : `${list.length} personas`;
   inner.append(faces, label);
   el.appendChild(inner);
   el.addEventListener('pointerdown', (e) => e.stopPropagation());
