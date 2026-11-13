@@ -59,6 +59,22 @@ function loadWorld(): Promise<World> {
   return worldPromise;
 }
 
+// Provincias (o estados, regiones…) de un país: solo las líneas que las
+// separan. Se descargan solo para los países donde vive alguien del grupo.
+type Lines = { type: 'MultiLineString'; coordinates: [number, number][][] };
+const regionCache = new Map<string, Promise<Lines | null>>();
+function loadRegions(id: string): Promise<Lines | null> {
+  if (!regionCache.has(id)) {
+    regionCache.set(
+      id,
+      fetch(`${BASE}/regiones/${id}.json`)
+        .then((r) => (r.ok ? (r.json() as Promise<Lines>) : null))
+        .catch(() => null),
+    );
+  }
+  return regionCache.get(id)!;
+}
+
 /** Posición en la esfera, coherente con cómo three.js envuelve la textura. */
 function toVec(lat: number, lng: number, r = R) {
   const phi = (lng + 180) * DEG;
@@ -182,7 +198,13 @@ function paintTexture(world: World, homeIds: Set<string>, size: number) {
  * al ampliar un país no se vea borroso.
  */
 type Region = { lat0: number; lat1: number; lng0: number; lng1: number };
-function makeDetail(world: World, homeIds: Set<string>, r: Region, maxTex: number) {
+function makeDetail(
+  world: World,
+  homeIds: Set<string>,
+  r: Region,
+  maxTex: number,
+  regions: Lines[],
+) {
   const spanLng = r.lng1 - r.lng0;
   const spanLat = r.lat1 - r.lat0;
   const W = Math.min(2048, maxTex);
@@ -197,7 +219,24 @@ function makeDetail(world: World, homeIds: Set<string>, r: Region, maxTex: numbe
     .translate([-r.lng0 * DEG * s, r.lat1 * DEG * s]);
   // Grosor de líneas: algo más finas, en proporción, que en el mundo entero.
   const ppd = W / spanLng;
-  paintMap(ctx, world, homeIds, proj, W, H, Math.min(3, (ppd / (4096 / 360)) * 0.45));
+  const kk = Math.min(3, (ppd / (4096 / 360)) * 0.45);
+  paintMap(ctx, world, homeIds, proj, W, H, kk);
+  // De cerca, las provincias del país de cada uno: líneas finas y discretas.
+  if (regions.length && r.lat1 - r.lat0 <= 40) {
+    const path = geoPath(proj, ctx);
+    ctx.save();
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    ctx.lineWidth = Math.max(1.2, 1.6 * kk);
+    ctx.setLineDash([2.5 * kk + 2, 3 * kk + 3]);
+    for (const g of regions) {
+      ctx.beginPath();
+      path(g as never);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
   // Bordes que se difuminan: el parche se funde con el resto del planeta.
   ctx.globalCompositeOperation = 'destination-in';
   const fade = Math.min(W, H) * 0.18;
@@ -508,26 +547,79 @@ function makeHouse(lat: number, lng: number, color: string) {
   return g;
 }
 
+/** Una mancha suave (blanca o de sombra) para las nubes. */
+function softTexture(inner: string, outer: string) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d')!;
+  const grad = g.createRadialGradient(64, 64, 4, 64, 64, 64);
+  grad.addColorStop(0, inner);
+  grad.addColorStop(
+    0.55,
+    inner.replace(/[\d.]+\)$/, (a) => `${parseFloat(a) * 0.6})`),
+  );
+  grad.addColorStop(1, outer);
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 128, 128);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+/**
+ * Nubes esponjosas: cada una, un racimo de manchas suaves (más blancas
+ * arriba, algo grises abajo) y su sombra leve sobre el suelo.
+ */
 function makeClouds(n: number) {
   const group = new THREE.Group();
-  const mat = new THREE.MeshStandardMaterial({ color: '#FFFFFF', flatShading: true, roughness: 1 });
-  const geo = new THREE.IcosahedronGeometry(0.035, 1);
+  const puffTex = softTexture('rgba(255,255,255,1)', 'rgba(255,255,255,0)');
+  const shadowTex = softTexture('rgba(20,50,60,0.5)', 'rgba(20,50,60,0)');
+  const top = new THREE.SpriteMaterial({
+    map: puffTex,
+    transparent: true,
+    depthWrite: false,
+    opacity: 0.95,
+  });
+  const low = new THREE.SpriteMaterial({
+    map: puffTex,
+    transparent: true,
+    depthWrite: false,
+    opacity: 0.9,
+    color: '#E6EEF2',
+  });
+  const shadowMat = new THREE.MeshBasicMaterial({
+    map: shadowTex,
+    transparent: true,
+    depthWrite: false,
+    opacity: 0.35,
+  });
+  const shadowGeo = new THREE.CircleGeometry(0.1, 24);
+  const height = R * 1.11;
   let seed = 3;
   const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   for (let i = 0; i < n; i++) {
     const cloud = new THREE.Group();
-    const puffs = 3 + Math.floor(rand() * 3);
+    const puffs = 10 + Math.floor(rand() * 7);
+    const long = 0.09 + rand() * 0.08;
     for (let j = 0; j < puffs; j++) {
-      const p = new THREE.Mesh(geo, mat);
-      p.position.set((j - puffs / 2) * 0.035, rand() * 0.015, (rand() - 0.5) * 0.03);
-      p.scale.setScalar(0.8 + rand() * 0.7);
-      cloud.add(p);
+      const k = j / (puffs - 1) - 0.5;
+      const up = rand() * 0.03;
+      const sp = new THREE.Sprite(up > 0.01 ? top : low);
+      sp.position.set(k * long * 2 + (rand() - 0.5) * 0.03, up, (rand() - 0.5) * 0.05);
+      sp.scale.setScalar(0.075 + rand() * 0.06 + (1 - Math.abs(k) * 2) * 0.05);
+      cloud.add(sp);
     }
+    const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.scale.set(1.6 + long * 7, 1.2, 1);
+    shadow.position.y = -(height - R * 1.003);
+    cloud.add(shadow);
     const lat = (rand() * 2 - 1) * 65;
     const lng = rand() * 360 - 180;
-    const pos = toVec(lat, lng, R * 1.2);
+    const pos = toVec(lat, lng, height);
     cloud.position.copy(pos);
     cloud.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), pos.clone().normalize());
+    cloud.rotateY(rand() * Math.PI);
     group.add(cloud);
   }
   return group;
@@ -662,6 +754,15 @@ export function GlobeMap({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     root.appendChild(renderer.domElement);
+    // Profundidad de campo: al acercarse, los bordes se desenfocan como en una
+    // foto de cerca (el centro, nítido).
+    const dof = document.createElement('div');
+    dof.style.cssText =
+      'position:absolute;inset:0;pointer-events:none;display:none;' +
+      '-webkit-mask-image:radial-gradient(ellipse 70% 60% at 50% 48%,transparent 40%,#000 95%);' +
+      'mask-image:radial-gradient(ellipse 70% 60% at 50% 48%,transparent 40%,#000 95%)';
+    root.appendChild(dof);
+    let dofLevel = -1;
     const pinLayer = document.createElement('div');
     pinLayer.style.cssText = 'position:absolute;inset:0;pointer-events:none';
     root.appendChild(pinLayer);
@@ -677,7 +778,7 @@ export function GlobeMap({
     world.rotation.order = 'XYZ';
     scene.add(world);
     scene.add(makeHalo());
-    const clouds = makeClouds(14);
+    const clouds = makeClouds(16);
     world.add(clouds);
     const earthMat = new THREE.MeshStandardMaterial({
       color: '#FFFFFF',
@@ -701,6 +802,7 @@ export function GlobeMap({
     let worldData: World | null = null;
     let homeKey = '';
     let homeSet = new Set<string>();
+    let regionLines: Lines[] = [];
     // Grupos de personas que se pisan en pantalla.
     const clusters = new Map<string, HTMLDivElement>();
     // Parche de alta resolución para cuando la cámara se acerca.
@@ -787,6 +889,12 @@ export function GlobeMap({
       homeKey = k;
       homeSet = homes;
       detailAt = { lat: 999, lng: 999, span: 0 }; // repintar el parche con las casas nuevas
+      // Las provincias de esos países, para cuando se acerque la cámara.
+      Promise.all([...homes].map(loadRegions)).then((list) => {
+        if (disposed || homeKey !== k) return;
+        regionLines = list.filter((x): x is Lines => !!x);
+        detailAt = { lat: 999, lng: 999, span: 0 };
+      });
       const size = Math.min(4096, renderer.capabilities.maxTextureSize);
       const { canvas, isLand } = paintTexture(worldData, homes, size);
       const tex = new THREE.CanvasTexture(canvas);
@@ -1001,6 +1109,15 @@ export function GlobeMap({
       camera.lookAt(0, 0, 0);
       world.updateMatrixWorld();
 
+      const level = Math.round(Math.max(0, Math.min(1, (2.7 - view.dist) / 1.2)) * 10) / 10;
+      if (level !== dofLevel) {
+        dofLevel = level;
+        dof.style.display = level > 0 ? 'block' : 'none';
+        const blur = `blur(${(level * 6).toFixed(1)}px)`;
+        dof.style.setProperty('backdrop-filter', blur);
+        dof.style.setProperty('-webkit-backdrop-filter', blur);
+      }
+
       // De cerca, un parche nítido de la zona que se ve (se repinta al pararse).
       const close = view.dist < 2.35;
       if (detail) detail.visible = close;
@@ -1033,7 +1150,13 @@ export function GlobeMap({
             old.map?.dispose();
             old.dispose();
           }
-          detail = makeDetail(worldData, homeSet, region, renderer.capabilities.maxTextureSize);
+          detail = makeDetail(
+            worldData,
+            homeSet,
+            region,
+            renderer.capabilities.maxTextureSize,
+            regionLines,
+          );
           world.add(detail);
           detailAt = { lat, lng, span };
         }
