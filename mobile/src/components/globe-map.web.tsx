@@ -13,6 +13,7 @@ import { feature, mesh } from 'topojson-client';
 import type { GeometryCollection, Topology } from 'topojson-specification';
 
 import { distanceKm, formatKm, localHour, skyPhase, subsolarPoint } from '@/lib/geo';
+import { fetchWeather } from '@/lib/weather';
 
 import type { GlobeMapProps, GlobeMemory, GlobePerson } from './globe-map.types';
 
@@ -335,6 +336,30 @@ const CSS = `
 .jc-label{font:600 11px Inter,system-ui,sans-serif;fill:#3F5320;paint-order:stroke;stroke:#F4FAE6;stroke-width:3px;stroke-linejoin:round;text-anchor:middle}
 .jc-km{position:absolute;left:0;top:0;white-space:nowrap;background:#fff;color:#C2571B;font:600 11px Inter,system-ui,sans-serif;
   padding:2px 8px;border-radius:999px;box-shadow:0 4px 12px rgba(20,40,30,.16)}
+.jc-card{position:absolute;left:0;top:0;transform:translate(-50%,-100%);margin-top:-62px;min-width:150px;background:#fff;border-radius:16px;
+  padding:10px 14px;box-shadow:0 14px 30px rgba(20,40,30,.22);font-family:Inter,system-ui,sans-serif;z-index:30;pointer-events:none;
+  animation:jc-pop .35s cubic-bezier(.2,1.4,.4,1) both}
+.jc-card b{display:block;font-size:15px;color:#1D1F22}
+.jc-card span{display:block;font-size:12px;color:#6B7076;margin-top:2px;white-space:nowrap}
+.jc-card i{display:block;font-style:normal;font-size:12px;color:#1D1F22;margin-top:4px;white-space:nowrap}
+.jc-origin{position:absolute;left:0;top:0;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:4px;
+  pointer-events:none;z-index:3}
+.jc-origin-dot{width:14px;height:14px;border-radius:50%;background:#C2477A;border:3px solid #fff;box-shadow:0 4px 12px rgba(194,71,122,.45)}
+.jc-origin-label{white-space:nowrap;background:#C2477A;color:#fff;font:600 11px Inter,system-ui,sans-serif;padding:3px 9px;border-radius:999px;
+  box-shadow:0 4px 12px rgba(194,71,122,.3)}
+.jcountry .jmem{z-index:4}
+.jc-cloud{position:absolute;left:50%;top:50%;border-radius:50%;pointer-events:none;
+  background:radial-gradient(closest-side,rgba(255,255,255,1),rgba(244,248,252,.9) 45%,rgba(196,214,228,.55) 72%,rgba(196,214,228,0));
+  filter:blur(3px);opacity:0;animation:jc-fly 1.5s cubic-bezier(.3,.6,.2,1) forwards;animation-delay:var(--d,0s);z-index:40}
+.jcountry.on .jc-art{animation:jc-arrive 1.5s cubic-bezier(.2,.8,.2,1) both}
+.jc-sky{position:absolute;inset:0;pointer-events:none;z-index:39;background:linear-gradient(#CFE9F3,#EAF5F8 60%,rgba(234,245,248,0));
+  animation:jc-sky 1.4s ease-out forwards}
+@keyframes jc-sky{0%{opacity:1}100%{opacity:0}}
+.jcountry .jpin.is-picked .jpin-card{transform:scale(1.18) translateY(-2px)}
+@keyframes jc-fly{0%{opacity:0;transform:translate(-50%,-50%) scale(.35)}25%{opacity:.95}
+  100%{opacity:0;transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(3.2)}}
+@keyframes jc-arrive{0%{opacity:0;transform:scale(1.7);filter:blur(12px)}45%{opacity:1}100%{opacity:1;transform:none;filter:blur(0)}}
+@keyframes jc-pop{0%{opacity:0;transform:translate(-50%,-90%) scale(.8)}100%{opacity:1;transform:translate(-50%,-100%) scale(1)}}
 .jc-head{position:absolute;left:0;right:0;display:flex;flex-direction:column;align-items:center;gap:4px;font-family:Inter,system-ui,sans-serif;pointer-events:none}
 .jc-title{font:600 22px Inter,system-ui,sans-serif;color:#1D1F22;letter-spacing:-.4px}
 .jc-sub{font:500 12px Inter,system-ui,sans-serif;color:#6B7076}
@@ -719,7 +744,13 @@ export function GlobeMap({
   distScale = 1,
   shiftY = 0,
   daylight = true,
+  countryMemories = [],
+  origins = [],
 }: GlobeMapProps) {
+  const countryMemsRef = useRef(countryMemories);
+  countryMemsRef.current = countryMemories;
+  const originsRef = useRef(origins);
+  originsRef.current = origins;
   const daylightRef = useRef(daylight);
   daylightRef.current = daylight;
   const frameRef = useRef({ distScale, shiftY });
@@ -933,10 +964,48 @@ export function GlobeMap({
           return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#FF8A3D" stroke-width="2" stroke-linecap="round" stroke-dasharray="0.1 7"/>`;
         })
         .join('');
-      el.innerHTML = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="position:absolute;inset:0">
+      // Dónde empezó todo, si fue en este país: un punto y líneas hacia cada uno.
+      const startHere = originsRef.current.filter((o) =>
+        geoContains(shape as never, [o.lng, o.lat]),
+      );
+      const originLines = startHere
+        .map((o) => {
+          const [ox, oy] = proj([o.lng, o.lat]) ?? [0, 0];
+          return people
+            .map((p) => {
+              const [x, y] = at(p);
+              return `<line x1="${ox}" y1="${oy}" x2="${x}" y2="${y}" stroke="#C2477A" stroke-opacity=".55" stroke-width="1.6" stroke-dasharray="5 5"/>`;
+            })
+            .join('');
+        })
+        .join('');
+      el.innerHTML = `<div class="jc-art" style="position:absolute;inset:0;transform-origin:50% 55%"><svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="position:absolute;inset:0">
         <g class="jc-land">${fills}</g>
         <path d="${path(reg.lines as never) ?? ''}" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1.1" stroke-dasharray="3 4"/>
-        ${lines}${labels}</svg>`;
+        ${originLines}${lines}${labels}</svg></div>`;
+      const art = el.querySelector('.jc-art') as HTMLDivElement;
+      for (const o of startHere) {
+        const [ox, oy] = proj([o.lng, o.lat]) ?? [0, 0];
+        const mark = document.createElement('div');
+        mark.className = 'jc-origin';
+        const crowded = people.some((p) => {
+          const [x, y] = at(p);
+          return Math.hypot(x - ox, y - oy) < 60;
+        });
+        mark.style.transform = `translate(${ox}px, ${oy + (crowded ? 44 : 0)}px) translate(-50%, -7px)`;
+        mark.innerHTML = `<div class="jc-origin-dot"></div><div class="jc-origin-label">${esc(o.label)}</div>`;
+        art.appendChild(mark);
+      }
+      // Los recuerdos con lugar dentro del país.
+      clusterMemories(
+        countryMemsRef.current.filter((m) => geoContains(shape as never, [m.lng, m.lat])),
+      ).forEach((g, i) => {
+        const [x, y] = proj([g.lng, g.lat]) ?? [-99, -99];
+        const mem = memoryElement(g.items, i, (ids) => memoriesCb.current?.(ids));
+        mem.style.transform = `translate(${x}px, ${y}px)`;
+        mem.style.pointerEvents = 'auto';
+        art.appendChild(mem);
+      });
       const placedKm: [number, number][] = [];
       for (const [a, b] of pairs) {
         const [x1, y1] = at(a);
@@ -950,15 +1019,15 @@ export function GlobeMap({
         km.className = 'jc-km';
         km.textContent = formatKm(distanceKm(a, b));
         km.style.transform = `translate(${(x1 + x2) / 2}px, ${(y1 + y2) / 2}px) translate(-50%, -50%)`;
-        el.appendChild(km);
+        art.appendChild(km);
       }
       people.forEach((p, i) => {
-        const pin = pinElement(p, i, () => pin.classList.toggle('is-focus'));
+        const pin = pinElement(p, i, () => showCard(p));
         pin.dataset.id = p.id;
         const [x, y] = at(p);
         pin.style.transform = `translate(${x}px, ${y}px)`;
         pin.style.zIndex = '5';
-        el.appendChild(pin);
+        art.appendChild(pin);
       });
       const head = document.createElement('div');
       head.className = 'jc-head';
@@ -1006,6 +1075,55 @@ export function GlobeMap({
       };
       el.addEventListener('pointerup', up);
       el.addEventListener('pointercancel', up);
+      // Al tocar a alguien: su hora, su ciudad y el tiempo que hace allí.
+      let card: HTMLDivElement | null = null;
+      function showCard(p: GlobePerson) {
+        const same = card?.dataset.id === p.id;
+        card?.remove();
+        card = null;
+        art
+          .querySelectorAll<HTMLElement>('.jpin')
+          .forEach((e) => e.classList.toggle('is-picked', !same && e.dataset.id === p.id));
+        if (same) return;
+        const [x, y] = at(p);
+        card = document.createElement('div');
+        card.className = 'jc-card';
+        card.dataset.id = p.id;
+        card.style.left = `${x}px`;
+        card.style.top = `${y}px`;
+        card.innerHTML = `<b>${esc(p.isMe ? 'Tú' : p.name.split(' ')[0])}</b><span>${esc(clock(p.tz))} · ${esc(p.city ?? p.country ?? '')}</span><i>…</i>`;
+        const line = card.querySelector('i')!;
+        fetchWeather(p.lat, p.lng).then((wx) => {
+          line.textContent = wx ? `${wx.label}, ${wx.temp}°` : '';
+        });
+        art.appendChild(card);
+      }
+      el.addEventListener('click', () => {
+        if (!card) return;
+        card.remove();
+        card = null;
+        art.querySelectorAll<HTMLElement>('.jpin').forEach((e) => e.classList.remove('is-picked'));
+      });
+      (el as HTMLDivElement & { showCard?: (p: GlobePerson) => void }).showCard = showCard;
+
+      // La llegada: un súper zoom atravesando nubes hasta el país.
+      const skyFlash = document.createElement('div');
+      skyFlash.className = 'jc-sky';
+      el.appendChild(skyFlash);
+      setTimeout(() => skyFlash.remove(), 1600);
+      for (let i = 0; i < 9; i++) {
+        const c = document.createElement('div');
+        c.className = 'jc-cloud';
+        const a = (i / 9) * Math.PI * 2 + Math.random() * 0.5;
+        const size = 180 + Math.random() * 160;
+        c.style.width = `${size}px`;
+        c.style.height = `${size * 0.62}px`;
+        c.style.setProperty('--dx', `${Math.cos(a) * w * 0.9}px`);
+        c.style.setProperty('--dy', `${Math.sin(a) * h * 0.6}px`);
+        c.style.setProperty('--d', `${i * 0.05}s`);
+        el.appendChild(c);
+        setTimeout(() => c.remove(), 2200);
+      }
       root.appendChild(el);
       requestAnimationFrame(() => el.classList.add('on'));
       renderer.domElement.style.opacity = '0';
@@ -1154,11 +1272,12 @@ export function GlobeMap({
       focus: (id) => {
         if (country) {
           // Dentro del país: si la persona está aquí, se destaca; si no, se sale.
-          const here = country.people.some((p) => p.id === id);
-          country.el
-            .querySelectorAll<HTMLElement>('.jpin')
-            .forEach((el) => el.classList.toggle('is-focus', el.dataset.id === id));
-          if (here || id === null) return;
+          const person = country.people.find((p) => p.id === id);
+          if (person)
+            (country.el as HTMLDivElement & { showCard?: (p: GlobePerson) => void }).showCard?.(
+              person,
+            );
+          if (person || id === null) return;
           exitCountry();
         }
         focused = id;

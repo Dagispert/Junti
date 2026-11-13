@@ -80,6 +80,16 @@ export default function MapScreen() {
         title: m.place!.name,
       }))
     : [];
+  // En el «modo país» se ven todos los recuerdos con lugar de ese país.
+  const allPlaced: GlobeMemory[] = moments
+    .filter((m) => m.groupId === id && m.place)
+    .map((m) => ({
+      id: m.id,
+      lat: m.place!.lat,
+      lng: m.place!.lng,
+      photo: m.imageUri,
+      title: m.place!.name,
+    }));
   const pickedMoments = moments.filter((m) => picked.includes(m.id));
   const pickedPlace = pickedMoments[0]?.place;
   const places = [...new Set(placed.map((m) => m.place!.name.split(',')[0]))];
@@ -108,6 +118,14 @@ export default function MapScreen() {
       <GlobeMap
         transparent
         daylight={daylight}
+        countryMemories={allPlaced}
+        origins={group.origins
+          .filter((o) => o.lat !== undefined && o.lng !== undefined)
+          .map((o) => ({
+            lat: o.lat!,
+            lng: o.lng!,
+            label: `Aquí empezó todo${o.year ? ` · ${o.year}` : ''}`,
+          }))}
         people={people}
         focusId={focus}
         onSelect={(pid) => {

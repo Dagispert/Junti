@@ -37,7 +37,8 @@ function describe(code: number, day: boolean): { icon: LucideIcon; label: string
   return { icon: Cloud, label: 'Nublado' };
 }
 
-function fetchWeather(lat: number, lng: number): Promise<Weather | null> {
+/** El tiempo ahora en unas coordenadas (con caché de media hora). */
+export function fetchWeather(lat: number, lng: number): Promise<Weather | null> {
   const key = `${lat.toFixed(2)},${lng.toFixed(2)}`;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < TTL) return hit.value;

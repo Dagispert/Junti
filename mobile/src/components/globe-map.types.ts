@@ -39,4 +39,8 @@ export type GlobeMapProps = {
   shiftY?: number;
   /** true (por defecto): la luz del sol de verdad, con día y noche. false: todo de día. */
   daylight?: boolean;
+  /** Recuerdos con lugar que se enseñan dentro del «modo país» (aunque se vean las personas). */
+  countryMemories?: GlobeMemory[];
+  /** Dónde empezó todo (el origen del grupo), para el «modo país». */
+  origins?: { lat: number; lng: number; label: string }[];
 };
