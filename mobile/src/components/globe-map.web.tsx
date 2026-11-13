@@ -629,7 +629,11 @@ export function GlobeMap({
   onMemories,
   focusPoint = null,
   hidePeople = false,
+  distScale = 1,
+  shiftY = 0,
 }: GlobeMapProps) {
+  const frameRef = useRef({ distScale, shiftY });
+  frameRef.current = { distScale, shiftY };
   const host = useRef<HTMLDivElement>(null);
   const api = useRef<{
     setPeople: (p: GlobePerson[]) => void;
@@ -925,9 +929,19 @@ export function GlobeMap({
       const w = root.clientWidth;
       const h = root.clientHeight;
       if (!w || !h) return; // pantalla oculta: no se dibuja
-      if (renderer.domElement.width !== Math.round(w * renderer.getPixelRatio())) {
+      const shift = frameRef.current.shiftY;
+      if (
+        renderer.domElement.width !== Math.round(w * renderer.getPixelRatio()) ||
+        camera.userData.shift !== shift ||
+        camera.userData.h !== h
+      ) {
         renderer.setSize(w, h, false);
         camera.aspect = w / h;
+        // Mover el planeta arriba o abajo sin recortarlo: se desplaza la «ventana» de la cámara.
+        if (shift) camera.setViewOffset(w, h, 0, -shift * h, w, h);
+        else camera.clearViewOffset();
+        camera.userData.shift = shift;
+        camera.userData.h = h;
         camera.updateProjectionMatrix();
       }
       const t = (now - started) / 1000;
@@ -979,7 +993,11 @@ export function GlobeMap({
       clouds.visible = view.dist > 1.95;
       // En vertical el campo de visión horizontal es estrecho: se aleja la cámara para que quepa.
       const fit = Math.max(1, 1.35 / camera.aspect);
-      camera.position.set(0, 0, view.dist * (fit > 1 ? 0.62 + fit * 0.38 : 1));
+      camera.position.set(
+        0,
+        0,
+        view.dist * (fit > 1 ? 0.62 + fit * 0.38 : 1) * frameRef.current.distScale,
+      );
       camera.lookAt(0, 0, 0);
       world.updateMatrixWorld();
 

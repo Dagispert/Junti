@@ -220,6 +220,8 @@ export function WhyJunti({ text, spoken }: { text: string; spoken: number }) {
         <GlobeMap
           people={PEOPLE}
           height={height}
+          distScale={1.45}
+          shiftY={-0.13}
           interactive={false}
           transparent
           hidePeople={!after('people')}

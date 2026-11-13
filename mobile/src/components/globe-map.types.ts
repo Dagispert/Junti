@@ -33,4 +33,8 @@ export type GlobeMapProps = {
   rounded?: boolean;
   /** Sin fondo propio: el planeta flota sobre lo que haya detrás. */
   transparent?: boolean;
+  /** Cuánto más lejos se pone la cámara (1 = lo normal): un planeta más pequeño. */
+  distScale?: number;
+  /** Desplaza el planeta en vertical (fracción del alto; negativo = más arriba). */
+  shiftY?: number;
 };
