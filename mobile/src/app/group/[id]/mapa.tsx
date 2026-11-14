@@ -46,6 +46,8 @@ export default function MapScreen() {
   const showMemories = layer === 'memories';
   const [period, setPeriod] = useState<Period>('all');
   const [picked, setPicked] = useState<string[]>([]);
+  // En el «modo país» el globo enseña su propia tarjeta y su lista de recuerdos.
+  const [inCountry, setInCountry] = useState<string | null>(null);
   // Día y noche reales, o todo de día. Se recuerda en este dispositivo.
   const [daylight, setDaylightState] = useState(() => {
     try {
@@ -118,6 +120,7 @@ export default function MapScreen() {
       <GlobeMap
         transparent
         daylight={daylight}
+        onCountry={setInCountry}
         countryMemories={allPlaced}
         origins={group.origins
           .filter((o) => o.lat !== undefined && o.lng !== undefined)
@@ -222,7 +225,7 @@ export default function MapScreen() {
             </ScrollView>
           </Animated.View>
         )}
-        {focused && !pickedMoments.length && (
+        {focused && !pickedMoments.length && !inCountry && (
           <View style={[styles.detail, { backgroundColor: theme.card }]}>
             <SkyBadge tz={focused.tz} size={40} />
             <View style={{ flex: 1 }}>
@@ -236,7 +239,7 @@ export default function MapScreen() {
             </View>
           </View>
         )}
-        {!pickedMoments.length && places.length > 0 && !focused && (
+        {!pickedMoments.length && places.length > 0 && !focused && !inCountry && (
           <Text style={styles.places}>
             Habéis compartido desde {places.slice(0, 6).join(' · ')}
           </Text>

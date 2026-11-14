@@ -43,4 +43,6 @@ export type GlobeMapProps = {
   countryMemories?: GlobeMemory[];
   /** Dónde empezó todo (el origen del grupo), para el «modo país». */
   origins?: { lat: number; lng: number; label: string }[];
+  /** Al entrar en el «modo país» (con su nombre) o al salir (null). */
+  onCountry?: (name: string | null) => void;
 };

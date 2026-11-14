@@ -360,6 +360,23 @@ const CSS = `
   100%{opacity:0;transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(3.2)}}
 @keyframes jc-arrive{0%{opacity:0;transform:scale(1.7);filter:blur(12px)}45%{opacity:1}100%{opacity:1;transform:none;filter:blur(0)}}
 @keyframes jc-pop{0%{opacity:0;transform:translate(-50%,-90%) scale(.8)}100%{opacity:1;transform:translate(-50%,-100%) scale(1)}}
+.jc-dot{position:absolute;left:0;top:0;width:11px;height:11px;margin:-5.5px 0 0 -5.5px;border-radius:50%;background:#FF8A3D;
+  border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.25);cursor:pointer;pointer-events:auto;z-index:4;transition:box-shadow .25s}
+.jc-dot.on{box-shadow:0 0 0 7px rgba(255,138,61,.28),0 2px 6px rgba(0,0,0,.25)}
+.jc-strip{position:absolute;left:0;right:0;display:flex;align-items:center;gap:8px;overflow-x:auto;padding:8px 16px;scrollbar-width:none;z-index:6;
+  pointer-events:auto;transition:opacity .3s}
+.jc-strip::-webkit-scrollbar{display:none}
+.jc-strip-label{flex:0 0 auto;font:600 12px Inter,system-ui,sans-serif;color:#1D1F22;background:#fff;border-radius:999px;padding:6px 10px;
+  box-shadow:0 4px 12px rgba(20,22,26,.12)}
+.jc-thumb{flex:0 0 auto;position:relative;width:52px;height:52px;border-radius:14px;overflow:hidden;border:3px solid #fff;background:#F3E2AE;
+  box-shadow:0 6px 14px rgba(20,22,26,.16);cursor:pointer;transition:border-color .2s,transform .2s}
+.jc-thumb.on{border-color:#FF8A3D;transform:translateY(-3px)}
+.jc-thumb img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+.jc-thumb b{position:absolute;right:2px;bottom:2px;background:#FF8A3D;color:#fff;font:700 10px Inter,system-ui,sans-serif;border-radius:8px;padding:0 5px}
+.jcountry .jc-picked{z-index:7}
+.jcountry.leaving .jc-art{animation:jc-leave .9s cubic-bezier(.4,0,.6,1) forwards}
+.jcountry.leaving .jc-head,.jcountry.leaving .jc-strip{opacity:0;transition:opacity .3s}
+@keyframes jc-leave{0%{opacity:1;transform:none;filter:blur(0)}100%{opacity:0;transform:scale(.55);filter:blur(10px)}}
 .jc-head{position:absolute;left:0;right:0;display:flex;flex-direction:column;align-items:center;gap:4px;font-family:Inter,system-ui,sans-serif;pointer-events:none}
 .jc-title{font:600 22px Inter,system-ui,sans-serif;color:#1D1F22;letter-spacing:-.4px}
 .jc-sub{font:500 12px Inter,system-ui,sans-serif;color:#6B7076}
@@ -746,7 +763,10 @@ export function GlobeMap({
   daylight = true,
   countryMemories = [],
   origins = [],
+  onCountry,
 }: GlobeMapProps) {
+  const countryCb = useRef(onCountry);
+  countryCb.current = onCountry;
   const countryMemsRef = useRef(countryMemories);
   countryMemsRef.current = countryMemories;
   const originsRef = useRef(origins);
@@ -878,6 +898,29 @@ export function GlobeMap({
       target.pitch = Math.max(-0.9, Math.min(0.9, f.pitch * (c.spread < 0.5 ? 1 : 0.8)));
       target.dist = fitDist(c.spread);
     }
+    /** Nubes que pasan de largo y el cielo que se abre (al entrar y al salir del país). */
+    function cloudBurst(into: HTMLElement) {
+      const w = root.clientWidth;
+      const h = root.clientHeight;
+      const sky = document.createElement('div');
+      sky.className = 'jc-sky';
+      into.appendChild(sky);
+      setTimeout(() => sky.remove(), 1600);
+      for (let i = 0; i < 9; i++) {
+        const c = document.createElement('div');
+        c.className = 'jc-cloud';
+        const a = (i / 9) * Math.PI * 2 + Math.random() * 0.5;
+        const size = 180 + Math.random() * 160;
+        c.style.width = `${size}px`;
+        c.style.height = `${size * 0.62}px`;
+        c.style.setProperty('--dx', `${Math.cos(a) * w * 0.9}px`);
+        c.style.setProperty('--dy', `${Math.sin(a) * h * 0.6}px`);
+        c.style.setProperty('--d', `${i * 0.05}s`);
+        into.appendChild(c);
+        setTimeout(() => c.remove(), 2200);
+      }
+    }
+
     /** El país (con provincias cargadas) que hay en un punto, si lo hay. */
     function countryAt(lat: number, lng: number): string | null {
       if (!worldData) return null;
@@ -897,7 +940,10 @@ export function GlobeMap({
       const w = root.clientWidth;
       const h = root.clientHeight;
       const people = peopleRef.current.filter((p) => geoContains(shape as never, [p.lng, p.lat]));
-      const box = { top: h * 0.27, bottom: h * 0.2 };
+      const memsHere = clusterMemories(
+        countryMemsRef.current.filter((m) => geoContains(shape as never, [m.lng, m.lat])),
+      );
+      const box = { top: h * 0.27, bottom: h * 0.2 + (memsHere.length ? 64 : 0) };
       const where = (p: GlobePerson) =>
         reg.provinces.find((x) => geoContains(x.feature as never, [p.lng, p.lat]));
       const homes = new Set(people.map(where).filter(Boolean));
@@ -996,16 +1042,65 @@ export function GlobeMap({
         mark.innerHTML = `<div class="jc-origin-dot"></div><div class="jc-origin-label">${esc(o.label)}</div>`;
         art.appendChild(mark);
       }
-      // Los recuerdos con lugar dentro del país.
-      clusterMemories(
-        countryMemsRef.current.filter((m) => geoContains(shape as never, [m.lng, m.lat])),
-      ).forEach((g, i) => {
+      // Los recuerdos del país: en el mapa, solo un punto naranja por sitio;
+      // la lista va abajo. Se enseña la foto solo del que se toca.
+      let picked: HTMLDivElement | null = null;
+      const strip = document.createElement('div');
+      const dots = memsHere.map((g, i) => {
         const [x, y] = proj([g.lng, g.lat]) ?? [-99, -99];
-        const mem = memoryElement(g.items, i, (ids) => memoriesCb.current?.(ids));
-        mem.style.transform = `translate(${x}px, ${y}px)`;
-        mem.style.pointerEvents = 'auto';
-        art.appendChild(mem);
+        const d = document.createElement('div');
+        d.className = 'jc-dot';
+        d.setAttribute('role', 'button');
+        d.setAttribute(
+          'aria-label',
+          `${g.items.length} ${g.items.length === 1 ? 'recuerdo' : 'recuerdos'}`,
+        );
+        d.style.transform = `translate(${x}px, ${y}px)`;
+        d.addEventListener('pointerdown', (e) => e.stopPropagation());
+        d.addEventListener('click', (e) => {
+          e.stopPropagation();
+          pick(i);
+        });
+        art.appendChild(d);
+        return { g, x, y, d };
       });
+      function pick(i: number) {
+        picked?.remove();
+        picked = null;
+        dots.forEach((o, j) => o.d.classList.toggle('on', j === i));
+        strip.querySelectorAll('.jc-thumb').forEach((t, j) => t.classList.toggle('on', j === i));
+        const o = dots[i];
+        if (!o) return;
+        const bubble = memoryElement(o.g.items, 0, (ids) => memoriesCb.current?.(ids));
+        bubble.classList.add('jc-picked');
+        bubble.style.transform = `translate(${o.x}px, ${o.y - 30}px)`;
+        bubble.style.pointerEvents = 'auto';
+        art.appendChild(bubble);
+        picked = bubble;
+      }
+      if (memsHere.length) {
+        strip.className = 'jc-strip';
+        strip.style.bottom = '92px';
+        const n = memsHere.reduce((a, g) => a + g.items.length, 0);
+        strip.innerHTML = `<div class="jc-strip-label">${n} ${n === 1 ? 'recuerdo' : 'recuerdos'}</div>`;
+        memsHere.forEach((g, i) => {
+          const t = document.createElement('div');
+          t.className = 'jc-thumb';
+          t.setAttribute('role', 'button');
+          t.setAttribute('aria-label', g.items[0].title ?? 'Recuerdo');
+          const photo = g.items.find((m) => m.photo)?.photo;
+          t.innerHTML = `${photo ? `<img src="${esc(photo)}" alt="">` : ''}${g.items.length > 1 ? `<b>${g.items.length}</b>` : ''}`;
+          t.addEventListener('pointerdown', (e) => e.stopPropagation());
+          t.addEventListener('click', (e) => {
+            e.stopPropagation();
+            // Otro toque al mismo: se abre.
+            if (t.classList.contains('on')) memoriesCb.current?.(g.items.map((m) => m.id));
+            else pick(i);
+          });
+          strip.appendChild(t);
+        });
+        el.appendChild(strip);
+      }
       const placedKm: [number, number][] = [];
       for (const [a, b] of pairs) {
         const [x1, y1] = at(a);
@@ -1107,24 +1202,9 @@ export function GlobeMap({
       (el as HTMLDivElement & { showCard?: (p: GlobePerson) => void }).showCard = showCard;
 
       // La llegada: un súper zoom atravesando nubes hasta el país.
-      const skyFlash = document.createElement('div');
-      skyFlash.className = 'jc-sky';
-      el.appendChild(skyFlash);
-      setTimeout(() => skyFlash.remove(), 1600);
-      for (let i = 0; i < 9; i++) {
-        const c = document.createElement('div');
-        c.className = 'jc-cloud';
-        const a = (i / 9) * Math.PI * 2 + Math.random() * 0.5;
-        const size = 180 + Math.random() * 160;
-        c.style.width = `${size}px`;
-        c.style.height = `${size * 0.62}px`;
-        c.style.setProperty('--dx', `${Math.cos(a) * w * 0.9}px`);
-        c.style.setProperty('--dy', `${Math.sin(a) * h * 0.6}px`);
-        c.style.setProperty('--d', `${i * 0.05}s`);
-        el.appendChild(c);
-        setTimeout(() => c.remove(), 2200);
-      }
+      cloudBurst(el);
       root.appendChild(el);
+      countryCb.current?.(name);
       requestAnimationFrame(() => el.classList.add('on'));
       renderer.domElement.style.opacity = '0';
       pinLayer.style.opacity = '0';
@@ -1135,14 +1215,52 @@ export function GlobeMap({
     function exitCountry() {
       if (!country) return;
       const el = country.el;
-      el.classList.remove('on');
-      setTimeout(() => el.remove(), 500);
+      // La misma animación, al revés: el país se aleja entre nubes y vuelve el planeta.
+      el.classList.add('leaving');
+      el.style.pointerEvents = 'none';
+      const burst = document.createElement('div');
+      burst.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:50';
+      root.appendChild(burst);
+      cloudBurst(burst);
+      setTimeout(() => burst.remove(), 2300);
+      setTimeout(() => {
+        el.classList.remove('on');
+        setTimeout(() => el.remove(), 450);
+      }, 650);
       country = null;
       countryArmed = false;
-      renderer.domElement.style.opacity = '1';
-      pinLayer.style.opacity = '1';
-      target.dist = 1.85;
+      setTimeout(() => {
+        renderer.domElement.style.opacity = '1';
+        pinLayer.style.opacity = '1';
+      }, 350);
+      view.dist = 1.45;
+      target.dist = 1.9;
       lastTouch = performance.now();
+      countryCb.current?.(null);
+    }
+
+    /** Un toque: ir a la persona. Dos toques seguidos: entrar en su país. */
+    let lastTap = { id: '', at: 0 };
+    function tapPerson(p: GlobePerson) {
+      const now = performance.now();
+      if (lastTap.id === p.id && now - lastTap.at < 400) {
+        lastTap = { id: '', at: 0 };
+        const id = countryAt(p.lat, p.lng);
+        const f = facing(p.lat, p.lng);
+        target.yaw = nearestYaw(f.yaw);
+        target.pitch = Math.max(-1.25, Math.min(1.25, f.pitch));
+        view.yaw = target.yaw;
+        view.pitch = target.pitch;
+        if (id) {
+          view.dist = target.dist = 1.6;
+          enterCountry(id);
+        } else {
+          target.dist = 1.4; // sin provincias: solo acercarse
+        }
+        return;
+      }
+      lastTap = { id: p.id, at: now };
+      selectRef.current?.(p.id);
     }
 
     /** Acercarse a un grupo de personas para verlas por separado. */
@@ -1167,7 +1285,7 @@ export function GlobeMap({
       clusters.forEach((el) => el.remove());
       clusters.clear();
       pins = list.map((p, i) => {
-        const el = pinElement(p, i, (id) => selectRef.current?.(id));
+        const el = pinElement(p, i, () => tapPerson(p));
         el.style.pointerEvents = interactive ? 'auto' : 'none';
         pinLayer.appendChild(el);
         return { id: p.id, el, pos: toVec(p.lat, p.lng, R * 1.004) };
