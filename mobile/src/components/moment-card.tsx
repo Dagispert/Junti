@@ -26,7 +26,17 @@ const QUICK_REACTIONS = ['❤️', '😂'];
 // Como en Instagram: lo último arriba y solo unos pocos; el resto, a un toque.
 const VISIBLE_COMMENTS = 4;
 
-export function MomentCard({ moment }: { moment: Moment }) {
+export function MomentCard({
+  moment,
+  embedded = false,
+  photoRef,
+}: {
+  moment: Moment;
+  /** Dentro de otro bloque (un reto): sin marco ni etiqueta propios. */
+  embedded?: boolean;
+  /** El contenedor de la foto (para animar su paso desde una miniatura). */
+  photoRef?: (node: unknown) => void;
+}) {
   const theme = useTheme();
   const { me, user, proposals, toggleReaction, addComment, reportMoment } = useStore();
   const [draft, setDraft] = useState('');
@@ -84,16 +94,21 @@ export function MomentCard({ moment }: { moment: Moment }) {
   const memory = family === 'memory';
 
   return (
-    <FamilyCard family={family} style={memory && styles.album}>
+    <Frame embedded={embedded} family={family} style={memory && styles.album}>
       <View onLayout={(e) => setCardHeight(e.nativeEvent.layout.height)}>
-        <FamilyTag
-          family={family}
-          detail={memory ? memoryAge(moment.createdAt) : proposal?.title}
-          style={{ marginBottom: 10, marginLeft: 2 }}
-        />
+        {!embedded && (
+          <FamilyTag
+            family={family}
+            detail={memory ? memoryAge(moment.createdAt) : proposal?.title}
+            style={{ marginBottom: 10, marginLeft: 2 }}
+          />
+        )}
         {moment.imageUri || moment.videoUri ? (
           <View
-            ref={revealRef}
+            ref={(node) => {
+              revealRef.current = node;
+              photoRef?.(node);
+            }}
             style={[
               styles.photoWrap,
               // Un recuerdo es una foto de álbum: entra en sepia y se «revela» a color.
@@ -287,6 +302,26 @@ export function MomentCard({ moment }: { moment: Moment }) {
         onDone={(id) => setBursts((b) => b.filter((x) => x.id !== id))}
       />
       <EmojiPicker visible={picking} onClose={() => setPicking(false)} onPick={pickOther} />
+    </Frame>
+  );
+}
+
+/** El marco de la tarjeta, o nada si va dentro de otro bloque. */
+function Frame({
+  embedded,
+  family,
+  style,
+  children,
+}: {
+  embedded: boolean;
+  family: FamilyId;
+  style?: object | false;
+  children: React.ReactNode;
+}) {
+  if (embedded) return <View>{children}</View>;
+  return (
+    <FamilyCard family={family} style={style || undefined}>
+      {children}
     </FamilyCard>
   );
 }
