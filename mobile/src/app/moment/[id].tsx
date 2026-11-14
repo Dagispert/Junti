@@ -15,7 +15,9 @@ import { Photo, Screen } from '@/components/ui';
 import { Hand, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import { clockIn } from '@/lib/time';
-import { ArrowLeft, Check, Pencil, Plus } from 'lucide-react-native';
+import { ArrowLeft, Check, Pencil, Plus, Share } from 'lucide-react-native';
+import { useExport } from '@/components/export-sheet';
+import { canExport, renderMomentImage } from '@/lib/export-media';
 
 /** Un momento a lo grande, como una foto pegada en un álbum. */
 export default function MomentView() {
@@ -24,6 +26,7 @@ export default function MomentView() {
   const { moments, user, proposals, albums, setAlbumMoments, me } = useStore();
   const moment = moments.find((m) => m.id === id);
   const [editing, setEditing] = useState(false);
+  const exporter = useExport();
   // Si se elimina desde aquí, se vuelve atrás.
   const seen = useRef(false);
   if (moment) seen.current = true;
@@ -66,17 +69,45 @@ export default function MomentView() {
               </Text>
             </View>
           </View>
-          {moment.authorId === me ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Editar o eliminar"
-              onPress={() => setEditing((e) => !e)}
-              style={[styles.round, { backgroundColor: theme.card }]}>
-              <Icon icon={Pencil} size={18} color={theme.text} />
-            </Pressable>
-          ) : (
-            <View style={{ width: 44 }} />
-          )}
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {canExport() && (moment.imageUri || moment.text) && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Exportar como foto"
+                onPress={() =>
+                  exporter.run(
+                    'photo',
+                    () =>
+                      renderMomentImage({
+                        image: moment.imageUri,
+                        note: moment.text ?? proposal?.title,
+                        stickers: emojis,
+                        footer: [
+                          author.name.split(' ')[0],
+                          date,
+                          moment.place?.name.split(',')[0] ?? author.city,
+                        ]
+                          .filter(Boolean)
+                          .join(' · '),
+                      }),
+                    'junti-foto',
+                    moment.text ?? 'Junti',
+                  )
+                }
+                style={[styles.round, { backgroundColor: theme.card }]}>
+                <Icon icon={Share} size={18} color={theme.text} />
+              </Pressable>
+            )}
+            {moment.authorId === me && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Editar o eliminar"
+                onPress={() => setEditing((e) => !e)}
+                style={[styles.round, { backgroundColor: theme.card }]}>
+                <Icon icon={Pencil} size={18} color={theme.text} />
+              </Pressable>
+            )}
+          </View>
         </View>
       }>
       <Animated.View entering={ZoomIn.duration(360)} style={styles.frame}>
@@ -183,6 +214,7 @@ export default function MomentView() {
           </Pressable>
         </View>
       </View>
+      {exporter.overlay}
     </Screen>
   );
 }

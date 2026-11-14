@@ -28,7 +28,9 @@ import { Subtitle } from '@/components/subtitle';
 import { styleOf } from '@/lib/narrative';
 import { buildRecap } from '@/lib/recap';
 import { clockIn } from '@/lib/time';
-import { Music, Volume2, VolumeX, X } from 'lucide-react-native';
+import { Music, Share, Volume2, VolumeX, X } from 'lucide-react-native';
+import { useExport } from '@/components/export-sheet';
+import { canRecordVideo, renderStoryVideo, type VideoScene } from '@/lib/export-media';
 
 type Slide =
   | { type: 'cover' }
@@ -253,6 +255,58 @@ export default function RecapScreen() {
     }
   });
 
+  // Exportar como vídeo: las mismas escenas, con la voz de la narradora si la hay.
+  const exporter = useExport();
+  const exportVideo = () => {
+    setPaused(true);
+    stopNarrator();
+    if (audio.playing) audio.toggle();
+    const toScene = (sl: Slide): VideoScene => {
+      const text = 'line' in sl && sl.line ? sl.line : '';
+      if (sl.type === 'moment' || sl.type === 'loved') {
+        const who = first(sl.moment.authorId);
+        return {
+          text: text || sl.moment.text || `${who} compartió esto`,
+          image: sl.moment.imageUri,
+          kicker: who,
+          caption: sl.moment.place?.name.split(',')[0] ?? user(sl.moment.authorId).city,
+        };
+      }
+      if (sl.type === 'stats')
+        return {
+          text: text || (recap.kind === 'week' ? 'La semana en números' : 'El mes en números'),
+          big: `${recap.stats.moments} momentos · ${recap.stats.photos} fotos · ${recap.stats.reactions} reacciones`,
+        };
+      if (sl.type === 'end')
+        return {
+          text: text || 'Todo esto queda guardado en vuestra memoria.',
+          big: recap.ongoing ? 'Y la semana sigue…' : 'Hasta la próxima',
+        };
+      if (sl.type === 'story')
+        return { text: recap.story.join(' '), big: story?.title || recap.title };
+      return { text, big: story?.title || recap.title };
+    };
+    const narrated = slides.filter((sl) => 'scene' in sl && sl.scene !== undefined);
+    const withVoice = !!voice && narrated.length === voice.sceneTimes?.length;
+    const list = (withVoice ? narrated : slides.filter((sl) => sl.type !== 'cover')).map(toScene);
+    exporter.run(
+      'video',
+      ({ signal, progress }) =>
+        renderStoryVideo({
+          title: story?.title || recap.title,
+          subtitle: `${group(groupId)?.name ?? ''} · ${recap.range}`,
+          scenes: list,
+          audioUrl: withVoice ? voice!.audioUrl : null,
+          sceneTimes: withVoice ? voice!.sceneTimes : null,
+          audioDuration: withVoice ? voice!.audioDuration : null,
+          onProgress: progress,
+          signal,
+        }).then((r) => r.blob),
+      recap.kind === 'week' ? 'junti-semana' : 'junti-mes',
+      `${group(groupId)?.name ?? 'Junti'} · ${recap.range}`,
+    );
+  };
+
   const close = () => {
     stopNarrator();
     if (audio.playing) audio.toggle();
@@ -314,6 +368,15 @@ export default function RecapScreen() {
               style={[styles.round, !audio.playing && styles.musicOff]}>
               <Icon icon={Music} color={INK} />
               {!audio.playing && <Text style={styles.roundText}>Música</Text>}
+            </Pressable>
+          )}
+          {canRecordVideo() && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Exportar como vídeo"
+              onPress={exportVideo}
+              style={styles.round}>
+              <Icon icon={Share} color={INK} />
             </Pressable>
           )}
           <Pressable
@@ -535,6 +598,7 @@ export default function RecapScreen() {
           )}
         </Animated.View>
       </Pressable>
+      {exporter.overlay}
     </View>
   );
 }

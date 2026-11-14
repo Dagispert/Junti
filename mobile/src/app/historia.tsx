@@ -1,13 +1,14 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
-import { MapPin, Plus, Volume2, VolumeX, X } from 'lucide-react-native';
+import { MapPin, Plus, Share, Volume2, VolumeX, X } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, ZoomIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useGlobePeople } from '@/components/connection-card';
+import { useExport } from '@/components/export-sheet';
 import { GlobeMap } from '@/components/globe-map';
 import type { GlobeMemory } from '@/components/globe-map.types';
 import { Icon } from '@/components/icon';
@@ -16,6 +17,7 @@ import { Hand, HandBold } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import type { GroupOrigin, Moment, Narration } from '@/data/types';
 import { useClock } from '@/lib/clock';
+import { canRecordVideo, renderStoryVideo, type VideoScene } from '@/lib/export-media';
 import { narratorAudio, stopNarrator } from '@/lib/narrator';
 import { buildStory, type Gap, gapLabel, parseGap, templateScenes } from '@/lib/story';
 
@@ -202,6 +204,50 @@ export default function StoryScreen() {
       setIndex((i) => i + 1);
   });
 
+  // Exportar como vídeo: lo mismo que se cuenta, con la voz si la hay.
+  const exporter = useExport();
+  const exportVideo = () => {
+    setPaused(true);
+    stopNarrator();
+    const told = voice && voice.sceneTimes?.length === scenes.length ? voice : null;
+    const videoScenes: VideoScene[] = scenes.map((sc, i) => {
+      const chapter = sc.chapter && chapterAt[i] ? chapterAt[i]! : undefined;
+      if (sc.type === 'memory')
+        return {
+          text: sc.text,
+          image: sc.moment.imageUri,
+          kicker: String(new Date(sc.moment.createdAt).getFullYear()),
+          caption: sc.moment.place?.name.split(',')[0],
+          chapter,
+        };
+      if (sc.type === 'origin')
+        return {
+          text: sc.text,
+          big: `Aquí empezó todo${sc.origin ? `\n${sc.origin.place.split(',')[0]}${sc.origin.year ? `, ${sc.origin.year}` : ''}` : ''}`,
+          chapter,
+        };
+      if (sc.type === 'gap')
+        return { text: sc.text, big: `${gapLabel(sc.gap)}: ¿qué pasó?`, chapter };
+      return { text: sc.text, big: sc.type === 'end' ? 'Y la historia sigue' : ' ', chapter };
+    });
+    exporter.run(
+      'video',
+      ({ signal, progress }) =>
+        renderStoryVideo({
+          title: source?.title || 'Nuestra historia',
+          subtitle: `${group?.name ?? ''} · Nuestra historia`,
+          scenes: videoScenes,
+          audioUrl: told?.audioUrl,
+          sceneTimes: told?.sceneTimes,
+          audioDuration: told?.audioDuration,
+          onProgress: progress,
+          signal,
+        }).then((r) => r.blob),
+      'junti-nuestra-historia',
+      `${group?.name ?? 'Junti'} · Nuestra historia`,
+    );
+  };
+
   const close = () => {
     stopNarrator();
     if (router.canGoBack()) router.back();
@@ -307,6 +353,15 @@ export default function StoryScreen() {
               onPress={() => setVoiceOn((v) => !v)}
               style={styles.round}>
               <Icon icon={voiceOn ? Volume2 : VolumeX} color={INK} />
+            </Pressable>
+          )}
+          {canRecordVideo() && index >= 0 && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Exportar como vídeo"
+              onPress={exportVideo}
+              style={styles.round}>
+              <Icon icon={Share} color={INK} />
             </Pressable>
           )}
           <Pressable
@@ -457,6 +512,7 @@ export default function StoryScreen() {
           <View style={styles.chapterRule} />
         </Animated.View>
       )}
+      {exporter.overlay}
       {!!note && index <= 0 && (
         <Text style={[styles.note, { bottom: insets.bottom + 14 }]} pointerEvents="none">
           {note}
