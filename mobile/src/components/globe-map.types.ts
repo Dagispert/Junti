@@ -45,4 +45,6 @@ export type GlobeMapProps = {
   origins?: { lat: number; lng: number; label: string }[];
   /** Al entrar en el «modo país» (con su nombre) o al salir (null). */
   onCountry?: (name: string | null) => void;
+  /** Entrar en el país de una persona (cambia «at» para repetirlo). */
+  dive?: { id: string; at: number } | null;
 };

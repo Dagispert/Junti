@@ -766,6 +766,7 @@ export function GlobeMap({
   countryMemories = [],
   origins = [],
   onCountry,
+  dive,
 }: GlobeMapProps) {
   const countryCb = useRef(onCountry);
   countryCb.current = onCountry;
@@ -784,6 +785,7 @@ export function GlobeMap({
     setMemories: (m: GlobeMemory[]) => void;
     focusAt: (lat: number, lng: number) => void;
     showPeople: (show: boolean) => void;
+    dive: (id: string) => void;
   } | null>(null);
   const memoriesRef = useRef(memories);
   memoriesRef.current = memories;
@@ -1247,22 +1249,30 @@ export function GlobeMap({
       const now = performance.now();
       if (lastTap.id === p.id && now - lastTap.at < 400) {
         lastTap = { id: '', at: 0 };
-        const id = countryAt(p.lat, p.lng);
-        const f = facing(p.lat, p.lng);
-        target.yaw = nearestYaw(f.yaw);
-        target.pitch = Math.max(-1.25, Math.min(1.25, f.pitch));
-        view.yaw = target.yaw;
-        view.pitch = target.pitch;
-        if (id) {
-          view.dist = target.dist = 1.6;
-          enterCountry(id);
-        } else {
-          target.dist = 1.4; // sin provincias: solo acercarse
-        }
+        dive(p);
         return;
       }
       lastTap = { id: p.id, at: now };
       selectRef.current?.(p.id);
+    }
+    /** Entrar en el país de una persona (o acercarse, si no hay provincias). */
+    function dive(p: GlobePerson) {
+      if (country) {
+        if (country.people.some((x) => x.id === p.id)) return;
+        exitCountry();
+      }
+      const id = countryAt(p.lat, p.lng);
+      const f = facing(p.lat, p.lng);
+      target.yaw = nearestYaw(f.yaw);
+      target.pitch = Math.max(-1.25, Math.min(1.25, f.pitch));
+      view.yaw = target.yaw;
+      view.pitch = target.pitch;
+      if (id) {
+        view.dist = target.dist = 1.6;
+        enterCountry(id);
+      } else {
+        target.dist = 1.4; // sin provincias: solo acercarse
+      }
     }
 
     /** Acercarse a un grupo de personas para verlas por separado. */
@@ -1369,6 +1379,10 @@ export function GlobeMap({
 
     api.current = {
       setMemories,
+      dive: (id) => {
+        const p = peopleRef.current.find((x) => x.id === id);
+        if (p) dive(p);
+      },
       showPeople: (show) => {
         peopleVisible = show;
         people3d.visible = show;
@@ -1792,6 +1806,11 @@ export function GlobeMap({
   useEffect(() => {
     api.current?.setPeople(peopleRef.current);
   }, [key]);
+
+  // Entrar en el país de alguien desde fuera (dos toques en su tarjeta).
+  useEffect(() => {
+    if (dive) api.current?.dive(dive.id);
+  }, [dive?.id, dive?.at]);
 
   const memKey = memories.map((m) => `${m.id}:${m.photo ? 1 : 0}`).join('|');
   useEffect(() => {

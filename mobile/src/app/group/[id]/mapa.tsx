@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -48,6 +48,9 @@ export default function MapScreen() {
   const [picked, setPicked] = useState<string[]>([]);
   // En el «modo país» el globo enseña su propia tarjeta y su lista de recuerdos.
   const [inCountry, setInCountry] = useState<string | null>(null);
+  // Dos toques en la tarjeta de alguien: entrar en su país.
+  const [dive, setDive] = useState<{ id: string; at: number } | null>(null);
+  const lastTap = useRef({ id: '', at: 0 });
   // Día y noche reales, o todo de día. Se recuerda en este dispositivo.
   const [daylight, setDaylightState] = useState(() => {
     try {
@@ -121,6 +124,7 @@ export default function MapScreen() {
         transparent
         daylight={daylight}
         onCountry={setInCountry}
+        dive={dive}
         countryMemories={allPlaced}
         origins={group.origins
           .filter((o) => o.lat !== undefined && o.lng !== undefined)
@@ -257,6 +261,14 @@ export default function MapScreen() {
                 accessibilityLabel={`Ir a ${p.isMe ? 'tu ciudad' : p.name}`}
                 onPress={() => {
                   setPicked([]);
+                  const now = Date.now();
+                  if (lastTap.current.id === p.id && now - lastTap.current.at < 400) {
+                    lastTap.current = { id: '', at: 0 };
+                    setFocus(p.id);
+                    setDive({ id: p.id, at: now });
+                    return;
+                  }
+                  lastTap.current = { id: p.id, at: now };
                   setFocus(p.id === focus ? null : p.id);
                 }}
                 style={[
@@ -269,7 +281,7 @@ export default function MapScreen() {
                   <Text style={{ color: theme.text, fontSize: 15, fontWeight: '600' }}>
                     {p.id === me ? 'Tú' : p.name.split(' ')[0]}
                   </Text>
-                  <CityWeather city={p.city} lat={p.lat} lng={p.lng} />
+                  <CityWeather city={p.city} lat={p.lat} lng={p.lng} tz={p.tz} />
                 </View>
               </Pressable>
             ))}
@@ -288,14 +300,28 @@ export default function MapScreen() {
 }
 
 /** La ciudad y el tiempo que hace allí ahora (si se sabe). */
-function CityWeather({ city, lat, lng }: { city?: string; lat: number; lng: number }) {
+function CityWeather({
+  city,
+  lat,
+  lng,
+  tz,
+}: {
+  city?: string;
+  lat: number;
+  lng: number;
+  tz: string;
+}) {
   const theme = useTheme();
   const weather = useWeather(lat, lng);
   return (
     <View
       style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
       accessibilityLabel={`${city ?? ''}${weather ? `, ${weather.label}, ${weather.temp} grados` : ''}`}>
-      <Text style={{ color: theme.textSecondary, fontSize: 13 }}>{city}</Text>
+      {/* La hora de allí, siempre a la vista. */}
+      <Text style={{ color: theme.text, fontSize: 13, fontVariant: ['tabular-nums'] }}>
+        {clockIn(tz)}
+      </Text>
+      <Text style={{ color: theme.textSecondary, fontSize: 13 }}>· {city}</Text>
       {weather && (
         <>
           <Text style={{ color: theme.textSecondary, fontSize: 13 }}>·</Text>
