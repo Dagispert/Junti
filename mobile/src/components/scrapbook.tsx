@@ -152,6 +152,7 @@ export function StickyNote({
   rotate = 4,
   width = 120,
   delay = 0,
+  fixed = false,
   style,
 }: {
   children: ReactNode;
@@ -159,8 +160,13 @@ export function StickyNote({
   rotate?: number;
   width?: number;
   delay?: number;
+  /** Tamaño fijo: el texto encoge para caber y nunca tapa la foto. */
+  fixed?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
+  const height = width * 0.78;
+  const fit =
+    fixed && typeof children === 'string' ? fitNote(children, width - 24, height - 32) : null;
   return (
     <Animated.View
       pointerEvents="none"
@@ -169,6 +175,7 @@ export function StickyNote({
         {
           width,
           minHeight: width * 0.7,
+          ...(fixed ? { height, overflow: 'hidden' as const } : null),
           backgroundColor: color,
           padding: 12,
           paddingTop: 20,
@@ -180,9 +187,29 @@ export function StickyNote({
         style,
       ]}>
       <View style={styles.clip} />
-      <Text style={styles.noteText}>{children}</Text>
+      <Text
+        numberOfLines={fit?.lines}
+        style={[styles.noteText, fit && { fontSize: fit.size, lineHeight: fit.size * 0.98 }]}>
+        {children}
+      </Text>
     </Animated.View>
   );
+}
+
+/**
+ * El tamaño de letra más grande con el que el texto cabe en la nota
+ * (letra Caveat: cada carácter ocupa ~0,42 de su tamaño). Por debajo del
+ * mínimo, se corta con puntos suspensivos.
+ */
+function fitNote(text: string, w: number, h: number) {
+  for (let size = 24; size >= 12; size--) {
+    const perLine = Math.max(1, Math.floor(w / (size * 0.42)));
+    // Cortes por palabras: algo de holgura sobre el cálculo exacto.
+    const lines = Math.ceil((text.length * 1.12) / perLine);
+    if (lines * size * 0.98 <= h)
+      return { size, lines: Math.max(1, Math.floor(h / (size * 0.98))) };
+  }
+  return { size: 12, lines: Math.floor(h / (12 * 0.98)) };
 }
 
 /** Texto manuscrito suelto, como una anotación al margen. */

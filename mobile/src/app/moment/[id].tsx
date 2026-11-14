@@ -80,7 +80,7 @@ export default function MomentView() {
           <Photo moment={moment} style={styles.photo} />
         )}
         {(moment.text || proposal) && moment.imageUri ? (
-          <StickyNote rotate={5} width={150} delay={350} style={styles.note}>
+          <StickyNote rotate={5} width={150} delay={350} fixed style={styles.note}>
             {moment.text ?? proposal?.title}
           </StickyNote>
         ) : null}
@@ -106,7 +106,8 @@ export default function MomentView() {
           Respondía a «{proposal.title}»
         </Text>
       )}
-      {moment.comments.map((c) => (
+      {/* Lo más nuevo primero, como en la tarjeta. */}
+      {[...moment.comments].reverse().map((c) => (
         <CommentLine key={c.id} comment={c} size={17} />
       ))}
 

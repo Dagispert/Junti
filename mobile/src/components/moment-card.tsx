@@ -19,7 +19,8 @@ import { Avatar, Card, Photo, Scrim } from './ui';
 
 const QUICK_REACTIONS = ['❤️', '😂'];
 /** Los comentarios no son un chat: se muestran pocos y el resto se pliega. */
-const VISIBLE_COMMENTS = 2;
+// Como en Instagram: lo último arriba y solo unos pocos; el resto, a un toque.
+const VISIBLE_COMMENTS = 4;
 
 export function MomentCard({ moment }: { moment: Moment }) {
   const theme = useTheme();
@@ -48,7 +49,8 @@ export function MomentCard({ moment }: { moment: Moment }) {
 
   // Reacciones agrupadas por emoji; las rápidas siempre están disponibles.
   const emojis = [...new Set([...QUICK_REACTIONS, ...moment.reactions.map((r) => r.emoji)])];
-  const comments = expanded ? moment.comments : moment.comments.slice(-VISIBLE_COMMENTS);
+  const newestFirst = [...moment.comments].reverse();
+  const comments = expanded ? newestFirst : newestFirst.slice(0, VISIBLE_COMMENTS);
   const hidden = moment.comments.length - comments.length;
   // La hora local del autor forma parte del recuerdo.
   const placeName = moment.place?.name.split(',')[0];
@@ -220,16 +222,21 @@ export function MomentCard({ moment }: { moment: Moment }) {
         )}
 
         <View style={styles.thread}>
-          {hidden > 0 && (
-            <Pressable onPress={() => setExpanded(true)}>
-              <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
-                Ver {hidden} {hidden === 1 ? 'comentario anterior' : 'comentarios anteriores'}
-              </Text>
-            </Pressable>
-          )}
           {comments.map((comment) => (
             <CommentLine key={comment.id} comment={comment} />
           ))}
+          {hidden > 0 && (
+            <Pressable accessibilityRole="button" onPress={() => setExpanded(true)} hitSlop={6}>
+              <Text style={{ color: theme.textSecondary, fontSize: 14 }}>
+                Ver {hidden === 1 ? 'el otro comentario' : `los otros ${hidden} comentarios`}
+              </Text>
+            </Pressable>
+          )}
+          {expanded && moment.comments.length > VISIBLE_COMMENTS && (
+            <Pressable accessibilityRole="button" onPress={() => setExpanded(false)} hitSlop={6}>
+              <Text style={{ color: theme.textSecondary, fontSize: 14 }}>Ver menos</Text>
+            </Pressable>
+          )}
           <View style={styles.inputRow}>
             <TextInput
               value={draft}

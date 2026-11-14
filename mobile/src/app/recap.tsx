@@ -594,6 +594,7 @@ function MomentSlide({
               rotate={5}
               width={150}
               delay={500}
+              fixed
               style={{ position: 'absolute', top: -22, right: -12 }}>
               {moment.text}
             </StickyNote>
