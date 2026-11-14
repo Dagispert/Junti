@@ -7,6 +7,7 @@ import { PressScale } from '@/components/motion';
 import { Button, Screen, Tag, Title } from '@/components/ui';
 import { Spacing, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
+import { type FamilyId, useFamily, useFamilyColorMode } from '@/lib/families';
 import {
   Camera,
   ChartColumn,
@@ -18,6 +19,7 @@ import {
 } from 'lucide-react-native';
 
 type Option = {
+  family: FamilyId;
   icon: LucideIcon;
   title: string;
   hint: string;
@@ -29,6 +31,7 @@ export default function AddScreen() {
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
   const theme = useTheme();
   const group = useStore().group(groupId);
+  const mode = useFamilyColorMode();
   if (!group) return null;
 
   // Se sustituye esta pantalla para que «Cancelar» vuelva directo al grupo.
@@ -36,6 +39,7 @@ export default function AddScreen() {
     router.replace({ pathname, params: { groupId, ...params } } as never);
 
   const main: Option = {
+    family: 'moment',
     icon: Camera,
     title: 'Un momento',
     hint: 'Foto, vídeo, voz o unas palabras de ahora',
@@ -43,30 +47,35 @@ export default function AddScreen() {
   };
   const options: Option[] = [
     {
+      family: 'memory',
       icon: History,
       title: 'Un recuerdo',
       hint: 'Una foto de antes, en su fecha',
       go: () => open('/publish', { memory: '1' }),
     },
     {
+      family: 'challenge',
       icon: Flag,
       title: 'Un reto',
       hint: 'Algo que hacer todos',
       go: () => open('/new-challenge', {}),
     },
     {
+      family: 'poll',
       icon: ChartColumn,
       title: 'Una encuesta',
       hint: 'Votad entre varias opciones',
       go: () => open('/ask', { kind: 'poll' }),
     },
     {
+      family: 'quiz',
       icon: CircleHelp,
       title: 'Un quiz',
       hint: '¿Quién de nosotros…? A adivinar',
       go: () => open('/ask', { kind: 'quiz' }),
     },
     {
+      family: 'open',
       icon: MessageCircle,
       title: 'Una pregunta',
       hint: 'Cada uno responde con sus palabras',
@@ -75,36 +84,48 @@ export default function AddScreen() {
   ];
 
   const tile = (o: Option, i: number, wide = false) => (
-    <Animated.View
-      key={o.title}
-      entering={FadeInDown.delay(60 * i).duration(360)}
-      style={wide ? { width: '100%' } : styles.half}>
-      <PressScale
-        accessibilityRole="button"
-        accessibilityLabel={o.title}
-        onPress={o.go}
-        style={[
-          styles.tile,
-          wide && styles.wide,
-          { backgroundColor: theme.card, boxShadow: theme.shadow },
-        ]}>
-        <View
-          style={[
-            styles.icon,
-            { backgroundColor: wide ? theme.accent : theme.soft },
-            wide && styles.iconWide,
-          ]}>
-          <Icon icon={o.icon} size={24} color={wide ? theme.onAccent : theme.text} />
-        </View>
-        <View style={wide ? { flex: 1, gap: 2 } : { gap: 2 }}>
-          <Text style={[styles.title, { color: theme.text }, wide && { fontSize: 24 }]}>
-            {o.title}
-          </Text>
-          <Text style={[styles.hint, { color: theme.textSecondary }]}>{o.hint}</Text>
-        </View>
-      </PressScale>
-    </Animated.View>
+    <Tile key={o.title} o={o} i={i} wide={wide} />
   );
+  function Tile({ o, i, wide }: { o: Option; i: number; wide: boolean }) {
+    const f = useFamily(o.family);
+    // Con color, cada familia lleva el suyo desde aquí (el momento, neutro).
+    const colored = mode !== 'plain' && o.family !== 'moment';
+    return (
+      <Animated.View
+        key={o.title}
+        entering={FadeInDown.delay(60 * i).duration(360)}
+        style={wide ? { width: '100%' } : styles.half}>
+        <PressScale
+          accessibilityRole="button"
+          accessibilityLabel={o.title}
+          onPress={o.go}
+          style={[
+            styles.tile,
+            wide && styles.wide,
+            { backgroundColor: theme.card, boxShadow: theme.shadow },
+          ]}>
+          <View
+            style={[
+              styles.icon,
+              { backgroundColor: wide ? theme.accent : colored ? f.tint : theme.soft },
+              wide && styles.iconWide,
+            ]}>
+            <Icon
+              icon={o.icon}
+              size={24}
+              color={wide ? theme.onAccent : colored ? f.color : theme.text}
+            />
+          </View>
+          <View style={wide ? { flex: 1, gap: 2 } : { gap: 2 }}>
+            <Text style={[styles.title, { color: theme.text }, wide && { fontSize: 24 }]}>
+              {o.title}
+            </Text>
+            <Text style={[styles.hint, { color: theme.textSecondary }]}>{o.hint}</Text>
+          </View>
+        </PressScale>
+      </Animated.View>
+    );
+  }
 
   return (
     <Screen

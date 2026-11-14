@@ -1,21 +1,34 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { Spacing, useTheme } from '@/constants/theme';
+import { Hand, Spacing, useTheme } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
 import type { Question } from '@/data/types';
+import { useFamily, useFamilyColorMode } from '@/lib/families';
 import { daysLeft, relative } from '@/lib/time';
 
+import { type Burst, EmojiBursts } from './emoji-burst';
+import { FamilyCard, FamilyTag } from './family';
 import { Icon } from './icon';
 import { OwnerActions } from './owner-actions';
-import { Avatar, AvatarRow, Card, Notice } from './ui';
-import { ArrowUp, ChartColumn, Check, CircleHelp, MessageCircle, X } from 'lucide-react-native';
+import { Avatar, AvatarRow, Notice } from './ui';
+import { ArrowUp, Check, X } from 'lucide-react-native';
 
-const LABEL = {
-  poll: { icon: ChartColumn, text: 'Encuesta' },
-  quiz: { icon: CircleHelp, text: 'Quiz' },
-  open: { icon: MessageCircle, text: 'Pregunta' },
-} as const;
+const web = (o: Record<string, unknown>) => o as object;
+
+// Animaciones propias de cada familia (solo en la web).
+const CSS = `
+@keyframes jq-drop { 0%{opacity:0;transform:translateY(-26px) rotate(var(--r))} 70%{opacity:1;transform:translateY(3px) rotate(var(--r))} 100%{opacity:1;transform:translateY(0) rotate(var(--r))} }
+`;
+function useCss() {
+  useEffect(() => {
+    if (typeof document === 'undefined' || document.getElementById('jq-css')) return;
+    const el = document.createElement('style');
+    el.id = 'jq-css';
+    el.textContent = CSS;
+    document.head.appendChild(el);
+  }, []);
+}
 const GOOD = '#16A34A';
 const BAD = '#DC2626';
 
@@ -30,6 +43,15 @@ export function QuestionCard({ question }: { question: Question }) {
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
+  useCss();
+  const fam = useFamily(question.kind);
+  const colored = useFamilyColorMode() !== 'plain';
+  // Quiz: al responder, la tarjeta se da la vuelta; si aciertas, una pequeña fiesta.
+  const [flip, setFlip] = useState(0);
+  const [bursts, setBursts] = useState<Burst[]>([]);
+  const [height, setHeight] = useState(0);
+  // Encuesta: las barras crecen (con un rebote) al enseñar los resultados.
+  const [grown, setGrown] = useState(false);
 
   const mine = question.answers.find((a) => a.userId === me);
   const isAuthor = question.createdBy === me;
@@ -37,6 +59,20 @@ export function QuestionCard({ question }: { question: Question }) {
   const left = question.closesAt && !closed ? daysLeft(question.closesAt) : undefined;
   // Ver resultados: si ya respondí, si es mía, o si ya se cerró.
   const reveal = !!mine || isAuthor || closed;
+  useEffect(() => {
+    if (!reveal) return setGrown(false);
+    const id = setTimeout(() => setGrown(true), 60);
+    return () => clearTimeout(id);
+  }, [reveal]);
+  const answered = useRef(!!mine);
+  // La solución llega al responder: si acertaste, la fiesta.
+  const celebrate = useRef(false);
+  useEffect(() => {
+    if (!celebrate.current || !mine || question.correct === undefined) return;
+    celebrate.current = false;
+    if (mine.choice === question.correct)
+      setBursts(['🎉', '✨', '🎉', '🥳'].map((emoji, i) => ({ id: Date.now() + i, emoji })));
+  }, [mine, question.correct]);
   const canAnswer = !closed && !(question.kind === 'quiz' && (isAuthor || mine));
   const first = (id: string) => user(id).name.split(' ')[0];
 
@@ -44,7 +80,17 @@ export function QuestionCard({ question }: { question: Question }) {
     setBusy(true);
     setNotice('');
     try {
-      await answerQuestion(question.id, a);
+      if (question.kind === 'quiz' && !answered.current) {
+        // Media vuelta, se responde, y la otra media enseña la solución.
+        setFlip(1);
+        await answerQuestion(question.id, a);
+        setFlip(2);
+        setTimeout(() => setFlip(0), 420);
+        celebrate.current = true;
+      } else {
+        await answerQuestion(question.id, a);
+      }
+      answered.current = true;
       setDraft('');
     } catch (error) {
       setNotice(errorText(error));
@@ -55,14 +101,22 @@ export function QuestionCard({ question }: { question: Question }) {
   const total = question.answers.length;
 
   return (
-    <Card style={styles.card}>
+    <FamilyCard
+      family={question.kind}
+      style={[
+        styles.card,
+        web({
+          transform: `perspective(900px) rotateY(${flip === 1 ? 90 : 0}deg)`,
+          transition: flip ? 'transform .32s cubic-bezier(.4,0,.2,1)' : 'none',
+        }),
+      ]}>
+      <View
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+        onLayout={(e) => setHeight(e.nativeEvent.layout.height)}
+      />
       <View style={styles.top}>
-        <View style={styles.kind}>
-          <Icon icon={LABEL[question.kind].icon} size={16} />
-          <Text style={{ color: theme.textSecondary, fontSize: 13, fontWeight: '500' }}>
-            {LABEL[question.kind].text}
-          </Text>
-        </View>
+        <FamilyTag family={question.kind} />
         <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
           {closed
             ? 'Cerrada'
@@ -114,7 +168,14 @@ export function QuestionCard({ question }: { question: Question }) {
                   <View
                     style={[
                       styles.bar,
-                      { width: `${Math.round(share * 100)}%`, backgroundColor: theme.border },
+                      {
+                        width: `${grown ? Math.round(share * 100) : 0}%`,
+                        backgroundColor: colored ? fam.color : theme.border,
+                        opacity: colored ? 0.22 : 0.8,
+                      },
+                      web({
+                        transition: `width .9s cubic-bezier(.34,1.56,.64,1) ${i * 0.08}s`,
+                      }),
                     ]}
                   />
                 )}
@@ -152,18 +213,32 @@ export function QuestionCard({ question }: { question: Question }) {
       {/* Pregunta abierta: responder y leer a los demás. */}
       {question.kind === 'open' && (
         <View style={{ gap: 12 }}>
-          {reveal &&
-            question.answers.map((a) => (
-              <View key={a.userId} style={styles.reply}>
-                <Avatar userId={a.userId} size={30} />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: theme.text, fontSize: 15, fontWeight: '600' }}>
-                    {a.userId === me ? 'Tú' : first(a.userId)}
-                  </Text>
-                  <Text style={{ color: theme.text, fontSize: 15, lineHeight: 21 }}>{a.text}</Text>
+          {/* Las respuestas, como notas que caen sobre la tarjeta. */}
+          {reveal && question.answers.length > 0 && (
+            <View style={styles.notes}>
+              {question.answers.map((a, i) => (
+                <View
+                  key={a.userId}
+                  style={[
+                    styles.note,
+                    { backgroundColor: colored ? fam.tint : theme.soft },
+                    web({
+                      '--r': `${i % 2 ? 1.6 : -1.4}deg`,
+                      transform: `rotate(${i % 2 ? 1.6 : -1.4}deg)`,
+                      animation: `jq-drop .55s cubic-bezier(.22,.8,.2,1) ${i * 0.09}s both`,
+                    }),
+                  ]}>
+                  <View style={styles.noteHead}>
+                    <Avatar userId={a.userId} size={22} />
+                    <Text style={{ color: theme.textSecondary, fontSize: 13, fontWeight: '600' }}>
+                      {a.userId === me ? 'Tú' : first(a.userId)}
+                    </Text>
+                  </View>
+                  <Text style={[styles.noteText, { color: theme.text }]}>{a.text}</Text>
                 </View>
-              </View>
-            ))}
+              ))}
+            </View>
+          )}
           {canAnswer && (
             <View style={[styles.compose, { backgroundColor: theme.soft }]}>
               <TextInput
@@ -215,14 +290,18 @@ export function QuestionCard({ question }: { question: Question }) {
           cantEditNote="Ya hay respuestas: ahora solo se puede eliminar."
         />
       )}
-    </Card>
+      <EmojiBursts
+        bursts={bursts}
+        height={height}
+        onDone={(id) => setBursts((b) => b.filter((x) => x.id !== id))}
+      />
+    </FamilyCard>
   );
 }
 
 const styles = StyleSheet.create({
   card: { padding: 20, gap: Spacing.two },
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  kind: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   who: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   title: { fontSize: 24, lineHeight: 28, fontWeight: '500', letterSpacing: -0.4 },
   option: {
@@ -239,7 +318,10 @@ const styles = StyleSheet.create({
   bar: { position: 'absolute', left: 0, top: 0, bottom: 0, opacity: 0.8 },
   optionText: { flex: 1, fontSize: 17, paddingVertical: 12 },
   percent: { fontSize: 13, fontVariant: ['tabular-nums'], minWidth: 36, textAlign: 'right' },
-  reply: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+  notes: { gap: 10 },
+  note: { borderRadius: 6, padding: 12, gap: 6, boxShadow: '0 6px 14px rgba(20,22,26,0.08)' },
+  noteHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  noteText: { fontFamily: Hand, fontSize: 22, lineHeight: 24 },
   compose: {
     flexDirection: 'row',
     alignItems: 'flex-end',

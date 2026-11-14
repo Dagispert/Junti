@@ -1,11 +1,12 @@
 import { router } from 'expo-router';
 import { Plus } from 'lucide-react-native';
-import { useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Radius, Spacing, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import type { Moment } from '@/data/types';
+import { type FamilyId } from '@/lib/families';
 import { clockIn, relative } from '@/lib/time';
 
 import { CommentLine } from './comment-line';
@@ -13,11 +14,12 @@ import { VersionsLine } from './memory-versions';
 import { MomentEditor } from './moment-editor';
 import { type Burst, EmojiBursts } from './emoji-burst';
 import { EmojiPicker } from './emoji-picker';
+import { FamilyCard, FamilyTag } from './family';
 import { Icon } from './icon';
 import { VideoMoment, VoiceNote } from './media-players';
 import { PhotoCarousel } from './photo-carousel';
 import { SkyBadge } from './sky-badge';
-import { Avatar, Card, Photo, Scrim } from './ui';
+import { Avatar, Photo, Scrim } from './ui';
 
 const QUICK_REACTIONS = ['❤️', '😂'];
 /** Los comentarios no son un chat: se muestran pocos y el resto se pliega. */
@@ -37,6 +39,7 @@ export function MomentCard({ moment }: { moment: Moment }) {
   const burstId = useRef(0);
 
   const author = user(moment.authorId);
+  const { ref: revealRef, revealed } = useReveal(!!moment.memory);
   const proposal = proposals.find((p) => p.id === moment.proposalId);
 
   // Reacciones agrupadas por emoji; las rápidas siempre están disponibles.
@@ -48,7 +51,7 @@ export function MomentCard({ moment }: { moment: Moment }) {
   const placeName = moment.place?.name.split(',')[0];
   // Un recuerdo lleva su fecha; un momento, la hora local de quien lo compartió.
   const when = moment.memory
-    ? `Recuerdo · ${new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }).format(moment.createdAt)}`
+    ? `${new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }).format(moment.createdAt)}`
     : clockIn(moment.authorTz, moment.createdAt);
   const where = `${when}${placeName ? ` · ${placeName}` : !moment.memory && author.city ? ` en ${author.city}` : ''}`;
 
@@ -70,11 +73,37 @@ export function MomentCard({ moment }: { moment: Moment }) {
     addComment(moment.id, text).catch(() => setDraft(text));
   };
 
+  // La familia: un recuerdo, la respuesta a un reto o a la propuesta, o un momento.
+  const family: FamilyId = moment.memory
+    ? 'memory'
+    : proposal?.kind === 'challenge'
+      ? 'challenge'
+      : proposal
+        ? 'prompt'
+        : 'moment';
+  const memory = family === 'memory';
+
   return (
-    <Card>
+    <FamilyCard family={family} style={memory && styles.album}>
       <View onLayout={(e) => setCardHeight(e.nativeEvent.layout.height)}>
+        <FamilyTag
+          family={family}
+          detail={memory ? memoryAge(moment.createdAt) : proposal?.title}
+          style={{ marginBottom: 10, marginLeft: 2 }}
+        />
         {moment.imageUri || moment.videoUri ? (
-          <View style={styles.photoWrap}>
+          <View
+            ref={revealRef}
+            style={[
+              styles.photoWrap,
+              // Un recuerdo es una foto de álbum: entra en sepia y se «revela» a color.
+              memory && styles.albumPhoto,
+              memory &&
+                webStyle({
+                  filter: revealed ? 'none' : 'sepia(0.85) saturate(0.6) contrast(0.92)',
+                  transition: 'filter 1.8s cubic-bezier(.22,.8,.2,1)',
+                }),
+            ]}>
             {moment.gallery ? (
               <PhotoCarousel
                 items={moment.gallery}
@@ -111,7 +140,6 @@ export function MomentCard({ moment }: { moment: Moment }) {
               <>
                 <Scrim edge="bottom" />
                 <View pointerEvents="none" style={styles.caption}>
-                  {proposal && <Text style={styles.overProposal}>{proposal.title}</Text>}
                   {!!moment.text && <Text style={styles.overText}>{moment.text}</Text>}
                 </View>
               </>
@@ -259,12 +287,63 @@ export function MomentCard({ moment }: { moment: Moment }) {
         onDone={(id) => setBursts((b) => b.filter((x) => x.id !== id))}
       />
       <EmojiPicker visible={picking} onClose={() => setPicking(false)} onPick={pickOther} />
-    </Card>
+    </FamilyCard>
   );
+}
+
+const webStyle = (o: Record<string, unknown>) => o as object;
+
+/** «hace 14 años · julio de 2012» (o la fecha, si no hace ni un año). */
+export function memoryAge(at: number): string {
+  const d = new Date(at);
+  const now = new Date();
+  let years = now.getFullYear() - d.getFullYear();
+  if (
+    now.getMonth() < d.getMonth() ||
+    (now.getMonth() === d.getMonth() && now.getDate() < d.getDate())
+  )
+    years -= 1;
+  const month = new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' }).format(d);
+  if (years < 1)
+    return new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'long' }).format(d);
+  return `hace ${years} ${years === 1 ? 'año' : 'años'} · ${month}`;
+}
+
+/**
+ * Se «revela» cuando se ve en pantalla (como una foto que sale del álbum).
+ * Fuera de la web, revelada desde el principio.
+ */
+function useReveal(enabled: boolean) {
+  const ref = useRef<any>(null);
+  const [revealed, setRevealed] = useState(!enabled || Platform.OS !== 'web');
+  useEffect(() => {
+    if (revealed) return;
+    const node = ref.current as Element | null;
+    if (!node || typeof node.getBoundingClientRect !== 'function') return setRevealed(true);
+    const check = () => {
+      const r = node.getBoundingClientRect();
+      const h = window.innerHeight;
+      if (r.top < h * 0.72 && r.bottom > h * 0.2) setRevealed(true);
+    };
+    check();
+    const id = setInterval(check, 400);
+    return () => clearInterval(id);
+  }, [revealed]);
+  return { ref, revealed };
 }
 
 const styles = StyleSheet.create({
   photoWrap: { aspectRatio: 4 / 5, borderRadius: Radius.inner, overflow: 'hidden' },
+  // El recuerdo, como una foto pegada en un álbum: borde blanco y algo inclinada.
+  album: { paddingTop: 14 },
+  albumPhoto: {
+    borderRadius: 4,
+    borderWidth: 8,
+    borderBottomWidth: 26,
+    borderColor: '#FFFFFF',
+    boxShadow: '0 10px 24px rgba(60,40,10,0.18)',
+    transform: [{ rotate: '-0.8deg' }],
+  },
   overName: {
     position: 'absolute',
     top: 22,
@@ -288,7 +367,6 @@ const styles = StyleSheet.create({
   },
   overMetaText: { color: 'rgba(255,255,255,0.88)', fontSize: 15 },
   caption: { position: 'absolute', left: 20, right: 20, bottom: 20, gap: 4 },
-  overProposal: { color: 'rgba(255,255,255,0.75)', fontSize: 13 },
   overText: { color: '#fff', fontSize: 17, lineHeight: 24, fontWeight: '500' },
   textPanel: { borderRadius: Radius.inner, padding: 24, paddingVertical: 32, gap: Spacing.two },
   bigText: { fontSize: 24, lineHeight: 31, fontWeight: '500', letterSpacing: -0.5 },

@@ -1,15 +1,19 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import { useRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { ConnectionCard } from '@/components/connection-card';
 import { GroupHeader } from '@/components/group-header';
+import type { Moment, Proposal } from '@/data/types';
+import { ChallengeBlock } from '@/components/challenge-block';
+import { FamilyCard, FamilyTag } from '@/components/family';
 import { MomentCard } from '@/components/moment-card';
 import { QuestionCard } from '@/components/question-card';
 import { OnThisDay } from '@/components/on-this-day';
 import { UpcomingCard } from '@/components/upcoming-card';
 import { RecapCard } from '@/components/recap-card';
 import { Appear } from '@/components/motion';
-import { Button, Card, Lead, Screen, Tag } from '@/components/ui';
+import { Button, Lead, Screen } from '@/components/ui';
 import { Spacing, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import { featuredWeek, weekStart } from '@/lib/recap';
@@ -28,6 +32,8 @@ export default function Today() {
     dismissProposal,
   } = useStore();
   const group = groupById(id);
+  // Lo que respondo aquí se queda a la vista (para ver el resultado) hasta salir.
+  const shown = useRef(new Set<string>());
   if (!group) return <Missing />;
 
   const feed = moments.filter((m) => m.groupId === id);
@@ -48,16 +54,38 @@ export default function Today() {
       ? latest
       : undefined;
 
+  // Las respuestas a un mismo reto van juntas, en un solo bloque (donde está la más nueva).
+  type Entry =
+    | { kind: 'moment'; moment: Moment }
+    | { kind: 'challenge'; challenge: Proposal; answers: Moment[] };
+  const entries: Entry[] = [];
+  const blocks = new Map<string, Entry & { kind: 'challenge' }>();
+  for (const moment of feed) {
+    const challenge = proposals.find((p) => p.id === moment.proposalId && p.kind === 'challenge');
+    if (!challenge) {
+      entries.push({ kind: 'moment', moment });
+      continue;
+    }
+    const block = blocks.get(challenge.id);
+    if (block) block.answers.push(moment);
+    else {
+      const entry = { kind: 'challenge' as const, challenge, answers: [moment] };
+      blocks.set(challenge.id, entry);
+      entries.push(entry);
+    }
+  }
+
   return (
     <Screen header={<GroupHeader group={group} />}>
       <ConnectionCard group={group} />
       {proposal && (
-        <Card style={styles.proposal}>
-          <Tag>
-            {proposal.startsAt >= new Date().setHours(0, 0, 0, 0)
-              ? 'Propuesta de hoy'
-              : 'Última propuesta'}
-          </Tag>
+        <FamilyCard family="prompt" style={styles.proposal}>
+          <FamilyTag
+            family="prompt"
+            detail={
+              proposal.startsAt >= new Date().setHours(0, 0, 0, 0) ? 'la de hoy' : 'la última'
+            }
+          />
           <Text style={[styles.question, { color: theme.text }]}>{proposal.title}</Text>
           <View style={styles.actions}>
             <Button
@@ -81,21 +109,22 @@ export default function Today() {
               onPress={() => dismissProposal(proposal.id, 'skipped').catch(() => {})}
             />
           </View>
-        </Card>
+        </FamilyCard>
       )}
-      {/* Preguntas del grupo que aún no he respondido (las dos más recientes). */}
+      {/* Preguntas del grupo que aún no he respondido (las tres más recientes). */}
       {questions
         .filter(
           (q) =>
             q.groupId === id &&
             q.createdBy !== me &&
-            !q.answers.some((a) => a.userId === me) &&
+            (shown.current.has(q.id) || !q.answers.some((a) => a.userId === me)) &&
             (!q.closesAt || q.closesAt > Date.now()),
         )
-        .slice(0, 2)
-        .map((q) => (
-          <QuestionCard key={q.id} question={q} />
-        ))}
+        .slice(0, 3)
+        .map((q) => {
+          shown.current.add(q.id);
+          return <QuestionCard key={q.id} question={q} />;
+        })}
       <UpcomingCard groupId={group.id} />
       <OnThisDay groupId={group.id} />
       {lastWeekReady != null && (
@@ -111,11 +140,17 @@ export default function Today() {
           Comparte el primero con el botón «+» e invita a los demás con «Invitar».
         </Lead>
       )}
-      {feed.map((moment, i) => (
-        <Appear key={moment.id} index={i + 1}>
-          <MomentCard moment={moment} />
-        </Appear>
-      ))}
+      {entries.map((entry, i) =>
+        entry.kind === 'challenge' ? (
+          <Appear key={`reto-${entry.challenge.id}`} index={i + 1}>
+            <ChallengeBlock challenge={entry.challenge} answers={entry.answers} />
+          </Appear>
+        ) : (
+          <Appear key={entry.moment.id} index={i + 1}>
+            <MomentCard moment={entry.moment} />
+          </Appear>
+        ),
+      )}
     </Screen>
   );
 }

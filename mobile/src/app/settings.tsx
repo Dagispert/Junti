@@ -8,7 +8,9 @@ import { AvatarCropper } from '@/components/avatar-cropper';
 import { CityPicker } from '@/components/city-picker';
 import { DatePick } from '@/components/date-pick';
 import { Icon } from '@/components/icon';
+import { FamilyTag } from '@/components/family';
 import { Avatar, Button, Card, Field, Lead, Notice, Screen, Tag, Title } from '@/components/ui';
+import { setFamilyColorMode, useFamilyColorMode } from '@/lib/families';
 import { Spacing, useTheme } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
 import type { Place } from '@/lib/geo';
@@ -18,6 +20,7 @@ import { disablePush, enablePush, pushState, type PushState } from '@/lib/push';
 /** Ajustes personales: cómo me ven los demás, cerrar sesión y borrar la cuenta. */
 export default function Settings() {
   const theme = useTheme();
+  const colorMode = useFamilyColorMode();
   const { me, user, groups, saveProfile, saveAbout, setAvatar, signOut, deleteAccount } =
     useStore();
   const profile = user(me);
@@ -310,6 +313,47 @@ export default function Settings() {
               )
             }
           />
+        </Card>
+      </View>
+
+      {/* De prueba: cuánto color lleva cada familia en «Hoy», para decidir viéndolo. */}
+      <View style={{ gap: Spacing.two }}>
+        <Tag>Colores de las familias (prueba)</Tag>
+        <Text style={{ color: theme.textSecondary, fontSize: 13, lineHeight: 19 }}>
+          Cada cosa del grupo (momento, recuerdo, reto, encuesta…) lleva su etiqueta. Elige cuánto
+          color quieres ver y mira cómo queda en «Hoy».
+        </Text>
+        <Card style={styles.card}>
+          <View style={styles.chips}>
+            {(
+              [
+                ['tinted', 'Tarjeta tintada'],
+                ['accent', 'Solo un detalle'],
+                ['plain', 'Sin color'],
+              ] as const
+            ).map(([value, label]) => {
+              const on = colorMode === value;
+              return (
+                <Pressable
+                  key={value}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: on }}
+                  onPress={() => setFamilyColorMode(value)}
+                  style={[styles.chip, { backgroundColor: on ? theme.accent : theme.soft }]}>
+                  <Text style={{ color: on ? theme.onAccent : theme.text, fontSize: 15 }}>
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <View style={[styles.chips, { gap: 6 }]}>
+            {(['moment', 'memory', 'challenge', 'poll', 'quiz', 'open', 'prompt'] as const).map(
+              (f) => (
+                <FamilyTag key={f} family={f} />
+              ),
+            )}
+          </View>
         </Card>
       </View>
 
