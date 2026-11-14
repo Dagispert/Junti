@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { ZoomIn } from 'react-native-reanimated';
 
 import { Icon } from '@/components/icon';
+import { MemoryVersions } from '@/components/memory-versions';
 import { MomentEditor } from '@/components/moment-editor';
 import { PhotoCarousel } from '@/components/photo-carousel';
 import { VideoMoment, VoiceNote, Waveform } from '@/components/media-players';
@@ -135,6 +136,11 @@ export default function MomentView() {
         </Text>
       )}
       {/* Lo más nuevo primero, como en la tarjeta. */}
+      {moment.memory && (
+        <View style={{ marginTop: 28 }}>
+          <MemoryVersions moment={moment} />
+        </View>
+      )}
       {[...moment.comments].reverse().map((c) => (
         <CommentLine key={c.id} comment={c} size={17} />
       ))}

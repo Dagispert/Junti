@@ -12,6 +12,7 @@ import type {
   GroupOrigin,
   Group,
   GroupEvent,
+  GalleryItem,
   Moment,
   Narration,
   Proposal,
@@ -88,6 +89,13 @@ type Store = {
     }[];
   }) => Promise<void>;
   deleteMoment: (momentId: string) => Promise<void>;
+  /** Añadir mi versión a un recuerdo de otra persona: cómo lo recuerdo y mis fotos o vídeos. */
+  addMemoryAddition: (
+    momentId: string,
+    input: { text?: string; items: VisualUpload[] },
+  ) => Promise<void>;
+  editMemoryAddition: (additionId: string, text: string) => Promise<void>;
+  deleteMemoryAddition: (additionId: string) => Promise<void>;
   /** Quitar la nota de voz de un momento propio. */
   removeVoice: (momentId: string) => Promise<void>;
   /** Cambiar el tramo del vídeo que se enseña (o null para el vídeo entero). */
@@ -172,6 +180,74 @@ type Store = {
   saveEvent: (event: Omit<GroupEvent, 'id' | 'createdBy'> & { id?: string }) => Promise<void>;
   deleteEvent: (eventId: string) => Promise<void>;
 };
+
+/** Una foto o un vídeo para subir. */
+type VisualUpload = {
+  uri: string;
+  kind: 'photo' | 'video';
+  mime?: string;
+  duration?: number;
+  poster?: string;
+  clip?: { start: number; end: number };
+};
+
+/** Sube un archivo al almacén privado del grupo. */
+async function putFile(groupId: string, me: string, uri: string, name: string, mime: string) {
+  const blob = await (await fetch(uri)).blob();
+  const path = `${groupId}/${me}/${name}`;
+  const upload = await supabase.storage
+    .from(MEDIA_BUCKET)
+    .upload(path, blob, { contentType: mime });
+  if (upload.error) {
+    throw new Error(
+      /exceeded|too large|size/i.test(upload.error.message)
+        ? 'El archivo es demasiado grande (máximo 50 MB). Prueba con un vídeo más corto.'
+        : upload.error.message,
+    );
+  }
+  return { path, bytes: blob.size };
+}
+
+/** Sube fotos y vídeos (con su portada y su tramo) y devuelve sus archivos, en orden. */
+async function saveVisuals(
+  groupId: string,
+  me: string,
+  items: VisualUpload[],
+  stamp: string,
+): Promise<string[]> {
+  const ids: string[] = [];
+  for (const [i, item] of items.entries()) {
+    const mime = item.mime ?? (item.kind === 'video' ? 'video/mp4' : 'image/jpeg');
+    const name = i === 0 ? stamp : `${stamp}-${i + 1}`;
+    const file = await putFile(
+      groupId,
+      me,
+      item.uri,
+      `${name}.${extensionFor(mime, item.kind === 'video' ? 'mp4' : 'jpg')}`,
+      mime,
+    );
+    const thumb = item.poster
+      ? await putFile(groupId, me, item.poster, `${name}-portada.jpg`, 'image/jpeg')
+      : undefined;
+    const { data, error } = await supabase
+      .from('media_assets')
+      .insert({
+        kind: item.kind,
+        storage_path: file.path,
+        thumb_path: thumb?.path ?? null,
+        bytes: file.bytes,
+        mime,
+        duration_s: item.duration ?? null,
+        clip_start: item.clip?.start ?? null,
+        clip_end: item.clip?.end ?? null,
+      })
+      .select('id')
+      .single();
+    if (error) throw error;
+    ids.push(data.id as string);
+  }
+  return ids;
+}
 
 /** Pide la crónica de un periodo a la función «narrate» del servidor. */
 async function requestNarration({
@@ -333,7 +409,8 @@ async function load(me: string): Promise<Data> {
       .select(
         'id, group_id, author_id, text, created_at, shared_at, memory, edited_at, author_tz, proposal_id, place_name, lat, lng, ' +
           'reactions(emoji, user_id), comments(id, user_id, text, created_at, deleted_at, edited_at), ' +
-          'moment_media(position, media_assets(id, storage_path, kind, thumb_path, duration_s, waveform, clip_start, clip_end))',
+          'memory_additions(id, author_id, text, created_at, edited_at), ' +
+          'moment_media(position, addition_id, media_assets(id, storage_path, kind, thumb_path, duration_s, waveform, clip_start, clip_end))',
       )
       .is('deleted_at', null)
       .order('shared_at', { ascending: false })
@@ -479,11 +556,12 @@ async function load(me: string): Promise<Data> {
     duration_s?: number;
     waveform?: number[];
   };
-  const assetsOf = (row: any): Asset[] =>
+  // Todos los archivos (los del autor y los de las versiones de los demás).
+  const assetsOf = (row: any): (Asset & { addition?: string })[] =>
     [...(row.moment_media ?? [])]
       .sort((a, b) => a.position - b.position)
-      .map((mm) => mm.media_assets)
-      .filter(Boolean);
+      .filter((mm) => mm.media_assets)
+      .map((mm) => ({ ...mm.media_assets, addition: mm.addition_id ?? undefined }));
   const paths = [
     ...new Set(
       (momentRows ?? [])
@@ -504,7 +582,22 @@ async function load(me: string): Promise<Data> {
   for (const g of groups) g.coverUri = g.coverPath ? signed[g.coverPath] : undefined;
 
   const moments: Moment[] = (momentRows ?? []).map((row) => {
-    const assets = assetsOf(row);
+    const everything = assetsOf(row);
+    // Lo del autor; las versiones de los demás van aparte (y al final del carrusel).
+    const assets = everything.filter((a) => !a.addition);
+    const additionRows: any[] = [...(row.memory_additions ?? [])].sort(
+      (a, b) => Date.parse(a.created_at) - Date.parse(b.created_at),
+    );
+    const byAddition = new Map(additionRows.map((x) => [x.id, x.author_id as string]));
+    const theirs = everything.filter((a) => a.addition && a.kind !== 'audio');
+    const galleryItem = (a: Asset & { addition?: string }): GalleryItem => ({
+      kind: a.kind as 'photo' | 'video',
+      uri: signed[a.storage_path],
+      poster: a.thumb_path ? signed[a.thumb_path] : undefined,
+      clip: clipOf(a),
+      duration: a.clip_end != null ? a.clip_end - (a.clip_start ?? 0) : (a.duration_s ?? undefined),
+      by: a.addition ? byAddition.get(a.addition) : undefined,
+    });
     const photo = assets.find((a) => a.kind === 'photo');
     const allPhotos = assets.filter((a) => a.kind === 'photo').map((a) => signed[a.storage_path]);
     const visuals = assets.filter((a) => a.kind !== 'audio');
@@ -538,16 +631,17 @@ async function load(me: string): Promise<Data> {
                 : undefined,
       photos: allPhotos.length > 1 ? allPhotos : undefined,
       gallery:
-        visuals.length > 1
-          ? visuals.map((a) => ({
-              kind: a.kind as 'photo' | 'video',
-              uri: signed[a.storage_path],
-              poster: a.thumb_path ? signed[a.thumb_path] : undefined,
-              clip: clipOf(a),
-              duration:
-                a.clip_end != null ? a.clip_end - (a.clip_start ?? 0) : (a.duration_s ?? undefined),
-            }))
-          : undefined,
+        visuals.length + theirs.length > 1 ? [...visuals, ...theirs].map(galleryItem) : undefined,
+      additions: additionRows.length
+        ? additionRows.map((x) => ({
+            id: x.id,
+            authorId: x.author_id,
+            text: x.text ?? undefined,
+            createdAt: Date.parse(x.created_at),
+            edited: !!x.edited_at,
+            items: theirs.filter((a) => a.addition === x.id).map(galleryItem),
+          }))
+        : undefined,
       videoUri: video ? signed[video.storage_path] : undefined,
       videoDuration:
         video?.clip_end != null
@@ -890,58 +984,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }) => {
       const visual = media ?? (imageUri ? { uri: imageUri, kind: 'photo' as const } : undefined);
       const stamp = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      const put = async (uri: string, name: string, mime: string) => {
-        const blob = await (await fetch(uri)).blob();
-        const path = `${groupId}/${me}/${name}`;
-        const upload = await supabase.storage
-          .from(MEDIA_BUCKET)
-          .upload(path, blob, { contentType: mime });
-        if (upload.error) {
-          throw new Error(
-            /exceeded|too large|size/i.test(upload.error.message)
-              ? 'El archivo es demasiado grande (máximo 50 MB). Prueba con un vídeo más corto.'
-              : upload.error.message,
-          );
-        }
-        return { path, bytes: blob.size };
-      };
-      const assetIds: string[] = [];
+      const put = (uri: string, name: string, mime: string) =>
+        putFile(groupId, me, uri, name, mime);
       // Lo visual, en orden: la principal y las demás (fotos y vídeos mezclados).
-      type Visual = NonNullable<typeof more>[number];
-      const visuals: Visual[] = [
-        ...(visual ? [visual as Visual] : []),
-        ...(more ?? []),
-        ...(morePhotos ?? []).map((uri) => ({ uri, kind: 'photo' as const })),
-      ];
-      for (const [i, item] of visuals.entries()) {
-        const mime = item.mime ?? (item.kind === 'video' ? 'video/mp4' : 'image/jpeg');
-        const name = i === 0 ? stamp : `${stamp}-${i + 1}`;
-        const file = await put(
-          item.uri,
-          `${name}.${extensionFor(mime, item.kind === 'video' ? 'mp4' : 'jpg')}`,
-          mime,
-        );
-        const thumb = item.poster
-          ? await put(item.poster, `${name}-portada.jpg`, 'image/jpeg')
-          : undefined;
-        const asset = check(
-          await supabase
-            .from('media_assets')
-            .insert({
-              kind: item.kind,
-              storage_path: file.path,
-              thumb_path: thumb?.path ?? null,
-              bytes: file.bytes,
-              mime,
-              duration_s: item.duration ?? null,
-              clip_start: item.clip?.start ?? null,
-              clip_end: item.clip?.end ?? null,
-            })
-            .select('id')
-            .single(),
-        );
-        assetIds.push(asset!.id);
-      }
+      const assetIds = await saveVisuals(
+        groupId,
+        me,
+        [
+          ...(visual ? [visual as VisualUpload] : []),
+          ...(more ?? []),
+          ...(morePhotos ?? []).map((uri) => ({ uri, kind: 'photo' as const })),
+        ],
+        stamp,
+      );
       if (voice) {
         const file = await put(
           voice.uri,
@@ -1009,6 +1064,71 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           .update({ text: text || null, edited_at: new Date().toISOString() })
           .eq('id', momentId),
       );
+      await refresh();
+    },
+    addMemoryAddition: async (momentId, { text, items }) => {
+      const moment = data.moments.find((m) => m.id === momentId);
+      if (!moment) throw new Error('Ese recuerdo ya no está.');
+      const addition = check(
+        await supabase
+          .from('memory_additions')
+          .insert({ moment_id: momentId, text: text || null })
+          .select('id')
+          .single(),
+      );
+      try {
+        const stamp = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const ids = await saveVisuals(moment.groupId, me, items, stamp);
+        if (ids.length) {
+          check(
+            await supabase.from('moment_media').insert(
+              ids.map((id, i) => ({
+                moment_id: momentId,
+                media_asset_id: id,
+                addition_id: addition!.id,
+                // Después de lo del autor, en el orden en que se añadieron.
+                position: Math.min(32000, 100 + (moment.additions?.length ?? 0) * 12 + i),
+              })),
+            ),
+          );
+        }
+      } catch (error) {
+        // Sin archivos a medias: se deshace la versión.
+        await supabase.from('memory_additions').delete().eq('id', addition!.id);
+        throw error;
+      }
+      await refresh();
+    },
+    editMemoryAddition: async (additionId, text) => {
+      check(
+        await supabase
+          .from('memory_additions')
+          .update({ text: text || null, edited_at: new Date().toISOString() })
+          .eq('id', additionId),
+      );
+      await refresh();
+    },
+    deleteMemoryAddition: async (additionId) => {
+      // Primero sus archivos (fotos, vídeos y portadas), luego la versión.
+      const { data: rows } = await supabase
+        .from('moment_media')
+        .select('media_asset_id, media_assets(storage_path, thumb_path)')
+        .eq('addition_id', additionId);
+      const assets = (rows ?? []) as any[];
+      check(await supabase.from('memory_additions').delete().eq('id', additionId));
+      if (assets.length) {
+        await supabase
+          .from('media_assets')
+          .delete()
+          .in(
+            'id',
+            assets.map((a) => a.media_asset_id),
+          );
+        const paths = assets
+          .flatMap((a) => [a.media_assets?.storage_path, a.media_assets?.thumb_path])
+          .filter(Boolean);
+        if (paths.length) await supabase.storage.from(MEDIA_BUCKET).remove(paths);
+      }
       await refresh();
     },
     removeVoice: async (momentId) => {

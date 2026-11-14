@@ -1,6 +1,8 @@
 import { Image } from 'expo-image';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+
+import { useStore } from '@/data/store';
 
 import type { GalleryItem, Moment } from '@/data/types';
 
@@ -21,6 +23,7 @@ export function PhotoCarousel({
   onOpen?: () => void;
   dotsBottom?: number;
 }) {
+  const { user } = useStore();
   const items: GalleryItem[] = given ?? (photos ?? []).map((uri) => ({ kind: 'photo', uri }));
   const [width, setWidth] = useState(0);
   const [index, setIndex] = useState(0);
@@ -69,6 +72,12 @@ export function PhotoCarousel({
           )}
         </ScrollView>
       )}
+      {/* Lo que añadió otra persona en su versión del recuerdo. */}
+      {!!items[index]?.by && (
+        <View pointerEvents="none" style={styles.by}>
+          <Text style={styles.byText}>Añadida por {user(items[index].by!).name.split(' ')[0]}</Text>
+        </View>
+      )}
       <View pointerEvents="none" style={[styles.dots, { bottom: dotsBottom }]}>
         {items.map((item, i) => (
           <View
@@ -94,4 +103,15 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   dot: { width: 6, height: 6, borderRadius: 3 },
+  by: {
+    position: 'absolute',
+    top: 56,
+    left: 12,
+    paddingHorizontal: 10,
+    height: 26,
+    borderRadius: 13,
+    justifyContent: 'center',
+    backgroundColor: 'rgba(20,22,26,0.55)',
+  },
+  byText: { color: '#FFFFFF', fontSize: 12, fontWeight: '600' },
 });

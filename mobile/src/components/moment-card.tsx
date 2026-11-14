@@ -9,6 +9,7 @@ import type { Moment } from '@/data/types';
 import { clockIn, relative } from '@/lib/time';
 
 import { CommentLine } from './comment-line';
+import { VersionsLine } from './memory-versions';
 import { MomentEditor } from './moment-editor';
 import { type Burst, EmojiBursts } from './emoji-burst';
 import { EmojiPicker } from './emoji-picker';
@@ -191,6 +192,8 @@ export function MomentCard({ moment }: { moment: Moment }) {
             <MomentEditor moment={moment} onClose={() => setEditing(null)} />
           </View>
         )}
+
+        <VersionsLine moment={moment} />
 
         <View style={styles.thread}>
           {comments.map((comment) => (

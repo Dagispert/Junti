@@ -128,6 +128,18 @@ export type GalleryItem = {
   poster?: string;
   clip?: { start: number; end: number };
   duration?: number;
+  /** Si la añadió otra persona en su versión del recuerdo. */
+  by?: string;
+};
+
+/** La versión de un recuerdo de otra persona: cómo lo recuerda y sus fotos. */
+export type MemoryAddition = {
+  id: string;
+  authorId: string;
+  text?: string;
+  createdAt: number;
+  edited: boolean;
+  items: GalleryItem[];
 };
 
 export type Moment = {
@@ -141,6 +153,8 @@ export type Moment = {
   photos?: string[];
   /** Varias fotos y vídeos mezclados, en orden (si hay más de uno). */
   gallery?: GalleryItem[];
+  /** En un recuerdo: las versiones de los demás. */
+  additions?: MemoryAddition[];
   /** Vídeo (entonces «imageUri» es su portada) y su duración en segundos. */
   videoUri?: string;
   videoDuration?: number;

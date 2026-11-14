@@ -43,16 +43,29 @@ type Media = {
  * recuerdo de antes que se guarda en su fecha.
  */
 export default function Publish() {
-  const { groupId, proposalId, memory, year } = useLocalSearchParams<{
+  const { groupId, proposalId, memory, year, addTo } = useLocalSearchParams<{
     groupId: string;
     proposalId?: string;
     memory?: string;
+    /** Añadir mi versión a este recuerdo (de otra persona). */
+    addTo?: string;
     /** Un recuerdo de un año concreto (al rellenar un hueco de la historia). */
     year?: string;
   }>();
-  const remembering = memory === '1';
+  const adding = !!addTo;
+  // Una versión se elige como un recuerdo (galería o cámara), pero sin fecha ni lugar propios.
+  const remembering = memory === '1' || adding;
   const theme = useTheme();
-  const { group: groupById, proposals, addMoment, me, user } = useStore();
+  const {
+    group: groupById,
+    proposals,
+    addMoment,
+    addMemoryAddition,
+    moments,
+    me,
+    user,
+  } = useStore();
+  const target = adding ? moments.find((m) => m.id === addTo) : undefined;
   const meUser = user(me);
   const home: Place | null =
     meUser.lat != null && meUser.lng != null
@@ -166,7 +179,7 @@ export default function Publish() {
       if (result.canceled) return;
       const picked = result.assets.slice(0, room);
       // Un recuerdo: la fecha de la primera foto que la guarde.
-      if (remembering && !append) {
+      if (remembering && !adding && !append) {
         let taken: number | undefined;
         for (const asset of picked.filter((a) => a.type !== 'video')) {
           taken = dateFromPickerExif(asset.exif) ?? (await dateFromFile(asset.uri)) ?? undefined;
@@ -230,6 +243,11 @@ export default function Publish() {
               },
         );
       }
+      if (adding) {
+        await addMemoryAddition(addTo!, { text: text.trim() || undefined, items: ready });
+        router.back();
+        return;
+      }
       await addMoment({
         groupId,
         proposalId: proposal?.id,
@@ -274,7 +292,15 @@ export default function Publish() {
           <Button compact label="Cancelar" variant="quiet" onPress={() => router.back()} />
           <Button
             compact
-            label={busy ? 'Guardando…' : remembering ? 'Guardar recuerdo' : 'Publicar'}
+            label={
+              busy
+                ? 'Guardando…'
+                : adding
+                  ? 'Añadir mi versión'
+                  : remembering
+                    ? 'Guardar recuerdo'
+                    : 'Publicar'
+            }
             disabled={!canSend}
             onPress={publish}
           />
@@ -284,9 +310,22 @@ export default function Publish() {
         {/* El destino siempre a la vista antes de publicar. */}
         <Tag>Para {group.name}</Tag>
         <Title>
-          {proposal ? proposal.title : remembering ? 'Un recuerdo' : 'Comparte un momento'}
+          {adding
+            ? 'Tu versión'
+            : proposal
+              ? proposal.title
+              : remembering
+                ? 'Un recuerdo'
+                : 'Comparte un momento'}
         </Title>
-        {remembering && (
+        {adding && (
+          <Text style={{ color: theme.textSecondary, fontSize: 15, lineHeight: 21 }}>
+            Cuenta cómo lo recuerdas tú y añade tus fotos o vídeos de aquel día. Se sumará al
+            recuerdo de {target ? user(target.authorId).name.split(' ')[0] : 'tu grupo'}
+            {target?.text ? ` («${target.text.slice(0, 60)}»)` : ''}.
+          </Text>
+        )}
+        {remembering && !adding && (
           <Text style={{ color: theme.textSecondary, fontSize: 15, lineHeight: 21 }}>
             Fotos y vídeos de antes, todos los que quieras. Se guardará en su fecha y aparecerá en
             la memoria, en el mapa y en «tal día como hoy».
@@ -470,13 +509,19 @@ export default function Publish() {
       <TextInput
         value={text}
         onChangeText={setText}
-        placeholder={remembering ? '¿Qué pasó aquel día?' : 'Cuéntalo, si te apetece…'}
+        placeholder={
+          adding
+            ? '¿Cómo lo recuerdas tú?'
+            : remembering
+              ? '¿Qué pasó aquel día?'
+              : 'Cuéntalo, si te apetece…'
+        }
         placeholderTextColor={theme.textSecondary}
         multiline
         style={[styles.input, { color: theme.text, backgroundColor: theme.card }]}
       />
 
-      {remembering && (
+      {remembering && !adding && (
         <View style={{ gap: 8 }}>
           <DatePick value={when} onChange={(d) => setWhen(d)} label="¿Cuándo fue?" />
           {dateFromPhoto && (
@@ -488,7 +533,7 @@ export default function Publish() {
       )}
 
       {/* Lugar: solo si se quiere, y a nivel de ciudad. */}
-      {picking ? (
+      {adding ? null : picking ? (
         <CityPicker
           value={place}
           onChange={(p) => {
