@@ -90,8 +90,12 @@ export default function StoryScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupId, narrating]);
 
+  // La versión que se cuenta se fija al empezar: si la narradora termina tarde,
+  // la historia no cambia a medias (la próxima vez ya saldrá la suya).
+  const frozen = useRef<Narration | null | undefined>(undefined);
+  const source = frozen.current !== undefined ? frozen.current : narration;
   const scenes: Scene[] = useMemo(() => {
-    const raw = narration?.scenes?.length ? narration.scenes : templateScenes(story.items);
+    const raw = source?.scenes?.length ? source.scenes : templateScenes(story.items);
     const base = raw.map((e): Scene => {
       const memory = story.memories.find((m) => m.id === e.momentId);
       if (memory) return { type: 'memory', text: e.text, moment: memory };
@@ -109,7 +113,7 @@ export default function StoryScreen() {
       return { type: 'line', text: e.text };
     });
     return base.map((x, i) => (raw[i].chapter ? { ...x, chapter: raw[i].chapter } : x));
-  }, [narration, story]);
+  }, [source, story]);
   // Los capítulos: en qué capítulo está cada escena (número y nombre).
   const chapterAt = useMemo(() => {
     let n = 0;
@@ -127,6 +131,7 @@ export default function StoryScreen() {
   const [index, setIndex] = useState(-1);
   const [paused, setPaused] = useState(false);
   const [voiceOn, setVoiceOn] = useState(true);
+  if (index >= 0 && frozen.current === undefined) frozen.current = narration;
   const scene = index >= 0 ? scenes[index] : undefined;
 
   const elapsed = useRef(0);
@@ -141,7 +146,13 @@ export default function StoryScreen() {
   }, [index]);
 
   // La voz: un solo audio, cada escena es un tramo.
-  const voice = narration?.audioUrl && narration.sceneTimes?.length ? narration : null;
+  // La voz, solo si es de la versión que se está contando (puede llegar después del texto).
+  const voice =
+    narration?.audioUrl &&
+    narration.sceneTimes?.length &&
+    (frozen.current === undefined || frozen.current?.id === narration.id)
+      ? narration
+      : null;
   const player = narratorAudio();
   useEffect(() => {
     if (!player || !voice?.audioUrl) return;
