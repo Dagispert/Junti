@@ -166,27 +166,39 @@ function drawText(ctx: Ctx, el: HTMLElement, cs: CSSStyleDeclaration, w: number)
   const lh = cs.lineHeight === 'normal' ? size * 1.2 : px(cs.lineHeight);
   // Palabras con su estilo, y líneas que caben en el ancho.
   type Word = { text: string; cs: CSSStyleDeclaration; width: number };
-  const lines: Word[][] = [[]];
-  let lineW = 0;
-  for (const r of runs) {
-    ctx.font = fontOf(r.cs);
-    for (const piece of r.text.split(/(\s+)/)) {
-      if (!piece) continue;
-      if (/\n/.test(piece)) {
-        lines.push([]);
-        lineW = 0;
-        continue;
+  const layout = (max: number) => {
+    const lines: Word[][] = [[]];
+    let lineW = 0;
+    for (const r of runs) {
+      ctx.font = fontOf(r.cs);
+      for (const piece of r.text.split(/(\s+)/)) {
+        if (!piece) continue;
+        if (/\n/.test(piece)) {
+          lines.push([]);
+          lineW = 0;
+          continue;
+        }
+        const width = ctx.measureText(piece).width;
+        if (lineW + width > max + 0.5 && lineW > 0 && piece.trim()) {
+          lines.push([]);
+          lineW = 0;
+        }
+        if (!piece.trim() && lineW === 0) continue;
+        lines[lines.length - 1].push({ text: piece, cs: r.cs, width });
+        lineW += width;
       }
-      const width = ctx.measureText(piece).width;
-      if (lineW + width > w + 0.5 && lineW > 0 && piece.trim()) {
-        lines.push([]);
-        lineW = 0;
-      }
-      if (!piece.trim() && lineW === 0) continue;
-      lines[lines.length - 1].push({ text: piece, cs: r.cs, width });
-      lineW += width;
     }
-  }
+    return lines;
+  };
+  // Tantas líneas como en la pantalla: la letra del lienzo mide un pelín
+  // distinto, así que se da algo de margen antes de partir una línea más.
+  const onScreen = Math.max(
+    1,
+    Math.round((el.offsetHeight - px(cs.paddingTop) - px(cs.paddingBottom)) / lh),
+  );
+  let lines = layout(w);
+  for (let extra = 1.02; lines.length > onScreen && extra <= 1.2; extra += 0.03)
+    lines = layout(w * extra);
   const align = cs.textAlign;
   ctx.textBaseline = 'middle';
   lines.forEach((line, i) => {

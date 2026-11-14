@@ -107,7 +107,10 @@ async function watermark(ctx: CanvasRenderingContext2D, w: number, h: number, si
     const img = new Image();
     img.onload = () => resolve(img);
     img.onerror = () => resolve(null);
-    img.src = `${base}/logo.svg`;
+    fetch(`${base}/logo.svg`)
+      .then((r) => r.text())
+      .then((svg) => (img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`))
+      .catch(() => resolve(null));
   });
   ctx.save();
   ctx.font = `700 ${size}px ${SANS}`;
@@ -264,7 +267,18 @@ export async function renderMomentImage(m: {
   await ensureFonts();
   const W = 1080;
   const withComments = !!m.comments?.length;
-  const H = withComments ? 1920 : 1350;
+  // Con comentarios, la imagen crece lo justo para ellos (como mucho, formato story).
+  let commentsH = 0;
+  if (withComments) {
+    const probe = document.createElement('canvas').getContext('2d')!;
+    probe.font = `600 36px ${SANS}`;
+    for (const c of m.comments!.slice(0, 5)) {
+      const h = wrap(probe, `${c.name}  ${c.text}`, W - 220).slice(0, 3).length * 46 + 34 + 18;
+      if (1260 + commentsH + h > 1920 - 150) break;
+      commentsH += h;
+    }
+  }
+  const H = withComments ? Math.min(1920, Math.max(1350, 1260 + commentsH + 130)) : 1350;
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
@@ -301,7 +315,7 @@ export async function renderMomentImage(m: {
       ctx.font = `600 36px ${SANS}`;
       const lines = wrap(ctx, `${c.name}  ${c.text}`, W - 220).slice(0, 3);
       const boxH = lines.length * 46 + 34;
-      if (y + boxH > H - 150) break;
+      if (y + boxH > H - 100) break;
       ctx.fillStyle = 'rgba(255,255,255,0.85)';
       roundRect(ctx, 60, y, W - 120, boxH, 26);
       ctx.fill();
