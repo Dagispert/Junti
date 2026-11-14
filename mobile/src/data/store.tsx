@@ -1490,9 +1490,31 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const key = `${groupId}:${kind}:${from}:${action ?? 'text'}`;
       const running = force ? undefined : inFlight.get(key);
       if (running) return running;
-      const job = requestNarration({ groupId, kind, from, to, label, force, action }).finally(() =>
-        inFlight.delete(key),
-      );
+      // Si se corta la conexión mientras escribe (tarda), el servidor termina y lo
+      // guarda igual: se vuelve a pedir y llega lo ya hecho.
+      const attempt = async (
+        left: number,
+      ): Promise<{ narration: Narration | null; reason?: string }> => {
+        try {
+          return await requestNarration({
+            groupId,
+            kind,
+            from,
+            to,
+            label,
+            force: force && left === 3,
+            action,
+          });
+        } catch (error) {
+          const network = /failed to (send|fetch)|network|load failed/i.test(
+            String((error as Error)?.message),
+          );
+          if (!network || left <= 1) throw error;
+          await new Promise((r) => setTimeout(r, 8000));
+          return attempt(left - 1);
+        }
+      };
+      const job = attempt(3).finally(() => inFlight.delete(key));
       if (!force) inFlight.set(key, job);
       return job;
     },
