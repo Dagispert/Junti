@@ -9,19 +9,24 @@ import { CityPicker } from '@/components/city-picker';
 import { useGroupPeople } from '@/components/connection-card';
 import { DatePick } from '@/components/date-pick';
 import { Icon } from '@/components/icon';
-import { InlineVideo, VoiceNote } from '@/components/media-players';
+import { type Clip, InlineVideo, VoiceNote } from '@/components/media-players';
+import { PhotoCropper } from '@/components/photo-cropper';
+import { VideoTrimmer } from '@/components/video-trimmer';
 import { PressScale } from '@/components/motion';
 import { Button, Notice, Screen, Tag, Title } from '@/components/ui';
 import { Radius, Spacing, useTheme } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
 import { dateFromFile, dateFromPickerExif } from '@/lib/exif';
 import type { Place } from '@/lib/geo';
-import { secondsOf, videoPoster } from '@/lib/media';
+import { secondsOf, videoLength, videoPoster } from '@/lib/media';
 import { mmss } from '@/lib/music';
 import { useVoiceRecorder } from '@/lib/recorder';
-import { Camera, ImageIcon, MapPin, Mic, Plus, Video, X } from 'lucide-react-native';
+import { Camera, Crop, ImageIcon, MapPin, Mic, Plus, Video, X } from 'lucide-react-native';
 
+/** Lo que se enseña de un vídeo, como mucho (se elige el tramo). */
 const MAX_VIDEO = 30;
+/** El vídeo de partida puede ser más largo: se elige qué parte se ve. */
+const MAX_SOURCE = 10 * 60;
 
 type Media = {
   uri: string;
@@ -29,6 +34,8 @@ type Media = {
   mime?: string;
   duration?: number;
   poster?: string;
+  /** El tramo del vídeo que se enseña. */
+  clip?: Clip;
 };
 
 /**
@@ -70,6 +77,8 @@ export default function Publish() {
     return d;
   });
   const [dateFromPhoto, setDateFromPhoto] = useState(false);
+  // La foto que se está recortando (0 = la principal; 1… = las demás).
+  const [cropping, setCropping] = useState<number | null>(null);
 
   const group = groupById(groupId);
   const proposal = proposals.find((p) => p.id === proposalId);
@@ -77,6 +86,21 @@ export default function Publish() {
   const [sent, setSent] = useState(false);
   const leave = useCallback(() => router.back(), []);
   if (!group) return null;
+
+  if (cropping !== null && media?.kind === 'photo') {
+    const uri = cropping === 0 ? media.uri : extra[cropping - 1];
+    return (
+      <PhotoCropper
+        uri={uri}
+        onCancel={() => setCropping(null)}
+        onDone={(cropped) => {
+          if (cropping === 0) setMedia({ ...media, uri: cropped });
+          else setExtra((list) => list.map((u, k) => (k === cropping - 1 ? cropped : u)));
+          setCropping(null);
+        }}
+      />
+    );
+  }
 
   if (sent) {
     return (
@@ -110,7 +134,7 @@ export default function Publish() {
         // Desde la galería se pueden elegir varias fotos a la vez.
         allowsMultipleSelection: source === 'library' && !remembering,
         selectionLimit: append ? 10 - 1 - extra.length : 10,
-        videoMaxDuration: MAX_VIDEO,
+        videoMaxDuration: MAX_SOURCE,
         videoQuality: ImagePicker.UIImagePickerControllerQualityType.Medium,
       };
       const result =
@@ -147,10 +171,10 @@ export default function Publish() {
         setMedia({ uri: asset.uri, kind: 'photo', mime: 'image/jpeg' });
         return;
       }
-      const duration = secondsOf(asset.duration);
-      if (duration && duration > MAX_VIDEO + 1) {
+      const duration = secondsOf(asset.duration) ?? (await videoLength(asset.uri));
+      if (duration && duration > MAX_SOURCE + 1) {
         setNotice(
-          `Ese vídeo dura ${Math.round(duration)} segundos y el máximo son ${MAX_VIDEO}. Recórtalo en tu galería y vuelve a elegirlo.`,
+          `Ese vídeo dura ${Math.round(duration / 60)} minutos. Elige uno de como mucho ${MAX_SOURCE / 60} minutos y luego la parte que quieres enseñar.`,
         );
         return;
       }
@@ -166,6 +190,7 @@ export default function Publish() {
         mime: asset.mimeType ?? 'video/mp4',
         duration,
         poster,
+        clip: duration ? { start: 0, end: Math.min(duration, MAX_VIDEO) } : undefined,
       });
       setPreparing(false);
     } catch {
@@ -178,10 +203,24 @@ export default function Publish() {
     setNotice('');
     setBusy(true);
     try {
+      // Del vídeo, solo el tramo elegido (si no es el vídeo entero); la portada, de su inicio.
+      let visual = media;
+      if (media?.kind === 'video' && media.clip && media.duration) {
+        const whole = media.clip.start < 0.05 && media.clip.end >= media.duration - 0.1;
+        visual = whole
+          ? { ...media, clip: undefined }
+          : {
+              ...media,
+              poster:
+                media.clip.start > 0.2
+                  ? ((await videoPoster(media.uri, media.clip.start)) ?? media.poster)
+                  : media.poster,
+            };
+      }
       await addMoment({
         groupId,
         proposalId: proposal?.id,
-        media,
+        media: visual,
         voice: voice.result,
         text: text.trim() || undefined,
         place: place ?? undefined,
@@ -245,9 +284,11 @@ export default function Publish() {
       <View style={[styles.stage, { backgroundColor: theme.card, boxShadow: theme.shadow }]}>
         {media?.kind === 'video' ? (
           <View style={[styles.preview, { overflow: 'hidden', backgroundColor: '#000' }]}>
-            <InlineVideo uri={media.uri} />
+            <InlineVideo uri={media.uri} clip={media.clip} />
             {!!media.duration && (
-              <Text style={styles.videoTag}>▶ {Math.round(media.duration)} s</Text>
+              <Text style={styles.videoTag}>
+                ▶ {Math.round(media.clip ? media.clip.end - media.clip.start : media.duration)} s
+              </Text>
             )}
           </View>
         ) : media ? (
@@ -278,6 +319,16 @@ export default function Publish() {
         )}
         {media && (
           <View style={styles.floating}>
+            {media.kind === 'photo' && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Recortar la foto"
+                onPress={() => setCropping(0)}
+                style={styles.floatButton}>
+                <Icon icon={Crop} size={16} color="#FFFFFF" />
+                <Text style={styles.floatText}>Recortar</Text>
+              </Pressable>
+            )}
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Cambiar"
@@ -298,12 +349,33 @@ export default function Publish() {
           </View>
         )}
       </View>
+      {/* Vídeo: qué parte se enseña. */}
+      {media?.kind === 'video' && media.clip && !!media.duration && media.duration > 1.5 && (
+        <View style={{ gap: 6 }}>
+          <Text style={{ color: theme.text, fontSize: 15, fontWeight: '600' }}>
+            ¿Qué parte del vídeo quieres enseñar?
+          </Text>
+          <VideoTrimmer
+            uri={media.uri}
+            duration={media.duration}
+            value={media.clip}
+            max={MAX_VIDEO}
+            onChange={(clip) => setMedia((m) => (m ? { ...m, clip } : m))}
+          />
+        </View>
+      )}
       {/* Varias fotos: la tira de miniaturas, para quitar o añadir. */}
       {media?.kind === 'photo' && !remembering && (
         <View style={styles.thumbs}>
           {[media.uri, ...extra].map((uri, i) => (
             <View key={uri + i} style={styles.thumb}>
-              <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="cover" />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Recortar la foto ${i + 1}`}
+                onPress={() => setCropping(i)}
+                style={StyleSheet.absoluteFill}>
+                <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="cover" />
+              </Pressable>
               {i > 0 && (
                 <Pressable
                   accessibilityRole="button"
@@ -485,6 +557,8 @@ const styles = StyleSheet.create({
   },
   floating: { position: 'absolute', top: 22, right: 22, flexDirection: 'row', gap: 8 },
   floatButton: {
+    flexDirection: 'row',
+    gap: 6,
     height: 36,
     minWidth: 36,
     paddingHorizontal: 12,

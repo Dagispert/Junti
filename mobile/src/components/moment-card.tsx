@@ -9,6 +9,7 @@ import type { Moment } from '@/data/types';
 import { clockIn, relative } from '@/lib/time';
 
 import { CommentLine } from './comment-line';
+import { MomentEditor } from './moment-editor';
 import { type Burst, EmojiBursts } from './emoji-burst';
 import { EmojiPicker } from './emoji-picker';
 import { Icon } from './icon';
@@ -24,19 +25,9 @@ const VISIBLE_COMMENTS = 4;
 
 export function MomentCard({ moment }: { moment: Moment }) {
   const theme = useTheme();
-  const {
-    me,
-    user,
-    proposals,
-    toggleReaction,
-    addComment,
-    deleteMoment,
-    editMoment,
-    reportMoment,
-  } = useStore();
+  const { me, user, proposals, toggleReaction, addComment, reportMoment } = useStore();
   const [draft, setDraft] = useState('');
   const [expanded, setExpanded] = useState(false);
-  const [confirming, setConfirming] = useState(false);
   const [reported, setReported] = useState<'' | 'ask' | 'sent'>('');
   const [editing, setEditing] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
@@ -190,34 +181,8 @@ export function MomentCard({ moment }: { moment: Moment }) {
         </View>
 
         {editing !== null && (
-          <View style={styles.editBox}>
-            <TextInput
-              value={editing}
-              onChangeText={setEditing}
-              multiline
-              autoFocus
-              maxLength={2000}
-              accessibilityLabel="Texto del momento"
-              style={[styles.editInput, { color: theme.text, backgroundColor: theme.soft }]}
-            />
-            <View style={styles.editActions}>
-              <Pressable accessibilityRole="button" onPress={() => setEditing(null)}>
-                <Text style={{ color: theme.textSecondary, fontSize: 15 }}>Cancelar</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                disabled={!editing.trim() && !moment.imageUri && !moment.videoUri && !moment.voice}
-                onPress={() =>
-                  editMoment(moment.id, editing.trim())
-                    .then(() => setEditing(null))
-                    .catch(() => {})
-                }
-                style={[styles.saveBtn, { backgroundColor: theme.accent }]}>
-                <Text style={{ color: theme.onAccent, fontSize: 15, fontWeight: '500' }}>
-                  Guardar
-                </Text>
-              </Pressable>
-            </View>
+          <View style={{ paddingHorizontal: 8, paddingTop: 12 }}>
+            <MomentEditor moment={moment} onClose={() => setEditing(null)} />
           </View>
         )}
 
@@ -271,22 +236,9 @@ export function MomentCard({ moment }: { moment: Moment }) {
             {moment.authorId === me && editing === null && (
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Editar el texto"
+                accessibilityLabel="Editar o eliminar este momento"
                 onPress={() => setEditing(moment.text ?? '')}>
                 <Text style={{ fontSize: 13, color: theme.textSecondary }}>Editar</Text>
-              </Pressable>
-            )}
-            {moment.authorId === me && (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Eliminar este momento"
-                onPress={() =>
-                  confirming ? deleteMoment(moment.id).catch(() => {}) : setConfirming(true)
-                }>
-                <Text
-                  style={{ fontSize: 13, color: confirming ? theme.text : theme.textSecondary }}>
-                  {confirming ? '¿Eliminar?' : 'Eliminar'}
-                </Text>
               </Pressable>
             )}
           </View>
@@ -349,22 +301,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 9,
     borderRadius: Radius.pill,
-  },
-  editBox: { paddingHorizontal: 8, paddingTop: 12, gap: 8 },
-  editInput: {
-    minHeight: 80,
-    fontSize: 15,
-    lineHeight: 20,
-    borderRadius: Radius.small,
-    padding: 12,
-    textAlignVertical: 'top',
-  },
-  editActions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 16 },
-  saveBtn: {
-    height: 36,
-    paddingHorizontal: 16,
-    borderRadius: Radius.small,
-    justifyContent: 'center',
   },
   thread: { paddingHorizontal: 8, paddingTop: 12, paddingBottom: 8, gap: 8 },
   comment: { fontSize: 15, lineHeight: 20 },

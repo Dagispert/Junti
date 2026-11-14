@@ -66,6 +66,8 @@ type Store = {
       mime?: string;
       duration?: number;
       poster?: string;
+      /** El tramo del vídeo que se enseña (en segundos). */
+      clip?: { start: number; end: number };
     };
     /** Nota de voz grabada. */
     voice?: { uri: string; mime: string; duration: number; waveform: number[] };
@@ -77,6 +79,13 @@ type Store = {
     morePhotos?: string[];
   }) => Promise<void>;
   deleteMoment: (momentId: string) => Promise<void>;
+  /** Quitar la nota de voz de un momento propio. */
+  removeVoice: (momentId: string) => Promise<void>;
+  /** Cambiar el tramo del vídeo que se enseña (o null para el vídeo entero). */
+  setVideoClip: (assetId: string, clip: { start: number; end: number } | null) => Promise<void>;
+  editChallenge: (proposalId: string, title: string, body: string) => Promise<void>;
+  deleteChallenge: (proposalId: string) => Promise<void>;
+  editQuestion: (questionId: string, title: string) => Promise<void>;
   /** Cambiar el texto de un momento propio. */
   editMoment: (momentId: string, text: string) => Promise<void>;
   toggleReaction: (momentId: string, emoji: string) => Promise<void>;
@@ -315,7 +324,7 @@ async function load(me: string): Promise<Data> {
       .select(
         'id, group_id, author_id, text, created_at, shared_at, memory, edited_at, author_tz, proposal_id, place_name, lat, lng, ' +
           'reactions(emoji, user_id), comments(id, user_id, text, created_at, deleted_at, edited_at), ' +
-          'moment_media(position, media_assets(storage_path, kind, thumb_path, duration_s, waveform))',
+          'moment_media(position, media_assets(id, storage_path, kind, thumb_path, duration_s, waveform, clip_start, clip_end))',
       )
       .is('deleted_at', null)
       .order('shared_at', { ascending: false })
@@ -323,7 +332,7 @@ async function load(me: string): Promise<Data> {
       .then(check) as PromiseLike<any[]>,
     supabase
       .from('proposals')
-      .select('id, group_id, kind, title, body, starts_at, ends_at')
+      .select('id, group_id, kind, title, body, starts_at, ends_at, created_by')
       .then(check),
     supabase.from('proposal_states').select('proposal_id, state').eq('user_id', me).then(check),
     supabase
@@ -452,6 +461,9 @@ async function load(me: string): Promise<Data> {
   // Las fotos están en un almacén privado: se piden direcciones temporales firmadas.
   // Archivos de cada momento: lo visual (foto o vídeo, con su portada) y la voz.
   type Asset = {
+    id: string;
+    clip_start?: number | null;
+    clip_end?: number | null;
     storage_path: string;
     kind: 'photo' | 'video' | 'audio';
     thumb_path?: string;
@@ -501,9 +513,19 @@ async function load(me: string): Promise<Data> {
           : undefined,
       photos: allPhotos.length > 1 ? allPhotos : undefined,
       videoUri: video ? signed[video.storage_path] : undefined,
-      videoDuration: video?.duration_s ?? undefined,
+      videoDuration:
+        video?.clip_end != null
+          ? video.clip_end - (video.clip_start ?? 0)
+          : (video?.duration_s ?? undefined),
+      videoAssetId: video?.id,
+      videoClip:
+        video?.clip_end != null
+          ? { start: Number(video.clip_start ?? 0), end: Number(video.clip_end) }
+          : undefined,
+      videoFullDuration: video?.duration_s ?? undefined,
       voice: voice
         ? {
+            assetId: voice.id,
             uri: signed[voice.storage_path],
             duration: Number(voice.duration_s ?? 0),
             waveform: voice.waveform ?? [],
@@ -541,6 +563,7 @@ async function load(me: string): Promise<Data> {
     body: p.body ?? undefined,
     startsAt: Date.parse(p.starts_at),
     endsAt: p.ends_at ? Date.parse(p.ends_at) : undefined,
+    createdBy: p.created_by ?? undefined,
   }));
 
   const songs: Song[] = (songRows ?? []).map((s) => ({
@@ -869,6 +892,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               bytes: file.bytes,
               mime,
               duration_s: visual.duration ?? null,
+              clip_start: visual.clip?.start ?? null,
+              clip_end: visual.clip?.end ?? null,
             })
             .select('id')
             .single(),
@@ -958,6 +983,58 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           .update({ text: text || null, edited_at: new Date().toISOString() })
           .eq('id', momentId),
       );
+      await refresh();
+    },
+    removeVoice: async (momentId) => {
+      const moment = data.moments.find((m) => m.id === momentId);
+      const assetId = moment?.voice?.assetId;
+      if (!assetId) return;
+      const { data: asset } = await supabase
+        .from('media_assets')
+        .select('storage_path')
+        .eq('id', assetId)
+        .maybeSingle();
+      check(
+        await supabase
+          .from('moment_media')
+          .delete()
+          .match({ moment_id: momentId, media_asset_id: assetId }),
+      );
+      check(await supabase.from('media_assets').delete().eq('id', assetId));
+      if (asset?.storage_path)
+        await supabase.storage.from(MEDIA_BUCKET).remove([asset.storage_path]);
+      check(
+        await supabase
+          .from('moments')
+          .update({ edited_at: new Date().toISOString() })
+          .eq('id', momentId),
+      );
+      await refresh();
+    },
+    setVideoClip: async (assetId, clip) => {
+      check(
+        await supabase
+          .from('media_assets')
+          .update({ clip_start: clip?.start ?? null, clip_end: clip?.end ?? null })
+          .eq('id', assetId),
+      );
+      await refresh();
+    },
+    editChallenge: async (proposalId, title, body) => {
+      check(
+        await supabase
+          .from('proposals')
+          .update({ title, body: body || null })
+          .eq('id', proposalId),
+      );
+      await refresh();
+    },
+    deleteChallenge: async (proposalId) => {
+      check(await supabase.from('proposals').delete().eq('id', proposalId));
+      await refresh();
+    },
+    editQuestion: async (questionId, title) => {
+      check(await supabase.from('questions').update({ title }).eq('id', questionId));
       await refresh();
     },
     deleteMoment: async (momentId) => {

@@ -1,9 +1,11 @@
 import { CommentLine } from '@/components/comment-line';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { ZoomIn } from 'react-native-reanimated';
 
 import { Icon } from '@/components/icon';
+import { MomentEditor } from '@/components/moment-editor';
 import { PhotoCarousel } from '@/components/photo-carousel';
 import { VideoMoment, VoiceNote, Waveform } from '@/components/media-players';
 import { Sticker, StickyNote } from '@/components/scrapbook';
@@ -12,14 +14,21 @@ import { Photo, Screen } from '@/components/ui';
 import { Hand, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import { clockIn } from '@/lib/time';
-import { ArrowLeft, Check, Plus } from 'lucide-react-native';
+import { ArrowLeft, Check, Pencil, Plus } from 'lucide-react-native';
 
 /** Un momento a lo grande, como una foto pegada en un álbum. */
 export default function MomentView() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
-  const { moments, user, proposals, albums, setAlbumMoments } = useStore();
+  const { moments, user, proposals, albums, setAlbumMoments, me } = useStore();
   const moment = moments.find((m) => m.id === id);
+  const [editing, setEditing] = useState(false);
+  // Si se elimina desde aquí, se vuelve atrás.
+  const seen = useRef(false);
+  if (moment) seen.current = true;
+  useEffect(() => {
+    if (!moment && seen.current) router.back();
+  }, [moment]);
   if (!moment) return null;
   const author = user(moment.authorId);
   const proposal = proposals.find((p) => p.id === moment.proposalId);
@@ -56,7 +65,17 @@ export default function MomentView() {
               </Text>
             </View>
           </View>
-          <View style={{ width: 44 }} />
+          {moment.authorId === me ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Editar o eliminar"
+              onPress={() => setEditing((e) => !e)}
+              style={[styles.round, { backgroundColor: theme.card }]}>
+              <Icon icon={Pencil} size={18} color={theme.text} />
+            </Pressable>
+          ) : (
+            <View style={{ width: 44 }} />
+          )}
         </View>
       }>
       <Animated.View entering={ZoomIn.duration(360)} style={styles.frame}>
@@ -96,6 +115,11 @@ export default function MomentView() {
         ))}
       </Animated.View>
 
+      {editing && (
+        <View style={{ marginTop: 28 }}>
+          <MomentEditor moment={moment} onClose={() => setEditing(false)} />
+        </View>
+      )}
       {moment.voice && (
         <View style={{ marginTop: 24 }}>
           <VoiceNote voice={moment.voice} />

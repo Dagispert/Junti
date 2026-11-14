@@ -32,6 +32,27 @@ const Surface = memo(function Surface({ player }: { player: VideoPlayer }) {
   );
 });
 
+export type Clip = { start: number; end: number };
+
+/**
+ * Solo el tramo elegido del vídeo: empieza en su inicio y, al llegar a su
+ * final, vuelve a empezar (o se para, si no va en bucle).
+ */
+function useClip(player: VideoPlayer, clip: Clip | undefined, loop = true) {
+  useEffect(() => {
+    if (!clip) return;
+    player.timeUpdateEventInterval = 0.1;
+    player.currentTime = clip.start;
+    const sub = player.addListener('timeUpdate', ({ currentTime }) => {
+      if (currentTime >= clip.end - 0.05 || currentTime < clip.start - 0.3) {
+        player.currentTime = clip.start;
+        if (!loop && currentTime >= clip.end - 0.05) player.pause();
+      }
+    });
+    return () => sub.remove();
+  }, [player, clip?.start, clip?.end, loop]);
+}
+
 /**
  * Reproduce o pausa según el vídeo esté a la vista. En la web se comprueba la
  * posición cada poco (más fiable que IntersectionObserver dentro de listas con
@@ -79,12 +100,14 @@ export function InlineVideo({
   muted = true,
   loop = true,
   controls = false,
+  clip,
   style,
 }: {
   uri: string;
   muted?: boolean;
   loop?: boolean;
   controls?: boolean;
+  clip?: Clip;
   style?: StyleProp<ViewStyle>;
 }) {
   const host = useRef<any>(null);
@@ -92,6 +115,7 @@ export function InlineVideo({
     p.loop = loop;
     p.muted = muted;
   });
+  useClip(player, clip, loop);
   useAutoplayWhenVisible(player, host, true);
   return (
     <View ref={host} style={[StyleSheet.absoluteFill, { overflow: 'hidden' }, style]}>
@@ -110,7 +134,16 @@ export function InlineVideo({
  * Clip animado de un vídeo, como un GIF: los primeros segundos en bucle, sin
  * sonido, y solo mientras está a la vista. Se usa en vez de una portada fija.
  */
-export function VideoClip({ uri, seconds = 3 }: { uri: string; seconds?: number }) {
+export function VideoClip({
+  uri,
+  seconds = 3,
+  start = 0,
+}: {
+  uri: string;
+  seconds?: number;
+  /** Desde dónde (si el vídeo se recortó). */
+  start?: number;
+}) {
   const host = useRef<any>(null);
   const player = useVideoPlayer(uri, (p) => {
     p.muted = true;
@@ -118,11 +151,12 @@ export function VideoClip({ uri, seconds = 3 }: { uri: string; seconds?: number 
     p.timeUpdateEventInterval = 0.2;
   });
   useEffect(() => {
+    if (start) player.currentTime = start;
     const sub = player.addListener('timeUpdate', ({ currentTime }) => {
-      if (currentTime >= seconds) player.currentTime = 0;
+      if (currentTime >= start + seconds || currentTime < start - 0.3) player.currentTime = start;
     });
     return () => sub.remove();
-  }, [player, seconds]);
+  }, [player, seconds, start]);
   useAutoplayWhenVisible(player, host, true);
   return (
     <View ref={host} pointerEvents="none" style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]}>
@@ -132,8 +166,8 @@ export function VideoClip({ uri, seconds = 3 }: { uri: string; seconds?: number 
 }
 
 /** Primer fotograma de un vídeo sin portada guardada (vídeo en pausa). */
-export function VideoFrame({ uri }: { uri: string }) {
-  const player = useVideoPlayer(`${uri}#t=0.1`, (p) => {
+export function VideoFrame({ uri, start = 0 }: { uri: string; start?: number }) {
+  const player = useVideoPlayer(`${uri}#t=${(start + 0.1).toFixed(2)}`, (p) => {
     p.muted = true;
   });
   return (
@@ -163,13 +197,14 @@ export function VideoMoment({ moment, style }: { moment: Moment; style?: StylePr
     p.muted = true;
   });
   useAutoplayWhenVisible(player, host, !!moment.videoUri);
+  useClip(player, moment.videoClip);
 
   const toggle = () => {
     const next = !sound;
     player.muted = !next;
     if (next) {
       // Al activar el sonido, desde el principio, como en las redes.
-      player.currentTime = 0;
+      player.currentTime = moment.videoClip?.start ?? 0;
       player.play();
     }
     setSound(next);

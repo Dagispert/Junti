@@ -157,7 +157,9 @@ export function Photo({
           transition={200}
         />
         {/* En los vídeos, la portada se anima: sus primeros segundos en bucle, como un GIF. */}
-        {moment.videoUri && animate && <VideoClip uri={moment.videoUri} />}
+        {moment.videoUri && animate && (
+          <VideoClip uri={moment.videoUri} start={moment.videoClip?.start} />
+        )}
         {badge && moment.videoUri && (
           <View style={styles.playBadge}>
             <Text style={{ color: '#1D1F22', fontSize: 11, marginLeft: 2 }}>▶</Text>
@@ -170,7 +172,11 @@ export function Photo({
     // Vídeo sin portada guardada: se muestra su primer fotograma.
     return (
       <View style={[styles.photo, { backgroundColor: '#2B2E33' }, style]}>
-        {animate ? <VideoClip uri={moment.videoUri} /> : <VideoFrame uri={moment.videoUri} />}
+        {animate ? (
+          <VideoClip uri={moment.videoUri} start={moment.videoClip?.start} />
+        ) : (
+          <VideoFrame uri={moment.videoUri} start={moment.videoClip?.start} />
+        )}
         {badge && (
           <View style={styles.playBadge}>
             <Text style={{ color: '#1D1F22', fontSize: 11, marginLeft: 2 }}>▶</Text>

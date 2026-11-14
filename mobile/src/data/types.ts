@@ -106,6 +106,8 @@ export type Proposal = {
   body?: string;
   startsAt: number;
   endsAt?: number;
+  /** Quién lo propuso (vacío: lo propuso Junti). */
+  createdBy?: string;
 };
 
 export type Reaction = { emoji: string; userId: string };
@@ -130,8 +132,12 @@ export type Moment = {
   /** Vídeo (entonces «imageUri» es su portada) y su duración en segundos. */
   videoUri?: string;
   videoDuration?: number;
+  /** El tramo del vídeo que se enseña (si se recortó), su duración total y su archivo. */
+  videoClip?: { start: number; end: number };
+  videoFullDuration?: number;
+  videoAssetId?: string;
   /** Nota de voz: audio, duración en segundos y forma de onda (0–100). */
-  voice?: { uri: string; duration: number; waveform: number[] };
+  voice?: { uri: string; duration: number; waveform: number[]; assetId?: string };
   /** Cuándo pasó (en un recuerdo, su fecha real). */
   createdAt: number;
   /** Cuándo se compartió en el grupo. */

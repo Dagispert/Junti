@@ -7,6 +7,7 @@ import type { Question } from '@/data/types';
 import { daysLeft, relative } from '@/lib/time';
 
 import { Icon } from './icon';
+import { OwnerActions } from './owner-actions';
 import { Avatar, AvatarRow, Card, Notice } from './ui';
 import { ArrowUp, ChartColumn, Check, CircleHelp, MessageCircle, X } from 'lucide-react-native';
 
@@ -25,11 +26,10 @@ const BAD = '#DC2626';
  */
 export function QuestionCard({ question }: { question: Question }) {
   const theme = useTheme();
-  const { me, user, answerQuestion, deleteQuestion } = useStore();
+  const { me, user, answerQuestion, deleteQuestion, editQuestion } = useStore();
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
-  const [confirming, setConfirming] = useState(false);
 
   const mine = question.answers.find((a) => a.userId === me);
   const isAuthor = question.createdBy === me;
@@ -207,14 +207,13 @@ export function QuestionCard({ question }: { question: Question }) {
       <Notice>{notice}</Notice>
 
       {isAuthor && (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => (confirming ? deleteQuestion(question.id) : setConfirming(true))}
-          style={{ alignSelf: 'flex-end' }}>
-          <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
-            {confirming ? '¿Seguro? Toca otra vez para borrarla' : 'Borrar'}
-          </Text>
-        </Pressable>
+        <OwnerActions
+          fields={[{ label: 'La pregunta', value: question.title, max: 200, required: true }]}
+          onSave={([title]) => editQuestion(question.id, title)}
+          onDelete={() => deleteQuestion(question.id)}
+          canEdit={total === 0}
+          cantEditNote="Ya hay respuestas: ahora solo se puede eliminar."
+        />
       )}
     </Card>
   );

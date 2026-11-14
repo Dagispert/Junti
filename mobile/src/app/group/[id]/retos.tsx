@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { GroupHeader } from '@/components/group-header';
+import { OwnerActions } from '@/components/owner-actions';
 import { QuestionCard } from '@/components/question-card';
 import { AvatarRow, Button, Card, PhotoFan, Screen, Tag } from '@/components/ui';
 import { Spacing, useTheme } from '@/constants/theme';
@@ -15,7 +16,16 @@ import { Missing } from './index';
 export default function Challenges() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
-  const { group: groupById, moments, proposals, questions, addChallenge } = useStore();
+  const {
+    group: groupById,
+    moments,
+    proposals,
+    questions,
+    addChallenge,
+    editChallenge,
+    deleteChallenge,
+    me,
+  } = useStore();
   const group = groupById(id);
   if (!group) return <Missing />;
 
@@ -67,6 +77,27 @@ export default function Challenges() {
             />
           )}
         </View>
+        {/* Quien lo propuso (o quien administra el grupo) puede corregirlo o quitarlo. */}
+        {(challenge.createdBy === me || (group.isAdmin && !!challenge.createdBy)) && (
+          <OwnerActions
+            fields={[
+              { label: 'El reto', value: challenge.title, max: 140, required: true },
+              {
+                label: 'Cómo se hace (opcional)',
+                value: challenge.body ?? '',
+                max: 600,
+                multiline: true,
+              },
+            ]}
+            onSave={([title, body]) => editChallenge(challenge.id, title, body)}
+            onDelete={() => deleteChallenge(challenge.id)}
+            deleteNote={
+              answers.length
+                ? 'Lo que ya se compartió para el reto se queda en el grupo.'
+                : undefined
+            }
+          />
+        )}
       </Card>
     );
   };

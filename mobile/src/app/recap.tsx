@@ -578,6 +578,7 @@ function MomentSlide({
               // En la historia, el vídeo se mueve solo, en silencio y en bucle.
               <InlineVideo
                 uri={moment.videoUri}
+                clip={moment.videoClip}
                 muted
                 loop
                 controls={false}
