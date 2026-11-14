@@ -120,6 +120,16 @@ export type Comment = {
   edited?: boolean;
 };
 
+/** Una foto o un vídeo dentro de un momento con varios. */
+export type GalleryItem = {
+  kind: 'photo' | 'video';
+  uri: string;
+  /** Portada (en los vídeos). */
+  poster?: string;
+  clip?: { start: number; end: number };
+  duration?: number;
+};
+
 export type Moment = {
   id: string;
   groupId: string;
@@ -129,6 +139,8 @@ export type Moment = {
   imageUri?: string;
   /** Todas las fotos del momento, en orden (la primera es «imageUri»). */
   photos?: string[];
+  /** Varias fotos y vídeos mezclados, en orden (si hay más de uno). */
+  gallery?: GalleryItem[];
   /** Vídeo (entonces «imageUri» es su portada) y su duración en segundos. */
   videoUri?: string;
   videoDuration?: number;

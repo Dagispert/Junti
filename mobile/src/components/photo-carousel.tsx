@@ -2,19 +2,26 @@ import { Image } from 'expo-image';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
+import type { GalleryItem, Moment } from '@/data/types';
+
+import { VideoMoment } from './media-players';
+
 /**
- * Varias fotos de un momento: se pasan deslizando, con puntos que dicen en
- * cuál estás. Tocar una abre «onOpen».
+ * Varias fotos (y vídeos) de un momento: se pasan deslizando, con puntos que
+ * dicen en cuál estás. Tocar una foto abre «onOpen»; tocar un vídeo le da sonido.
  */
 export function PhotoCarousel({
   photos,
+  items: given,
   onOpen,
   dotsBottom = 12,
 }: {
-  photos: string[];
+  photos?: string[];
+  items?: GalleryItem[];
   onOpen?: () => void;
   dotsBottom?: number;
 }) {
+  const items: GalleryItem[] = given ?? (photos ?? []).map((uri) => ({ kind: 'photo', uri }));
   const [width, setWidth] = useState(0);
   const [index, setIndex] = useState(0);
   return (
@@ -27,22 +34,45 @@ export function PhotoCarousel({
           scrollEventThrottle={32}
           onScroll={(e) => setIndex(Math.round(e.nativeEvent.contentOffset.x / width))}
           style={StyleSheet.absoluteFill}>
-          {photos.map((uri, i) => (
-            <Pressable
-              key={uri}
-              accessibilityRole="button"
-              accessibilityLabel={`Foto ${i + 1} de ${photos.length}`}
-              onPress={onOpen}
-              style={{ width, height: '100%' }}>
-              <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="cover" />
-            </Pressable>
-          ))}
+          {items.map((item, i) =>
+            item.kind === 'video' ? (
+              <View
+                key={item.uri}
+                accessibilityLabel={`Vídeo ${i + 1} de ${items.length}`}
+                style={{ width, height: '100%' }}>
+                <VideoMoment
+                  moment={
+                    {
+                      videoUri: item.uri,
+                      imageUri: item.poster,
+                      videoClip: item.clip,
+                      videoDuration: item.duration,
+                    } as Moment
+                  }
+                  style={StyleSheet.absoluteFill}
+                />
+              </View>
+            ) : (
+              <Pressable
+                key={item.uri}
+                accessibilityRole="button"
+                accessibilityLabel={`Foto ${i + 1} de ${items.length}`}
+                onPress={onOpen}
+                style={{ width, height: '100%' }}>
+                <Image
+                  source={{ uri: item.uri }}
+                  style={StyleSheet.absoluteFill}
+                  contentFit="cover"
+                />
+              </Pressable>
+            ),
+          )}
         </ScrollView>
       )}
       <View pointerEvents="none" style={[styles.dots, { bottom: dotsBottom }]}>
-        {photos.map((uri, i) => (
+        {items.map((item, i) => (
           <View
-            key={uri}
+            key={item.uri}
             style={[
               styles.dot,
               { backgroundColor: i === index ? '#FFFFFF' : 'rgba(255,255,255,0.5)' },

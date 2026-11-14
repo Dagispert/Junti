@@ -77,6 +77,15 @@ type Store = {
     rememberedAt?: number;
     /** Más fotos, además de la principal. */
     morePhotos?: string[];
+    /** Más fotos o vídeos, además de la principal (en este orden). */
+    more?: {
+      uri: string;
+      kind: 'photo' | 'video';
+      mime?: string;
+      duration?: number;
+      poster?: string;
+      clip?: { start: number; end: number };
+    }[];
   }) => Promise<void>;
   deleteMoment: (momentId: string) => Promise<void>;
   /** Quitar la nota de voz de un momento propio. */
@@ -498,30 +507,54 @@ async function load(me: string): Promise<Data> {
     const assets = assetsOf(row);
     const photo = assets.find((a) => a.kind === 'photo');
     const allPhotos = assets.filter((a) => a.kind === 'photo').map((a) => signed[a.storage_path]);
-    const video = assets.find((a) => a.kind === 'video');
+    const visuals = assets.filter((a) => a.kind !== 'audio');
+    // Con varias cosas (fotos y vídeos mezclados), la primera hace de portada.
+    const video =
+      visuals.length > 1
+        ? visuals[0].kind === 'video'
+          ? visuals[0]
+          : undefined
+        : assets.find((a) => a.kind === 'video');
     const voice = assets.find((a) => a.kind === 'audio');
+    const clipOf = (a: Asset) =>
+      a.clip_end != null
+        ? { start: Number(a.clip_start ?? 0), end: Number(a.clip_end) }
+        : undefined;
     return {
       id: row.id,
       groupId: row.group_id,
       authorId: row.author_id,
       text: row.text ?? undefined,
       // En los vídeos, «imageUri» es su portada: así sirven igual en carretes, polaroids y mapa.
-      imageUri: photo
-        ? signed[photo.storage_path]
-        : video?.thumb_path
-          ? signed[video.thumb_path]
-          : undefined,
+      imageUri:
+        visuals.length > 1 && visuals[0].kind === 'photo'
+          ? signed[visuals[0].storage_path]
+          : visuals.length > 1 && video?.thumb_path
+            ? signed[video.thumb_path]
+            : photo && !video
+              ? signed[photo.storage_path]
+              : video?.thumb_path
+                ? signed[video.thumb_path]
+                : undefined,
       photos: allPhotos.length > 1 ? allPhotos : undefined,
+      gallery:
+        visuals.length > 1
+          ? visuals.map((a) => ({
+              kind: a.kind as 'photo' | 'video',
+              uri: signed[a.storage_path],
+              poster: a.thumb_path ? signed[a.thumb_path] : undefined,
+              clip: clipOf(a),
+              duration:
+                a.clip_end != null ? a.clip_end - (a.clip_start ?? 0) : (a.duration_s ?? undefined),
+            }))
+          : undefined,
       videoUri: video ? signed[video.storage_path] : undefined,
       videoDuration:
         video?.clip_end != null
           ? video.clip_end - (video.clip_start ?? 0)
           : (video?.duration_s ?? undefined),
       videoAssetId: video?.id,
-      videoClip:
-        video?.clip_end != null
-          ? { start: Number(video.clip_start ?? 0), end: Number(video.clip_end) }
-          : undefined,
+      videoClip: video ? clipOf(video) : undefined,
       videoFullDuration: video?.duration_s ?? undefined,
       voice: voice
         ? {
@@ -853,6 +886,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       place,
       rememberedAt,
       morePhotos,
+      more,
     }) => {
       const visual = media ?? (imageUri ? { uri: imageUri, kind: 'photo' as const } : undefined);
       const stamp = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -872,44 +906,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return { path, bytes: blob.size };
       };
       const assetIds: string[] = [];
-      if (visual) {
-        const mime = visual.mime ?? (visual.kind === 'video' ? 'video/mp4' : 'image/jpeg');
+      // Lo visual, en orden: la principal y las demás (fotos y vídeos mezclados).
+      type Visual = NonNullable<typeof more>[number];
+      const visuals: Visual[] = [
+        ...(visual ? [visual as Visual] : []),
+        ...(more ?? []),
+        ...(morePhotos ?? []).map((uri) => ({ uri, kind: 'photo' as const })),
+      ];
+      for (const [i, item] of visuals.entries()) {
+        const mime = item.mime ?? (item.kind === 'video' ? 'video/mp4' : 'image/jpeg');
+        const name = i === 0 ? stamp : `${stamp}-${i + 1}`;
         const file = await put(
-          visual.uri,
-          `${stamp}.${extensionFor(mime, visual.kind === 'video' ? 'mp4' : 'jpg')}`,
+          item.uri,
+          `${name}.${extensionFor(mime, item.kind === 'video' ? 'mp4' : 'jpg')}`,
           mime,
         );
-        const thumb = visual.poster
-          ? await put(visual.poster, `${stamp}-portada.jpg`, 'image/jpeg')
+        const thumb = item.poster
+          ? await put(item.poster, `${name}-portada.jpg`, 'image/jpeg')
           : undefined;
         const asset = check(
           await supabase
             .from('media_assets')
             .insert({
-              kind: visual.kind,
+              kind: item.kind,
               storage_path: file.path,
               thumb_path: thumb?.path ?? null,
               bytes: file.bytes,
               mime,
-              duration_s: visual.duration ?? null,
-              clip_start: visual.clip?.start ?? null,
-              clip_end: visual.clip?.end ?? null,
-            })
-            .select('id')
-            .single(),
-        );
-        assetIds.push(asset!.id);
-      }
-      for (const [i, uri] of (morePhotos ?? []).entries()) {
-        const file = await put(uri, `${stamp}-${i + 2}.jpg`, 'image/jpeg');
-        const asset = check(
-          await supabase
-            .from('media_assets')
-            .insert({
-              kind: 'photo',
-              storage_path: file.path,
-              bytes: file.bytes,
-              mime: 'image/jpeg',
+              duration_s: item.duration ?? null,
+              clip_start: item.clip?.start ?? null,
+              clip_end: item.clip?.end ?? null,
             })
             .select('id')
             .single(),

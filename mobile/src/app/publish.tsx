@@ -21,7 +21,7 @@ import type { Place } from '@/lib/geo';
 import { secondsOf, videoLength, videoPoster } from '@/lib/media';
 import { mmss } from '@/lib/music';
 import { useVoiceRecorder } from '@/lib/recorder';
-import { Camera, Crop, ImageIcon, MapPin, Mic, Plus, Video, X } from 'lucide-react-native';
+import { Camera, Crop, ImageIcon, MapPin, Mic, Play, Plus, Video, X } from 'lucide-react-native';
 
 /** Lo que se enseña de un vídeo, como mucho (se elige el tramo). */
 const MAX_VIDEO = 30;
@@ -59,9 +59,13 @@ export default function Publish() {
       ? { name: meUser.city, country: meUser.country, lat: meUser.lat, lng: meUser.lng }
       : null;
   const [busy, setBusy] = useState(false);
-  const [media, setMedia] = useState<Media>();
-  // Más fotos además de la principal (hasta 10 en total).
-  const [extra, setExtra] = useState<string[]>([]);
+  // Fotos y vídeos, mezclados (hasta 10). «sel» es el que se ve en grande.
+  const [items, setItems] = useState<Media[]>([]);
+  const [sel, setSel] = useState(0);
+  const media: Media | undefined = items[Math.min(sel, items.length - 1)];
+  const current = Math.min(sel, Math.max(0, items.length - 1));
+  const update = (i: number, change: Partial<Media>) =>
+    setItems((list) => list.map((m, k) => (k === i ? { ...m, ...change } : m)));
   const [preparing, setPreparing] = useState(false);
   const voice = useVoiceRecorder();
   const [text, setText] = useState('');
@@ -77,7 +81,7 @@ export default function Publish() {
     return d;
   });
   const [dateFromPhoto, setDateFromPhoto] = useState(false);
-  // La foto que se está recortando (0 = la principal; 1… = las demás).
+  // La foto que se está recortando (su posición en la lista).
   const [cropping, setCropping] = useState<number | null>(null);
 
   const group = groupById(groupId);
@@ -87,15 +91,13 @@ export default function Publish() {
   const leave = useCallback(() => router.back(), []);
   if (!group) return null;
 
-  if (cropping !== null && media?.kind === 'photo') {
-    const uri = cropping === 0 ? media.uri : extra[cropping - 1];
+  if (cropping !== null && items[cropping]?.kind === 'photo') {
     return (
       <PhotoCropper
-        uri={uri}
+        uri={items[cropping].uri}
         onCancel={() => setCropping(null)}
         onDone={(cropped) => {
-          if (cropping === 0) setMedia({ ...media, uri: cropped });
-          else setExtra((list) => list.map((u, k) => (k === cropping - 1 ? cropped : u)));
+          update(cropping, { uri: cropped });
           setCropping(null);
         }}
       />
@@ -109,6 +111,24 @@ export default function Publish() {
       </View>
     );
   }
+
+  /** Un vídeo elegido: comprueba su duración y su peso, y prepara su portada. */
+  const prepareVideo = async (asset: ImagePicker.ImagePickerAsset): Promise<Media | string> => {
+    const duration = secondsOf(asset.duration) ?? (await videoLength(asset.uri));
+    if (duration && duration > MAX_SOURCE + 1)
+      return `Un vídeo dura ${Math.round(duration / 60)} minutos: elige vídeos de como mucho ${MAX_SOURCE / 60} minutos y luego la parte que quieres enseñar.`;
+    if (asset.fileSize && asset.fileSize > 50 * 1024 * 1024)
+      return 'Un vídeo pesa más de 50 MB. Prueba con uno más corto o con menos calidad.';
+    const poster = await videoPoster(asset.uri);
+    return {
+      uri: asset.uri,
+      kind: 'video',
+      mime: asset.mimeType ?? 'video/mp4',
+      duration,
+      poster,
+      clip: duration ? { start: 0, end: Math.min(duration, MAX_VIDEO) } : undefined,
+    };
+  };
 
   const pick = async (
     source: 'camera' | 'library',
@@ -126,14 +146,16 @@ export default function Publish() {
           return;
         }
       }
+      const room = append ? 10 - items.length : 10;
+      if (room <= 0) return;
       const options: ImagePicker.ImagePickerOptions = {
         mediaTypes:
           want === 'photo' ? ['images'] : want === 'video' ? ['videos'] : ['images', 'videos'],
         quality: 0.8,
         exif: remembering,
-        // Desde la galería se pueden elegir varias fotos a la vez.
-        allowsMultipleSelection: source === 'library' && !remembering,
-        selectionLimit: append ? 10 - 1 - extra.length : 10,
+        // Desde la galería se pueden elegir varias fotos y vídeos a la vez.
+        allowsMultipleSelection: source === 'library',
+        selectionLimit: room,
         videoMaxDuration: MAX_SOURCE,
         videoQuality: ImagePicker.UIImagePickerControllerQualityType.Medium,
       };
@@ -142,57 +164,42 @@ export default function Publish() {
           ? await ImagePicker.launchCameraAsync(options)
           : await ImagePicker.launchImageLibraryAsync(options);
       if (result.canceled) return;
-      const photos = result.assets.filter((a) => a.type !== 'video');
-      if (append || (result.assets.length > 1 && photos.length > 1)) {
-        // Varias fotos: la primera es la principal; los vídeos van de uno en uno.
-        const uris = photos.map((a) => a.uri);
-        if (append && media?.kind === 'photo') {
-          setExtra((list) => [...list, ...uris].slice(0, 9));
-        } else {
-          setMedia({ uri: uris[0], kind: 'photo', mime: 'image/jpeg' });
-          setExtra(uris.slice(1, 10));
+      const picked = result.assets.slice(0, room);
+      // Un recuerdo: la fecha de la primera foto que la guarde.
+      if (remembering && !append) {
+        let taken: number | undefined;
+        for (const asset of picked.filter((a) => a.type !== 'video')) {
+          taken = dateFromPickerExif(asset.exif) ?? (await dateFromFile(asset.uri)) ?? undefined;
+          if (taken) break;
         }
-        if (photos.length < result.assets.length) {
-          setNotice('Los vídeos van de uno en uno: se han añadido solo las fotos.');
-        }
-        return;
-      }
-      setExtra([]);
-      const asset = result.assets[0];
-      if (remembering && asset.type !== 'video') {
-        // La fecha en que se hizo la foto, si la guarda.
-        const taken = dateFromPickerExif(asset.exif) ?? (await dateFromFile(asset.uri));
         if (taken) {
           setWhen(new Date(taken));
           setDateFromPhoto(true);
         } else setDateFromPhoto(false);
       }
-      if (asset.type !== 'video') {
-        setMedia({ uri: asset.uri, kind: 'photo', mime: 'image/jpeg' });
-        return;
+      const hasVideo = picked.some((a) => a.type === 'video');
+      if (hasVideo) setPreparing(true);
+      const added: Media[] = [];
+      const problems: string[] = [];
+      for (const asset of picked) {
+        if (asset.type !== 'video') {
+          added.push({ uri: asset.uri, kind: 'photo', mime: 'image/jpeg' });
+          continue;
+        }
+        const video = await prepareVideo(asset);
+        if (typeof video === 'string') problems.push(video);
+        else added.push(video);
       }
-      const duration = secondsOf(asset.duration) ?? (await videoLength(asset.uri));
-      if (duration && duration > MAX_SOURCE + 1) {
-        setNotice(
-          `Ese vídeo dura ${Math.round(duration / 60)} minutos. Elige uno de como mucho ${MAX_SOURCE / 60} minutos y luego la parte que quieres enseñar.`,
-        );
-        return;
-      }
-      if (asset.fileSize && asset.fileSize > 50 * 1024 * 1024) {
-        setNotice('Ese vídeo pesa más de 50 MB. Prueba con uno más corto o con menos calidad.');
-        return;
-      }
-      setPreparing(true);
-      const poster = await videoPoster(asset.uri);
-      setMedia({
-        uri: asset.uri,
-        kind: 'video',
-        mime: asset.mimeType ?? 'video/mp4',
-        duration,
-        poster,
-        clip: duration ? { start: 0, end: Math.min(duration, MAX_VIDEO) } : undefined,
-      });
       setPreparing(false);
+      if (problems.length) setNotice(problems[0]);
+      if (!added.length) return;
+      if (append) {
+        setItems((list) => [...list, ...added].slice(0, 10));
+        setSel(items.length);
+      } else {
+        setItems(added);
+        setSel(0);
+      }
     } catch {
       setPreparing(false);
       setNotice('No se ha podido abrir la cámara o la galería en este dispositivo.');
@@ -203,29 +210,35 @@ export default function Publish() {
     setNotice('');
     setBusy(true);
     try {
-      // Del vídeo, solo el tramo elegido (si no es el vídeo entero); la portada, de su inicio.
-      let visual = media;
-      if (media?.kind === 'video' && media.clip && media.duration) {
-        const whole = media.clip.start < 0.05 && media.clip.end >= media.duration - 0.1;
-        visual = whole
-          ? { ...media, clip: undefined }
-          : {
-              ...media,
-              poster:
-                media.clip.start > 0.2
-                  ? ((await videoPoster(media.uri, media.clip.start)) ?? media.poster)
-                  : media.poster,
-            };
+      // De cada vídeo, solo el tramo elegido (si no es el vídeo entero); la portada, de su inicio.
+      const ready: Media[] = [];
+      for (const m of items) {
+        if (m.kind !== 'video' || !m.clip || !m.duration) {
+          ready.push(m);
+          continue;
+        }
+        const whole = m.clip.start < 0.05 && m.clip.end >= m.duration - 0.1;
+        ready.push(
+          whole
+            ? { ...m, clip: undefined }
+            : {
+                ...m,
+                poster:
+                  m.clip.start > 0.2
+                    ? ((await videoPoster(m.uri, m.clip.start)) ?? m.poster)
+                    : m.poster,
+              },
+        );
       }
       await addMoment({
         groupId,
         proposalId: proposal?.id,
-        media: visual,
+        media: ready[0],
+        more: ready.slice(1),
         voice: voice.result,
         text: text.trim() || undefined,
         place: place ?? undefined,
         rememberedAt: remembering ? when.getTime() : undefined,
-        morePhotos: media?.kind === 'photo' && extra.length ? extra : undefined,
       });
       setSent(true);
     } catch (error) {
@@ -236,7 +249,8 @@ export default function Publish() {
 
   const recording = voice.state === 'recording';
   const empty = !media && !preparing;
-  const canSend = !busy && !preparing && !recording && (!!media || !!text.trim() || !!voice.result);
+  const canSend =
+    !busy && !preparing && !recording && (items.length > 0 || !!text.trim() || !!voice.result);
 
   // Las fuentes, como botones grandes dentro del marco vacío.
   const sources = remembering
@@ -274,8 +288,8 @@ export default function Publish() {
         </Title>
         {remembering && (
           <Text style={{ color: theme.textSecondary, fontSize: 15, lineHeight: 21 }}>
-            Una foto o un vídeo de antes. Se guardará en su fecha y aparecerá en la memoria, en el
-            mapa y en «tal día como hoy».
+            Fotos y vídeos de antes, todos los que quieras. Se guardará en su fecha y aparecerá en
+            la memoria, en el mapa y en «tal día como hoy».
           </Text>
         )}
       </View>
@@ -323,7 +337,7 @@ export default function Publish() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Recortar la foto"
-                onPress={() => setCropping(0)}
+                onPress={() => setCropping(current)}
                 style={styles.floatButton}>
                 <Icon icon={Crop} size={16} color="#FFFFFF" />
                 <Text style={styles.floatText}>Recortar</Text>
@@ -338,10 +352,10 @@ export default function Publish() {
             </Pressable>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Quitar"
+              accessibilityLabel={items.length > 1 ? 'Quitar esta' : 'Quitar'}
               onPress={() => {
-                setMedia(undefined);
-                setExtra([]);
+                setItems((list) => list.filter((_, k) => k !== current));
+                setSel(Math.max(0, current - 1));
               }}
               style={styles.floatButton}>
               <Icon icon={X} size={16} color="#FFFFFF" />
@@ -360,38 +374,57 @@ export default function Publish() {
             duration={media.duration}
             value={media.clip}
             max={MAX_VIDEO}
-            onChange={(clip) => setMedia((m) => (m ? { ...m, clip } : m))}
+            onChange={(clip) => update(current, { clip })}
           />
         </View>
       )}
-      {/* Varias fotos: la tira de miniaturas, para quitar o añadir. */}
-      {media?.kind === 'photo' && !remembering && (
+      {/* La tira: fotos y vídeos, para elegir cuál se ve, recortarlo, quitarlo o añadir más. */}
+      {items.length > 0 && (
         <View style={styles.thumbs}>
-          {[media.uri, ...extra].map((uri, i) => (
-            <View key={uri + i} style={styles.thumb}>
+          {items.map((m, i) => (
+            <View
+              key={m.uri + i}
+              style={[
+                styles.thumb,
+                i === current && { borderWidth: 2.5, borderColor: theme.text },
+              ]}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`Recortar la foto ${i + 1}`}
-                onPress={() => setCropping(i)}
+                accessibilityLabel={`${m.kind === 'video' ? 'Vídeo' : 'Foto'} ${i + 1}`}
+                onPress={() => (i === current && m.kind === 'photo' ? setCropping(i) : setSel(i))}
                 style={StyleSheet.absoluteFill}>
-                <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                {(m.kind === 'photo' || m.poster) && (
+                  <Image
+                    source={{ uri: m.kind === 'photo' ? m.uri : m.poster }}
+                    style={StyleSheet.absoluteFill}
+                    contentFit="cover"
+                  />
+                )}
+                {m.kind === 'video' && (
+                  <View style={[StyleSheet.absoluteFill, styles.thumbVideo]}>
+                    <Icon icon={Play} size={16} color="#FFFFFF" />
+                  </View>
+                )}
               </Pressable>
-              {i > 0 && (
+              {items.length > 1 && (
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`Quitar la foto ${i + 1}`}
-                  onPress={() => setExtra((list) => list.filter((_, k) => k !== i - 1))}
+                  accessibilityLabel={`Quitar ${m.kind === 'video' ? 'el vídeo' : 'la foto'} ${i + 1}`}
+                  onPress={() => {
+                    setItems((list) => list.filter((_, k) => k !== i));
+                    if (current >= i) setSel(Math.max(0, current - 1));
+                  }}
                   style={styles.thumbRemove}>
                   <Icon icon={X} size={12} color="#FFFFFF" />
                 </Pressable>
               )}
             </View>
           ))}
-          {extra.length < 9 && (
+          {items.length < 10 && (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Añadir más fotos"
-              onPress={() => pick('library', 'photo', true)}
+              accessibilityLabel="Añadir más fotos o vídeos"
+              onPress={() => pick('library', 'any', true)}
               style={[styles.thumb, styles.thumbAdd, { backgroundColor: theme.soft }]}>
               <Icon icon={Plus} size={20} color={theme.text} />
             </Pressable>
@@ -544,6 +577,11 @@ const styles = StyleSheet.create({
   thumbs: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   thumb: { width: 56, height: 56, borderRadius: 12, overflow: 'hidden' },
   thumbAdd: { alignItems: 'center', justifyContent: 'center' },
+  thumbVideo: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(20,22,26,0.35)',
+  },
   thumbRemove: {
     position: 'absolute',
     top: 4,

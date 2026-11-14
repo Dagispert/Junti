@@ -79,7 +79,11 @@ export default function MomentView() {
         </View>
       }>
       <Animated.View entering={ZoomIn.duration(360)} style={styles.frame}>
-        {moment.videoUri ? (
+        {moment.gallery ? (
+          <View style={[styles.photo, { overflow: 'hidden' }]}>
+            <PhotoCarousel items={moment.gallery} />
+          </View>
+        ) : moment.videoUri ? (
           <View style={[styles.photo, { overflow: 'hidden' }]}>
             <VideoMoment moment={moment} style={StyleSheet.absoluteFill} />
           </View>

@@ -74,7 +74,13 @@ export function MomentCard({ moment }: { moment: Moment }) {
       <View onLayout={(e) => setCardHeight(e.nativeEvent.layout.height)}>
         {moment.imageUri || moment.videoUri ? (
           <View style={styles.photoWrap}>
-            {moment.videoUri ? (
+            {moment.gallery ? (
+              <PhotoCarousel
+                items={moment.gallery}
+                dotsBottom={moment.text || proposal ? 96 : 16}
+                onOpen={() => router.push({ pathname: '/moment/[id]', params: { id: moment.id } })}
+              />
+            ) : moment.videoUri ? (
               <VideoMoment moment={moment} style={StyleSheet.absoluteFill} />
             ) : moment.photos ? (
               <PhotoCarousel
