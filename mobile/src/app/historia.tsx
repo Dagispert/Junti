@@ -127,7 +127,7 @@ export default function StoryScreen() {
     });
   }, [scenes]);
 
-  // -1: la portada, mientras la narradora escribe y pone voz (como mucho 40 s).
+  // -1: la portada, mientras la narradora escribe y pone voz (como mucho 70 s; tocar empieza ya).
   const [index, setIndex] = useState(-1);
   const [paused, setPaused] = useState(false);
   const [voiceOn, setVoiceOn] = useState(true);
@@ -193,7 +193,7 @@ export default function StoryScreen() {
   useEffect(() => {
     if (paused) return;
     if (index === -1) {
-      const waiting = state !== 'ready' && elapsed.current < 40_000;
+      const waiting = state !== 'ready' && elapsed.current < 70_000;
       if (!waiting && elapsed.current > 2600) setIndex(0);
       return;
     }
@@ -331,7 +331,7 @@ export default function StoryScreen() {
             {state === 'writing'
               ? 'La narradora está repasando vuestros recuerdos…'
               : state === 'voicing'
-                ? 'Poniéndole voz…'
+                ? 'Poniéndole voz… (toca para empezar sin esperar)'
                 : `Desde ${story.items.find((i) => i.type === 'origin')?.type === 'origin' ? 'donde empezó todo' : 'el primer recuerdo'}`}
           </Text>
         </Animated.View>

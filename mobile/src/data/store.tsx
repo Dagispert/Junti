@@ -1510,7 +1510,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             String((error as Error)?.message),
           );
           if (!network || left <= 1) throw error;
-          await new Promise((r) => setTimeout(r, 8000));
+          if (action === 'voice') {
+            // La voz se sigue haciendo en el servidor: se espera a que esté guardada
+            // (sin pedir otra) y entonces se recoge.
+            const d = new Date(from);
+            const pad = (n: number) => String(n).padStart(2, '0');
+            const period =
+              kind === 'story'
+                ? '2000-01-01'
+                : `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+            for (let k = 0; k < 24; k++) {
+              await new Promise((r) => setTimeout(r, 5000));
+              const { data: row } = await supabase
+                .from('narrations')
+                .select('audio_path')
+                .match({ group_id: groupId, kind, period_start: period })
+                .maybeSingle();
+              if (row?.audio_path) break;
+            }
+          } else {
+            await new Promise((r) => setTimeout(r, 8000));
+          }
           return attempt(left - 1);
         }
       };
