@@ -422,3 +422,32 @@ delete from group_origins where id = '60000000-0000-0000-0000-000000000001';
 select pg_temp.expect((select count(*) = 0 from group_origins), 'quien administra puede quitar un comienzo');
 reset role;
 \echo DONDE EMPEZO TODO CORRECTO
+
+-- ── Versiones de un recuerdo ──
+reset role;
+insert into moments (id, group_id, author_id, text, author_tz, memory, created_at) values
+  ('20000000-0000-0000-0000-0000000000f1', '10000000-0000-0000-0000-0000000000ae', '00000000-0000-0000-0000-0000000000e1', 'Verano en Cádiz', 'Europe/Madrid', true, '2012-07-10'),
+  ('20000000-0000-0000-0000-0000000000f2', '10000000-0000-0000-0000-0000000000ae', '00000000-0000-0000-0000-0000000000e1', 'Hoy', 'Europe/Madrid', false, now());
+update activity_queue set sent_at = now() where sent_at is null;
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000e2';
+insert into memory_additions (id, moment_id, text) values
+  ('70000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-0000000000f1', 'Yo me acuerdo del tren');
+select pg_temp.fails($$insert into memory_additions (moment_id, text) values ('20000000-0000-0000-0000-0000000000f2', 'no')$$, 'las versiones son solo para recuerdos');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000e1';
+update memory_additions set text = 'cambiado' where id = '70000000-0000-0000-0000-000000000001';
+delete from memory_additions where id = '70000000-0000-0000-0000-000000000001';
+select pg_temp.expect((select text = 'Yo me acuerdo del tren' from memory_additions where id = '70000000-0000-0000-0000-000000000001'), 'nadie más cambia ni borra tu versión');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000c';
+select pg_temp.expect((select count(*) = 0 from memory_additions), 'alguien ajeno no ve las versiones');
+select pg_temp.fails($$insert into memory_additions (moment_id, text) values ('20000000-0000-0000-0000-0000000000f1', 'no')$$, 'alguien ajeno no añade versiones');
+reset role;
+update memberships set quiet_from = 0, quiet_to = 0, muted_until = null where group_id = '10000000-0000-0000-0000-0000000000ae';
+update activity_queue set created_at = now() - interval '2 minutes' where sent_at is null;
+set role service_role;
+create temp table versiones as select * from claim_activity() where g_name = 'Actividad';
+reset role;
+select pg_temp.expect((select body from versiones where sub_endpoint = 'https://push.example/e1') =
+  'Félix ha añadido su versión de tu recuerdo «Verano en Cádiz»', 'a quien guardó el recuerdo le llega quién añadió su versión');
+select pg_temp.expect((select count(*) = 0 from versiones where sub_endpoint = 'https://push.example/e2'), 'a quien añade su versión no le avisa de lo suyo');
+\echo VERSIONES CORRECTO
