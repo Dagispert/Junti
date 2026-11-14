@@ -7,7 +7,7 @@ import { SkyBadge } from '@/components/sky-badge';
 import { Avatar, Photo, Screen, Tag, Title } from '@/components/ui';
 import { Hand, Radius, Spacing, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
-import { clockIn } from '@/lib/time';
+import { clockIn, useMinute } from '@/lib/time';
 
 const MONTHS = [
   'enero',
@@ -28,6 +28,7 @@ const MONTHS = [
 export default function PersonScreen() {
   const { id, groupId } = useLocalSearchParams<{ id: string; groupId?: string }>();
   const theme = useTheme();
+  useMinute(); // «allí son las…», al día
   const { user, me, moments, group: groupById } = useStore();
   const person = user(id);
   const group = groupId ? groupById(groupId) : undefined;

@@ -1484,11 +1484,19 @@ export function GlobeMap({
     let sphereTick = -1;
     const proj = new THREE.Vector3();
     const camDir = new THREE.Vector3();
+    // Si el planeta no se ve (se ha bajado por la página), no se dibuja: ahorra batería.
+    let onScreen = true;
+    const seen =
+      typeof IntersectionObserver !== 'undefined'
+        ? new IntersectionObserver(([e]) => (onScreen = e.isIntersecting), { rootMargin: '80px' })
+        : null;
+    seen?.observe(root);
     const tick = (now: number) => {
       frame = requestAnimationFrame(tick);
       const w = root.clientWidth;
       const h = root.clientHeight;
       if (!w || !h) return; // pantalla oculta: no se dibuja
+      if (!onScreen) return; // fuera de la vista (p. ej. al bajar por «Hoy»): descansa
       if (country) return; // en el modo país, el planeta descansa
       const shift = frameRef.current.shiftY;
       if (
@@ -1785,6 +1793,7 @@ export function GlobeMap({
     return () => {
       disposed = true;
       cancelAnimationFrame(frame);
+      seen?.disconnect();
       renderer.domElement.removeEventListener('pointerdown', onDown);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);

@@ -4,7 +4,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { MapPin, Plus, Share, Volume2, VolumeX, X } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import Animated, { FadeIn, FadeOut, ZoomIn } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import { popIn } from '@/components/motion';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useGlobePeople } from '@/components/connection-card';
@@ -434,7 +435,7 @@ export default function StoryScreen() {
             {scene?.type === 'memory' && (scene.moment.imageUri || scene.moment.text) && (
               <Animated.View
                 key={`c-${index}`}
-                entering={ZoomIn.duration(520)}
+                entering={popIn()}
                 pointerEvents="none"
                 style={[
                   styles.polaroid,
@@ -463,7 +464,7 @@ export default function StoryScreen() {
             {scene?.type === 'origin' && (
               <Animated.View
                 key={`c-${index}`}
-                entering={ZoomIn.duration(520)}
+                entering={popIn()}
                 pointerEvents="none"
                 style={styles.pill}>
                 <Icon icon={MapPin} size={18} color="#C2477A" />
@@ -474,7 +475,7 @@ export default function StoryScreen() {
               </Animated.View>
             )}
             {(scene?.type === 'gap' || scene?.type === 'end') && (
-              <Animated.View key={`c-${index}`} entering={ZoomIn.duration(520)}>
+              <Animated.View key={`c-${index}`} entering={popIn()}>
                 <Pressable
                   accessibilityRole="button"
                   onPress={() =>

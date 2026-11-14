@@ -829,6 +829,12 @@ export const NumbersShot = memo(function NumbersShot({
   );
 });
 
+/** El último índice que cumple (como findLastIndex, que no está en iPhones algo antiguos). */
+function lastIndex<T>(list: T[], ok: (x: T) => boolean): number {
+  for (let i = list.length - 1; i >= 0; i--) if (ok(list[i])) return i;
+  return -1;
+}
+
 /** Letras por segundo cuando no hay voz que marque el ritmo. */
 const PACE = 15;
 
@@ -889,14 +895,14 @@ export function Captions({
   }
   const index = Math.max(
     0,
-    sentences.findLastIndex((s) => s.start <= Math.max(at, 1)),
+    lastIndex(sentences, (s) => s.start <= Math.max(at, 1)),
   );
   const cur = sentences[index] ?? { start: 0, end: text.length };
   const sentence = text.slice(cur.start, cur.end).trim();
   const words: { text: string; start: number }[] = [];
   for (const m of sentence.matchAll(/\S+/g))
     words.push({ text: m[0], start: cur.start + m.index! });
-  const active = words.findLastIndex((w) => w.start <= at);
+  const active = lastIndex(words, (w) => w.start <= at);
 
   return (
     <View pointerEvents="none" style={[styles.captions, { bottom }]}>

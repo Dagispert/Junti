@@ -1,15 +1,39 @@
 import type { ReactNode } from 'react';
 import { Pressable, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
-  FadeInDown,
-  useAnimatedStyle,
   Easing,
+  FadeInDown,
+  Keyframe,
+  useAnimatedStyle,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
 
-/** La única curva de la app: salida suave, sin rebotes. */
+// La identidad de movimiento de Junti, en pocas constantes:
+// - Una curva para casi todo: arranca rápido y aterriza suave (lo que entra).
+// - Su contraria para lo que se va: arranca suave y se va deprisa.
+// - Tres duraciones: rápida (respuesta al toque), normal (tarjetas), lenta (escenas).
+
+/** La curva de siempre: salida suave, sin rebotes. */
 export const EASE = Easing.out(Easing.cubic);
+/** Para lo que entra y debe llamar la atención: frena más al final. */
+export const EASE_IN_VIEW = Easing.bezier(0.05, 0.7, 0.1, 1);
+/** Para lo que se va. */
+export const EASE_OUT_VIEW = Easing.bezier(0.3, 0, 1, 1);
+export const DURATION = { quick: 160, normal: 320, slow: 520 } as const;
+
+/**
+ * Aparecer «posándose»: sube un poco y crece desde el 92 % (nunca desde cero,
+ * que en piezas grandes queda brusco). Para tarjetas, hojas y fotos.
+ */
+export function popIn(delay = 0, duration: number = DURATION.slow) {
+  return new Keyframe({
+    0: { opacity: 0, transform: [{ translateY: 14 }, { scale: 0.92 }] },
+    100: { opacity: 1, transform: [{ translateY: 0 }, { scale: 1 }], easing: EASE_IN_VIEW },
+  })
+    .delay(delay)
+    .duration(duration);
+}
 
 /** Entrada suave desde abajo, escalonada según su posición en la lista. */
 export function Appear({
@@ -23,9 +47,9 @@ export function Appear({
 }) {
   return (
     <Animated.View
-      entering={FadeInDown.duration(360)
-        .delay(Math.min(index, 6) * 80)
-        .duration(360)}
+      entering={FadeInDown.duration(DURATION.normal + 80)
+        .delay(Math.min(index, 6) * 60)
+        .easing(EASE_IN_VIEW)}
       style={style}>
       {children}
     </Animated.View>
@@ -44,11 +68,11 @@ export function PressScale({
     <Pressable
       {...rest}
       onPressIn={(e) => {
-        scale.value = withTiming(0.98, { duration: 120, easing: EASE });
+        scale.value = withTiming(0.97, { duration: 120, easing: EASE });
         rest.onPressIn?.(e);
       }}
       onPressOut={(e) => {
-        scale.value = withTiming(1, { duration: 180, easing: EASE });
+        scale.value = withTiming(1, { duration: 220, easing: EASE_IN_VIEW });
         rest.onPressOut?.(e);
       }}>
       <Animated.View style={[animated, style]}>{children}</Animated.View>

@@ -2,7 +2,8 @@ import { CommentLine } from '@/components/comment-line';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { ZoomIn } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
+import { popIn } from '@/components/motion';
 
 import { Icon } from '@/components/icon';
 import { MemoryVersions } from '@/components/memory-versions';
@@ -132,7 +133,7 @@ export default function MomentView() {
           </View>
         </View>
       }>
-      <Animated.View entering={ZoomIn.duration(360)} style={styles.frame}>
+      <Animated.View entering={popIn(0, 420)} style={styles.frame}>
         {moment.gallery ? (
           <View style={[styles.photo, { overflow: 'hidden' }]}>
             <PhotoCarousel items={moment.gallery} />

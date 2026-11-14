@@ -1,7 +1,8 @@
 import { Check, Download, Share2, X } from 'lucide-react-native';
 import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeIn, FadeOut, ZoomIn } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import { popIn } from './motion';
 
 import { Hand, HandBold } from '@/constants/theme';
 import { NO_REC } from '@/lib/dom-recorder';
@@ -119,7 +120,7 @@ export function useExport() {
       </View>
     ) : (
       <Animated.View entering={FadeIn.duration(250)} exiting={FadeOut} style={styles.backdrop}>
-        <Animated.View entering={ZoomIn.duration(320)} style={styles.sheet}>
+        <Animated.View entering={popIn(0, 360)} style={styles.sheet}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={state.phase === 'working' ? 'Cancelar' : 'Cerrar'}

@@ -13,7 +13,7 @@ import { Avatar } from '@/components/ui';
 import { Hand, Radius, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import { distanceKm, formatKm } from '@/lib/geo';
-import { clockIn } from '@/lib/time';
+import { clockIn, useMinute } from '@/lib/time';
 import { useWeather } from '@/lib/weather';
 
 import { Missing } from './index';
@@ -39,6 +39,7 @@ export default function MapScreen() {
   const { group: groupById, me, moments, user } = useStore();
   const group = groupById(id);
   const people = useGlobePeople(group);
+  useMinute(); // las horas de cada uno, al día
   const [focus, setFocus] = useState<string | null>(null);
   // Personas o recuerdos, nunca a la vez: así el planeta no se llena de cosas.
   const [layer, setLayer] = useState<'people' | 'memories'>('people');

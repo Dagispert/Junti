@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+
 const MIN = 60_000;
 const HOUR = 60 * MIN;
 const DAY = 24 * HOUR;
@@ -37,4 +39,24 @@ export function monthOf(at: number): { key: string; label: string } {
 
 export function daysLeft(endsAt: number, now: number = Date.now()): number {
   return Math.ceil((endsAt - now) / DAY);
+}
+
+/**
+ * Vuelve a pintar al cambiar el minuto: para las horas que se ven en pantalla
+ * («14:58 en Madrid»), que si no se quedarían congeladas.
+ */
+export function useMinute(): number {
+  const [minute, setMinute] = useState(() => Math.floor(Date.now() / 60_000));
+  useEffect(() => {
+    let id: ReturnType<typeof setTimeout>;
+    const next = () => {
+      id = setTimeout(() => {
+        setMinute(Math.floor(Date.now() / 60_000));
+        next();
+      }, 60_000 - (Date.now() % 60_000) + 50);
+    };
+    next();
+    return () => clearTimeout(id);
+  }, []);
+  return minute;
 }

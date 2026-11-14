@@ -281,12 +281,21 @@ export function Button({
         styles.button,
         compact && styles.buttonCompact,
         { backgroundColor: background },
-        (pressed || disabled) && { opacity: 0.45 },
+        // Al tocarlo se hunde un poco (no se apaga: apagado es «desactivado»).
+        pressed && !disabled && { transform: [{ scale: 0.97 }], opacity: 0.88 },
+        disabled && { opacity: 0.45 },
+        webTransition,
       ]}>
       <Text style={{ color, fontWeight: '500', fontSize: compact ? 14 : 15 }}>{label}</Text>
     </Pressable>
   );
 }
+
+const webTransition = {
+  transitionProperty: 'transform, opacity',
+  transitionDuration: '140ms',
+  transitionTimingFunction: 'cubic-bezier(0.2, 0, 0, 1)',
+} as object;
 
 /** Tarjeta blanca con marco grueso: dentro va una foto con esquinas propias. */
 export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
