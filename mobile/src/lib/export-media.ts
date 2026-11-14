@@ -97,13 +97,27 @@ function paper(ctx: CanvasRenderingContext2D, w: number, h: number) {
   ctx.fillRect(0, 0, w, h);
 }
 
-function watermark(ctx: CanvasRenderingContext2D, w: number, h: number, size = 40) {
+const base =
+  typeof window !== 'undefined' && window.location?.pathname.startsWith('/Junti') ? '/Junti' : '';
+
+/** La firma: el logo de Junti y su nombre, abajo a la derecha. */
+async function watermark(ctx: CanvasRenderingContext2D, w: number, h: number, size = 40) {
+  // El SVG va como imagen normal (no todos los navegadores lo convierten de otra forma).
+  const logo = await new Promise<HTMLImageElement | null>((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = `${base}/logo.svg`;
+  });
   ctx.save();
-  ctx.font = `${size}px ${HAND_BOLD}`;
-  ctx.fillStyle = 'rgba(31,33,36,0.55)';
+  ctx.font = `700 ${size}px ${SANS}`;
+  ctx.fillStyle = 'rgba(31,33,36,0.8)';
   ctx.textAlign = 'right';
-  ctx.textBaseline = 'alphabetic';
-  ctx.fillText('hecho con Junti', w - 48, h - 44);
+  ctx.textBaseline = 'middle';
+  const y = h - 44 - size / 2;
+  ctx.fillText('Junti', w - 48, y);
+  const tw = ctx.measureText('Junti').width;
+  if (logo) ctx.drawImage(logo, w - 48 - tw - size * 1.35, y - size * 0.6, size * 1.2, size * 1.2);
   ctx.restore();
 }
 
@@ -236,16 +250,21 @@ export async function shareFile(
 
 // ───────────────────────────── La foto ─────────────────────────────
 
-/** Una foto con su nota, lista para redes (1080 × 1350). */
+/**
+ * Una foto con su nota, lista para redes: 1080 × 1350 (publicación) o, con
+ * los comentarios, 1080 × 1920 (para stories), con ellos debajo.
+ */
 export async function renderMomentImage(m: {
   image?: string;
   note?: string;
   stickers: string[];
   footer: string;
+  comments?: { name: string; text: string; color: string }[];
 }): Promise<Blob> {
   await ensureFonts();
   const W = 1080;
-  const H = 1350;
+  const withComments = !!m.comments?.length;
+  const H = withComments ? 1920 : 1350;
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
@@ -273,305 +292,49 @@ export async function renderMomentImage(m: {
     ctx.fillText(e, 0, 4);
     ctx.restore();
   });
+  if (withComments) {
+    // Los comentarios, como en la app: nombre en negrita y su texto.
+    let y = 1260;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    for (const c of m.comments!.slice(0, 5)) {
+      ctx.font = `600 36px ${SANS}`;
+      const lines = wrap(ctx, `${c.name}  ${c.text}`, W - 220).slice(0, 3);
+      const boxH = lines.length * 46 + 34;
+      if (y + boxH > H - 150) break;
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      roundRect(ctx, 60, y, W - 120, boxH, 26);
+      ctx.fill();
+      ctx.fillStyle = c.color;
+      ctx.beginPath();
+      ctx.arc(100, y + boxH / 2, 18, 0, Math.PI * 2);
+      ctx.fill();
+      lines.forEach((l, i) => {
+        const yy = y + 50 + i * 46;
+        if (i === 0) {
+          ctx.fillStyle = INK;
+          ctx.font = `700 36px ${SANS}`;
+          ctx.fillText(c.name, 136, yy);
+          const nw = ctx.measureText(`${c.name}  `).width;
+          ctx.fillStyle = '#4A4E55';
+          ctx.font = `400 36px ${SANS}`;
+          ctx.fillText(l.slice(c.name.length).trim(), 136 + nw, yy);
+        } else {
+          ctx.fillStyle = '#4A4E55';
+          ctx.font = `400 36px ${SANS}`;
+          ctx.fillText(l, 136, yy);
+        }
+      });
+      y += boxH + 18;
+    }
+  }
   ctx.fillStyle = '#5A6168';
   ctx.font = `500 34px ${SANS}`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
   ctx.fillText(m.footer, 60, H - 48, W - 460);
-  watermark(ctx, W, H, 46);
+  await watermark(ctx, W, H, 40);
   return await new Promise<Blob>((resolve, reject) =>
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('sin imagen'))), 'image/jpeg', 0.92),
   );
-}
-
-// ───────────────────────────── El vídeo ─────────────────────────────
-
-export type VideoScene = {
-  text: string;
-  image?: string;
-  /** Encima de la foto: el año o una etiqueta corta. */
-  kicker?: string;
-  /** Pie de la foto (el lugar). */
-  caption?: string;
-  /** Si con esta escena empieza un capítulo: su número y nombre. */
-  chapter?: { n: number; name: string };
-  /** Sin foto: una frase grande (cifras, despedida…). */
-  big?: string;
-};
-
-const VIDEO_TYPES = [
-  'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
-  'video/mp4',
-  'video/webm;codecs=vp9,opus',
-  'video/webm;codecs=vp8,opus',
-  'video/webm',
-];
-
-/**
- * Graba la narración como vídeo vertical (1080 × 1920): portada, una escena por
- * foto con un leve movimiento, los capítulos, subtítulos escritos a mano y la
- * voz de la narradora. Se graba en tiempo real (tarda lo que dura).
- */
-export async function renderStoryVideo(opts: {
-  title: string;
-  subtitle: string;
-  scenes: VideoScene[];
-  audioUrl?: string | null;
-  sceneTimes?: number[] | null;
-  audioDuration?: number | null;
-  onProgress?: (p: number) => void;
-  signal?: AbortSignal;
-}): Promise<{ blob: Blob; ext: string }> {
-  // El sonido se prepara dentro del toque (Safari solo deja empezarlo ahí).
-  const AC = window.AudioContext ?? (window as any).webkitAudioContext;
-  const audio: AudioContext | null = AC ? new AC() : null;
-  await ensureFonts();
-  const W = 1080;
-  const H = 1920;
-  const FPS = 30;
-  const COVER = 3.2;
-  const OUTRO = 3;
-  const FADE = 0.45;
-
-  const images = await Promise.all(opts.scenes.map((s) => loadImage(s.image)));
-
-  // Cuándo empieza y acaba cada escena (con la voz, sus tramos; si no, por texto).
-  let buffer: AudioBuffer | null = null;
-  if (audio && opts.audioUrl) {
-    try {
-      const data = await (await fetch(opts.audioUrl)).arrayBuffer();
-      buffer = await audio.decodeAudioData(data);
-    } catch {
-      buffer = null;
-    }
-  }
-  const times: { start: number; end: number }[] = [];
-  if (buffer && opts.sceneTimes?.length === opts.scenes.length) {
-    const total = opts.audioDuration ?? buffer.duration;
-    opts.scenes.forEach((_, i) =>
-      times.push({
-        start: COVER + opts.sceneTimes![i],
-        end: COVER + (opts.sceneTimes![i + 1] ?? total),
-      }),
-    );
-  } else {
-    buffer = null;
-    let t = COVER;
-    for (const s of opts.scenes) {
-      const d = Math.max(3.2, s.text.length / 14 + 1.8);
-      times.push({ start: t, end: t + d });
-      t += d;
-    }
-  }
-  const total = (times[times.length - 1]?.end ?? COVER) + OUTRO;
-
-  const canvas = document.createElement('canvas');
-  canvas.width = W;
-  canvas.height = H;
-  const ctx = canvas.getContext('2d')!;
-  const stream = canvas.captureStream(FPS);
-  if (audio && buffer) {
-    const dest = audio.createMediaStreamDestination();
-    const src = audio.createBufferSource();
-    src.buffer = buffer;
-    src.connect(dest);
-    src.start(audio.currentTime + COVER);
-    dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
-  }
-  const type = VIDEO_TYPES.find((t) => MediaRecorder.isTypeSupported(t)) ?? '';
-  const recorder = new MediaRecorder(stream, {
-    ...(type ? { mimeType: type } : {}),
-    videoBitsPerSecond: 6_000_000,
-  });
-  const chunks: Blob[] = [];
-  recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
-
-  const drawSubtitle = (text: string, said: number) => {
-    // La frase que se está diciendo, escrita a mano en un panel claro.
-    const at = Math.floor(text.length * said);
-    const parts = [...text.matchAll(/[^.?!…]+[.?!…»]*/g)].map((m) => ({
-      start: m.index! + (m[0].length - m[0].trimStart().length),
-      end: m.index! + m[0].length,
-    }));
-    const cur = [...parts].reverse().find((p) => p.start <= Math.max(at, 1)) ?? parts[0];
-    if (!cur) return;
-    const sentence = text.slice(cur.start, cur.end).trim();
-    ctx.font = `64px ${HAND}`;
-    const lines = wrap(ctx, sentence, W - 220).slice(0, 4);
-    const lh = 70;
-    const boxH = lines.length * lh + 60;
-    const y = H - 300 - boxH;
-    ctx.fillStyle = 'rgba(255,255,255,0.86)';
-    roundRect(ctx, 70, y, W - 140, boxH, 36);
-    ctx.fill();
-    ctx.fillStyle = INK;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    lines.forEach((l, i) => ctx.fillText(l, W / 2, y + 30 + lh / 2 + i * lh));
-  };
-
-  const drawHeader = () => {
-    ctx.fillStyle = 'rgba(31,33,36,0.6)';
-    ctx.font = `600 34px ${SANS}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'alphabetic';
-    ctx.fillText(opts.subtitle, W / 2, 120, W - 160);
-  };
-
-  const drawScene = (i: number, local: number, dur: number) => {
-    const s = opts.scenes[i];
-    paper(ctx, W, H);
-    drawHeader();
-    const img = images[i];
-    const k = Math.min(1, local / dur);
-    if (img || !s.big) {
-      if (s.kicker) {
-        ctx.fillStyle = ROSE;
-        ctx.font = `110px ${HAND_BOLD}`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'alphabetic';
-        ctx.fillText(s.kicker, W / 2, 300);
-      }
-      polaroid(
-        ctx,
-        img,
-        W / 2,
-        360,
-        780,
-        i % 2 ? 2.2 : -2.2,
-        s.caption,
-        1 + 0.08 * k,
-        (i % 2 ? 1 : -1) * 0.3 * k,
-        img ? undefined : s.text,
-      );
-    } else {
-      ctx.fillStyle = INK;
-      ctx.font = `120px ${HAND_BOLD}`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      wrap(ctx, s.big, W - 200)
-        .slice(0, 5)
-        .forEach((l, j, all) => ctx.fillText(l, W / 2, 760 + (j - (all.length - 1) / 2) * 130));
-    }
-    drawSubtitle(s.text, Math.min(1, local / Math.max(0.5, dur - 0.6)));
-    // Entrada de capítulo, como en un libro.
-    if (s.chapter && local < 2.6) {
-      const a = local < 0.4 ? local / 0.4 : local > 2 ? (2.6 - local) / 0.6 : 1;
-      ctx.globalAlpha = a;
-      ctx.fillStyle = 'rgba(250,247,240,0.96)';
-      ctx.fillRect(0, 0, W, H);
-      ctx.fillStyle = '#A86A1F';
-      ctx.font = `700 40px ${SANS}`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(`CAPÍTULO ${s.chapter.n}`, W / 2, H / 2 - 150);
-      ctx.fillStyle = INK;
-      ctx.font = `130px ${HAND_BOLD}`;
-      wrap(ctx, s.chapter.name, W - 180)
-        .slice(0, 3)
-        .forEach((l, j) => ctx.fillText(l, W / 2, H / 2 - 20 + j * 135));
-      ctx.globalAlpha = 1;
-    }
-    watermark(ctx, W, H);
-  };
-
-  const drawCover = (local: number) => {
-    paper(ctx, W, H);
-    const fan = images.filter(Boolean).slice(0, 3) as ImageBitmap[];
-    fan.forEach((img, j) =>
-      polaroid(ctx, img, W / 2 + (j - (fan.length - 1) / 2) * 110, 330 + j * 20, 560, (j - 1) * 7),
-    );
-    const a = Math.min(1, local / 0.8);
-    ctx.globalAlpha = a;
-    ctx.fillStyle = INK;
-    ctx.font = `128px ${HAND_BOLD}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    wrap(ctx, opts.title, W - 160)
-      .slice(0, 3)
-      .forEach((l, j) => ctx.fillText(l, W / 2, 1230 + j * 135));
-    ctx.fillStyle = '#5A6168';
-    ctx.font = `600 40px ${SANS}`;
-    ctx.fillText(opts.subtitle, W / 2, 1640, W - 160);
-    ctx.globalAlpha = 1;
-    watermark(ctx, W, H);
-  };
-
-  const drawOutro = (local: number) => {
-    paper(ctx, W, H);
-    ctx.globalAlpha = Math.min(1, local / 0.6);
-    ctx.fillStyle = INK;
-    ctx.font = `120px ${HAND_BOLD}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('Junti', W / 2, H / 2 - 40);
-    ctx.fillStyle = '#5A6168';
-    ctx.font = `500 40px ${SANS}`;
-    ctx.fillText('Para los que están lejos', W / 2, H / 2 + 70);
-    ctx.globalAlpha = 1;
-  };
-
-  const frameAt = (t: number) => {
-    if (t < COVER) return drawCover(t);
-    const i = times.findIndex((x) => t < x.end);
-    if (i < 0) return drawOutro(t - (total - OUTRO));
-    const { start, end } = times[i];
-    const local = t - start;
-    drawScene(i, local, end - start);
-  };
-
-  // Fundido: se dibuja la anterior encima con transparencia que se va.
-  const fadeCanvas = document.createElement('canvas');
-  fadeCanvas.width = W;
-  fadeCanvas.height = H;
-  const fctx = fadeCanvas.getContext('2d')!;
-  let lastIndex = -2;
-
-  await new Promise<void>((resolve, reject) => {
-    recorder.onstop = () => resolve();
-    recorder.onerror = () => reject(new Error('No se ha podido grabar el vídeo.'));
-    recorder.start(1000);
-    if (audio?.state === 'suspended') audio.resume().catch(() => {});
-    const t0 = performance.now();
-    const tick = () => {
-      if (opts.signal?.aborted) {
-        recorder.stop();
-        return;
-      }
-      const t = (performance.now() - t0) / 1000;
-      if (t >= total) {
-        recorder.stop();
-        return;
-      }
-      const index = t < COVER ? -1 : times.findIndex((x) => t < x.end);
-      if (index !== lastIndex) {
-        // Se guarda el último fotograma para fundirlo con la escena nueva.
-        fctx.drawImage(canvas, 0, 0);
-        lastIndex = index;
-      }
-      frameAt(t);
-      const since =
-        index >= 0 && index < times.length
-          ? t - times[index].start
-          : t >= total - OUTRO
-            ? t - (total - OUTRO)
-            : 1;
-      if (since < FADE && t > 0.1) {
-        ctx.globalAlpha = 1 - since / FADE;
-        ctx.drawImage(fadeCanvas, 0, 0);
-        ctx.globalAlpha = 1;
-      }
-      opts.onProgress?.(Math.min(1, t / total));
-      requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
-  });
-  audio?.close().catch(() => {});
-  stream.getTracks().forEach((t) => t.stop());
-  if (opts.signal?.aborted) throw new DOMException('Cancelado', 'AbortError');
-  const mime = recorder.mimeType || type || 'video/webm';
-  return {
-    blob: new Blob(chunks, { type: mime.split(';')[0] }),
-    ext: mime.includes('mp4') ? 'mp4' : 'webm',
-  };
 }

@@ -17,8 +17,14 @@ import { Hand, HandBold } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import type { GroupOrigin, Moment, Narration } from '@/data/types';
 import { useClock } from '@/lib/clock';
-import { canRecordVideo, renderStoryVideo, type VideoScene } from '@/lib/export-media';
-import { narratorAudio, stopNarrator } from '@/lib/narrator';
+import {
+  canRecordScreen,
+  NO_REC,
+  prepareRecording,
+  preloadImages,
+  recordScreen,
+} from '@/lib/dom-recorder';
+import { narratorAudio, narratorStream, stopNarrator } from '@/lib/narrator';
 import { buildStory, type Gap, gapLabel, parseGap, templateScenes } from '@/lib/story';
 
 type Scene = (
@@ -204,49 +210,62 @@ export default function StoryScreen() {
       setIndex((i) => i + 1);
   });
 
-  // Exportar como vídeo: lo mismo que se cuenta, con la voz si la hay.
+  // Exportar como vídeo: se graba la pantalla tal cual mientras se vuelve a
+  // contar desde la portada, con sus animaciones, el planeta y la voz.
   const exporter = useExport();
-  const exportVideo = () => {
+  const rootRef = useRef<unknown>(null);
+  const recorder = useRef<ReturnType<typeof recordScreen> | null>(null);
+  const finishing = useRef(false);
+  useEffect(() => {
+    prepareRecording().catch(() => {});
+  }, []);
+  // Ya ha vuelto a la portada (si no, «la última escena terminó» sería la de antes).
+  const restarted = useRef(false);
+  const exportVideo = async () => {
+    const root = rootRef.current as unknown as HTMLElement | null;
+    if (!root) return;
+    const audio = voice ? narratorStream() : null; // dentro del toque
+    finishing.current = false;
+    restarted.current = false;
     setPaused(true);
-    stopNarrator();
-    const told = voice && voice.sceneTimes?.length === scenes.length ? voice : null;
-    const videoScenes: VideoScene[] = scenes.map((sc, i) => {
-      const chapter = sc.chapter && chapterAt[i] ? chapterAt[i]! : undefined;
-      if (sc.type === 'memory')
-        return {
-          text: sc.text,
-          image: sc.moment.imageUri,
-          kicker: String(new Date(sc.moment.createdAt).getFullYear()),
-          caption: sc.moment.place?.name.split(',')[0],
-          chapter,
-        };
-      if (sc.type === 'origin')
-        return {
-          text: sc.text,
-          big: `Aquí empezó todo${sc.origin ? `\n${sc.origin.place.split(',')[0]}${sc.origin.year ? `, ${sc.origin.year}` : ''}` : ''}`,
-          chapter,
-        };
-      if (sc.type === 'gap')
-        return { text: sc.text, big: `${gapLabel(sc.gap)}: ¿qué pasó?`, chapter };
-      return { text: sc.text, big: sc.type === 'end' ? 'Y la historia sigue' : ' ', chapter };
-    });
-    exporter.run(
-      'video',
-      ({ signal, progress }) =>
-        renderStoryVideo({
-          title: source?.title || 'Nuestra historia',
-          subtitle: `${group?.name ?? ''} · Nuestra historia`,
-          scenes: videoScenes,
-          audioUrl: told?.audioUrl,
-          sceneTimes: told?.sceneTimes,
-          audioDuration: told?.audioDuration,
-          onProgress: progress,
-          signal,
-        }).then((r) => r.blob),
-      'junti-nuestra-historia',
-      `${group?.name ?? 'Junti'} · Nuestra historia`,
+    await preloadImages(
+      root,
+      story.memories.map((m) => m.imageUri),
     );
+    setPaused(false);
+    setIndex(-1);
+    recorder.current = recordScreen(root, { audio });
+    exporter.recording(() => {
+      recorder.current?.cancel();
+      recorder.current = null;
+    });
   };
+  // Mientras se graba: el progreso, y al acabar la última escena, el vídeo.
+  const recordingNow = exporter.live && !!recorder.current;
+  const progressNow =
+    index < 0 ? 0 : Math.min(1, (index + Math.min(1, said)) / Math.max(1, scenes.length));
+  useEffect(() => {
+    if (!recordingNow) return;
+    exporter.progress(progressNow);
+    if (index === -1) restarted.current = true;
+    if (!restarted.current) return;
+    const doneScene =
+      last && (voiced ? now >= end - 0.05 || player!.ended : elapsed.current >= duration);
+    if (doneScene && !finishing.current) {
+      finishing.current = true;
+      setTimeout(async () => {
+        const rec = recorder.current;
+        recorder.current = null;
+        if (!rec) return;
+        const blob = await rec.stop();
+        exporter.ready(
+          blob,
+          'junti-nuestra-historia',
+          `${group?.name ?? 'Junti'} · Nuestra historia`,
+        );
+      }, 1600);
+    }
+  });
 
   const close = () => {
     stopNarrator();
@@ -300,7 +319,7 @@ export default function StoryScreen() {
   const card = Math.min(width * 0.62, 300);
 
   return (
-    <View style={styles.root}>
+    <View ref={rootRef as never} style={styles.root}>
       <LinearGradient colors={['#FFFFFF', '#E7F5F8', '#D5ECF1']} style={StyleSheet.absoluteFill} />
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         <GlobeMap
@@ -320,6 +339,7 @@ export default function StoryScreen() {
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Seguir"
+        disabled={exporter.live}
         onPressIn={() => setPaused(true)}
         onPressOut={() => setPaused(false)}
         onPress={(e) => {
@@ -342,7 +362,7 @@ export default function StoryScreen() {
             </View>
           ))}
         </View>
-        <View style={styles.topRow}>
+        <View style={styles.topRow} {...NO_REC}>
           <Text style={styles.topTitle} numberOfLines={1}>
             {group?.name} · Nuestra historia
           </Text>
@@ -355,7 +375,7 @@ export default function StoryScreen() {
               <Icon icon={voiceOn ? Volume2 : VolumeX} color={INK} />
             </Pressable>
           )}
-          {canRecordVideo() && index >= 0 && (
+          {canRecordScreen() && !exporter.live && (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Exportar como vídeo"
@@ -464,6 +484,7 @@ export default function StoryScreen() {
                         : undefined,
                     )
                   }
+                  {...NO_REC}
                   style={styles.ask}>
                   <Icon icon={Plus} size={18} color="#FFFFFF" />
                   <Text style={styles.askText}>
@@ -488,6 +509,7 @@ export default function StoryScreen() {
           {last && (
             <Animated.View
               entering={FadeIn.delay(600)}
+              {...NO_REC}
               style={[styles.endRow, { bottom: insets.bottom + 40 }]}>
               <Pressable accessibilityRole="button" onPress={() => setIndex(0)} hitSlop={8}>
                 <Text style={styles.endLink}>Volver a empezar</Text>
@@ -511,6 +533,13 @@ export default function StoryScreen() {
           <Text style={styles.chapterName}>{scene.chapter}</Text>
           <View style={styles.chapterRule} />
         </Animated.View>
+      )}
+      {/* La firma, solo en el vídeo que se graba: el logo y el nombre. */}
+      {exporter.live && (
+        <View pointerEvents="none" style={[styles.signature, { bottom: insets.bottom + 14 }]}>
+          <LogoMark size={26} />
+          <Text style={styles.signatureText}>Junti</Text>
+        </View>
       )}
       {exporter.overlay}
       {!!note && index <= 0 && (
@@ -550,6 +579,15 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(255,255,255,0.95)',
     textShadowRadius: 12,
   },
+  signature: {
+    position: 'absolute',
+    right: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    opacity: 0.85,
+  },
+  signatureText: { color: INK, fontSize: 17, fontWeight: '700', letterSpacing: -0.2 },
   chapterLine: {
     position: 'absolute',
     left: 24,

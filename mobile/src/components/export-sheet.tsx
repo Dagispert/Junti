@@ -1,9 +1,10 @@
-import { Download, Share2, X } from 'lucide-react-native';
+import { Check, Download, Share2, X } from 'lucide-react-native';
 import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, ZoomIn } from 'react-native-reanimated';
 
 import { Hand, HandBold } from '@/constants/theme';
+import { NO_REC } from '@/lib/dom-recorder';
 import { shareFile } from '@/lib/export-media';
 
 import { Icon } from './icon';
@@ -11,6 +12,14 @@ import { Icon } from './icon';
 type State =
   | { phase: 'idle' }
   | { phase: 'working'; progress: number; what: 'video' | 'photo' }
+  | { phase: 'recording'; progress: number; cancel: () => void }
+  | {
+      phase: 'options';
+      title: string;
+      choices: { label: string; on: boolean }[];
+      action: string;
+      go: (values: boolean[]) => void;
+    }
   | {
       phase: 'ready';
       blob: Blob;
@@ -62,14 +71,53 @@ export function useExport() {
     }
   };
 
+  // Antes de crear: elegir qué incluir.
+  const choose = (o: {
+    title: string;
+    choices: { label: string; on: boolean }[];
+    action: string;
+    go: (values: boolean[]) => void;
+  }) => setState({ phase: 'options', ...o });
+
+  // Grabación en directo: la pantalla se ve tal cual y arriba, un aviso discreto.
+  const recording = (cancel: () => void) => setState({ phase: 'recording', progress: 0, cancel });
+  const progress = (p: number) =>
+    setState((s) =>
+      s.phase === 'recording' && Math.abs(s.progress - p) >= 0.01 ? { ...s, progress: p } : s,
+    );
+  const ready = (blob: Blob, name: string, title: string) => {
+    const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
+    setState({
+      phase: 'ready',
+      blob,
+      name: `${name}.${ext}`,
+      title,
+      preview: URL.createObjectURL(blob),
+      what: 'video',
+    });
+  };
+
   const close = () => {
+    if (state.phase === 'recording') state.cancel();
     abort.current?.abort();
     if (state.phase === 'ready' && state.preview) URL.revokeObjectURL(state.preview);
     setState({ phase: 'idle' });
   };
 
   const overlay =
-    state.phase === 'idle' ? null : (
+    state.phase === 'idle' ? null : state.phase === 'recording' ? (
+      <View {...NO_REC} style={styles.recBar} pointerEvents="box-none">
+        <View style={styles.recPill}>
+          <View style={styles.recDot} />
+          <Text style={styles.recText}>
+            Grabando el vídeo · {Math.round(state.progress * 100)} %
+          </Text>
+          <Pressable accessibilityRole="button" onPress={close} hitSlop={8}>
+            <Text style={[styles.recText, { textDecorationLine: 'underline' }]}>Cancelar</Text>
+          </Pressable>
+        </View>
+      </View>
+    ) : (
       <Animated.View entering={FadeIn.duration(250)} exiting={FadeOut} style={styles.backdrop}>
         <Animated.View entering={ZoomIn.duration(320)} style={styles.sheet}>
           <Pressable
@@ -129,6 +177,39 @@ export function useExport() {
               </View>
             </>
           )}
+          {state.phase === 'options' && (
+            <>
+              <Text style={styles.title}>{state.title}</Text>
+              {state.choices.map((c, i) => (
+                <Pressable
+                  key={c.label}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: c.on }}
+                  onPress={() =>
+                    setState((s) =>
+                      s.phase === 'options'
+                        ? {
+                            ...s,
+                            choices: s.choices.map((x, k) => (k === i ? { ...x, on: !x.on } : x)),
+                          }
+                        : s,
+                    )
+                  }
+                  style={styles.choice}>
+                  <View style={[styles.box, c.on && styles.boxOn]}>
+                    {c.on && <Icon icon={Check} size={14} color="#FFFFFF" />}
+                  </View>
+                  <Text style={styles.choiceText}>{c.label}</Text>
+                </Pressable>
+              ))}
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => state.go(state.choices.map((c) => c.on))}
+                style={[styles.action, { backgroundColor: '#1F2124', flex: 0 }]}>
+                <Text style={[styles.actionText, { color: '#FFFFFF' }]}>{state.action}</Text>
+              </Pressable>
+            </>
+          )}
           {state.phase === 'error' && (
             <>
               <Text style={styles.title}>No ha salido</Text>
@@ -139,7 +220,17 @@ export function useExport() {
       </Animated.View>
     );
 
-  return { run, overlay, busy: state.phase === 'working' };
+  return {
+    run,
+    choose,
+    recording,
+    progress,
+    ready,
+    fail: (message: string) => setState({ phase: 'error', message }),
+    overlay,
+    busy: state.phase === 'working' || state.phase === 'recording',
+    live: state.phase === 'recording',
+  };
 }
 
 function download(blob: Blob, name: string) {
@@ -162,6 +253,25 @@ const previewStyle = {
 };
 
 const styles = StyleSheet.create({
+  recBar: {
+    position: 'fixed' as 'absolute',
+    top: 10,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 210,
+  },
+  recPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(20,22,26,0.82)',
+  },
+  recDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#E5484D' },
+  recText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
   // Fija en la pantalla (aunque la página tenga scroll).
   backdrop: {
     position: 'fixed' as 'absolute',
@@ -202,6 +312,18 @@ const styles = StyleSheet.create({
   fill: { height: 10, borderRadius: 5, backgroundColor: '#C2477A' },
   percent: { fontFamily: Hand, fontSize: 22, color: '#5A6168', textAlign: 'right' },
   actions: { flexDirection: 'row', gap: 10 },
+  choice: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44 },
+  box: {
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: '#B9B2A6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  boxOn: { backgroundColor: '#1F2124', borderColor: '#1F2124' },
+  choiceText: { fontSize: 16, color: '#1F2124', flex: 1 },
   action: {
     flex: 1,
     height: 50,

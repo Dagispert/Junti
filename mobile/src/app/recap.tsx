@@ -13,6 +13,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
+import { LogoMark } from '@/components/logo';
 import { InlineVideo, VoiceNote, Waveform } from '@/components/media-players';
 import { PolaroidPile, Scribble, Sticker, StickyNote } from '@/components/scrapbook';
 import { SkyBadge } from '@/components/sky-badge';
@@ -23,14 +24,20 @@ import { useStore } from '@/data/store';
 import type { Moment, Narration } from '@/data/types';
 import { progress, useClock } from '@/lib/clock';
 import { usePreview } from '@/lib/music';
-import { narratorAudio, primeNarrator, stopNarrator } from '@/lib/narrator';
+import { narratorAudio, narratorStream, primeNarrator, stopNarrator } from '@/lib/narrator';
 import { Subtitle } from '@/components/subtitle';
 import { styleOf } from '@/lib/narrative';
 import { buildRecap } from '@/lib/recap';
 import { clockIn } from '@/lib/time';
 import { Music, Share, Volume2, VolumeX, X } from 'lucide-react-native';
 import { useExport } from '@/components/export-sheet';
-import { canRecordVideo, renderStoryVideo, type VideoScene } from '@/lib/export-media';
+import {
+  canRecordScreen,
+  NO_REC,
+  prepareRecording,
+  preloadImages,
+  recordScreen,
+} from '@/lib/dom-recorder';
 
 type Slide =
   | { type: 'cover' }
@@ -255,57 +262,59 @@ export default function RecapScreen() {
     }
   });
 
-  // Exportar como vídeo: las mismas escenas, con la voz de la narradora si la hay.
+  // Exportar como vídeo: se graba la pantalla tal cual mientras se vuelve a
+  // contar desde la portada, con sus animaciones y la voz de la narradora.
   const exporter = useExport();
-  const exportVideo = () => {
+  const rootRef = useRef<unknown>(null);
+  const recorder = useRef<ReturnType<typeof recordScreen> | null>(null);
+  const finishing = useRef(false);
+  const restarted = useRef(false);
+  useEffect(() => {
+    prepareRecording().catch(() => {});
+  }, []);
+  const exportVideo = async () => {
+    const root = rootRef.current as unknown as HTMLElement | null;
+    if (!root) return;
+    const voiceTrack = voice ? narratorStream() : null; // dentro del toque
+    finishing.current = false;
+    restarted.current = false;
     setPaused(true);
-    stopNarrator();
-    if (audio.playing) audio.toggle();
-    const toScene = (sl: Slide): VideoScene => {
-      const text = 'line' in sl && sl.line ? sl.line : '';
-      if (sl.type === 'moment' || sl.type === 'loved') {
-        const who = first(sl.moment.authorId);
-        return {
-          text: text || sl.moment.text || `${who} compartió esto`,
-          image: sl.moment.imageUri,
-          kicker: who,
-          caption: sl.moment.place?.name.split(',')[0] ?? user(sl.moment.authorId).city,
-        };
-      }
-      if (sl.type === 'stats')
-        return {
-          text: text || (recap.kind === 'week' ? 'La semana en números' : 'El mes en números'),
-          big: `${recap.stats.moments} momentos · ${recap.stats.photos} fotos · ${recap.stats.reactions} reacciones`,
-        };
-      if (sl.type === 'end')
-        return {
-          text: text || 'Todo esto queda guardado en vuestra memoria.',
-          big: recap.ongoing ? 'Y la semana sigue…' : 'Hasta la próxima',
-        };
-      if (sl.type === 'story')
-        return { text: recap.story.join(' '), big: story?.title || recap.title };
-      return { text, big: story?.title || recap.title };
-    };
-    const narrated = slides.filter((sl) => 'scene' in sl && sl.scene !== undefined);
-    const withVoice = !!voice && narrated.length === voice.sceneTimes?.length;
-    const list = (withVoice ? narrated : slides.filter((sl) => sl.type !== 'cover')).map(toScene);
-    exporter.run(
-      'video',
-      ({ signal, progress }) =>
-        renderStoryVideo({
-          title: story?.title || recap.title,
-          subtitle: `${group(groupId)?.name ?? ''} · ${recap.range}`,
-          scenes: list,
-          audioUrl: withVoice ? voice!.audioUrl : null,
-          sceneTimes: withVoice ? voice!.sceneTimes : null,
-          audioDuration: withVoice ? voice!.audioDuration : null,
-          onProgress: progress,
-          signal,
-        }).then((r) => r.blob),
-      recap.kind === 'week' ? 'junti-semana' : 'junti-mes',
-      `${group(groupId)?.name ?? 'Junti'} · ${recap.range}`,
+    await preloadImages(
+      root,
+      recap.moments.map((m) => m.imageUri),
     );
+    setPaused(false);
+    setIndex(0);
+    elapsed.current = 0;
+    recorder.current = recordScreen(root, { audio: voiceTrack });
+    exporter.recording(() => {
+      recorder.current?.cancel();
+      recorder.current = null;
+    });
   };
+  const lastSlide = index === slides.length - 1;
+  useEffect(() => {
+    if (!exporter.live || !recorder.current) return;
+    exporter.progress(Math.min(1, (index + Math.min(1, barFill)) / Math.max(1, slides.length)));
+    if (index === 0) restarted.current = true;
+    if (!restarted.current) return;
+    const done =
+      lastSlide && (voiced ? player!.ended || now >= sceneEnd - 0.05 : elapsed.current >= duration);
+    if (done && !finishing.current) {
+      finishing.current = true;
+      setTimeout(async () => {
+        const rec = recorder.current;
+        recorder.current = null;
+        if (!rec) return;
+        const blob = await rec.stop();
+        exporter.ready(
+          blob,
+          recap.kind === 'week' ? 'junti-semana' : 'junti-mes',
+          `${group(groupId)?.name ?? 'Junti'} · ${recap.range}`,
+        );
+      }, 1200);
+    }
+  });
 
   const close = () => {
     stopNarrator();
@@ -326,7 +335,7 @@ export default function RecapScreen() {
   const first = (id: string) => user(id).name.split(' ')[0];
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
+    <View ref={rootRef as never} style={[styles.root, { paddingTop: insets.top }]}>
       {/* Barras de progreso */}
       <View style={styles.bars}>
         {slides.map((_, i) => (
@@ -342,7 +351,7 @@ export default function RecapScreen() {
           </View>
         ))}
       </View>
-      <View style={styles.top}>
+      <View style={styles.top} {...NO_REC}>
         <Text style={styles.topTitle}>
           {group(groupId)?.name} · {recap.range}
         </Text>
@@ -370,7 +379,7 @@ export default function RecapScreen() {
               {!audio.playing && <Text style={styles.roundText}>Música</Text>}
             </Pressable>
           )}
-          {canRecordVideo() && (
+          {canRecordScreen() && !exporter.live && (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Exportar como vídeo"
@@ -392,6 +401,7 @@ export default function RecapScreen() {
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Avanzar"
+        disabled={exporter.live}
         style={{ flex: 1 }}
         onPressIn={() => {
           if (!touched.current) {
@@ -567,7 +577,7 @@ export default function RecapScreen() {
                   ? 'Todo esto queda guardado en vuestra memoria.'
                   : 'Un mes más de vida compartida, guardado en vuestra memoria.'}
               </Text>
-              <Pressable accessibilityRole="button" onPress={close} style={styles.cta}>
+              <Pressable accessibilityRole="button" onPress={close} style={styles.cta} {...NO_REC}>
                 <Text style={styles.ctaText}>Volver</Text>
               </Pressable>
               {narrating && (
@@ -579,7 +589,8 @@ export default function RecapScreen() {
                     await write(true);
                     setIndex(1);
                   }}
-                  style={styles.again}>
+                  style={styles.again}
+                  {...NO_REC}>
                   <Text style={styles.againText}>
                     {writing ? 'Escribiendo otra versión…' : 'Otra versión de la crónica'}
                   </Text>
@@ -598,6 +609,13 @@ export default function RecapScreen() {
           )}
         </Animated.View>
       </Pressable>
+      {/* La firma, solo en el vídeo que se graba: el logo y el nombre. */}
+      {exporter.live && (
+        <View pointerEvents="none" style={[styles.signature, { bottom: insets.bottom + 12 }]}>
+          <LogoMark size={24} />
+          <Text style={styles.signatureText}>Junti</Text>
+        </View>
+      )}
       {exporter.overlay}
     </View>
   );
@@ -716,6 +734,15 @@ function MomentSlide({
 }
 
 const styles = StyleSheet.create({
+  signature: {
+    position: 'absolute',
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    opacity: 0.85,
+  },
+  signatureText: { color: '#2A2724', fontSize: 16, fontWeight: '700' },
   root: { flex: 1, backgroundColor: PAPER },
   bars: { flexDirection: 'row', gap: 4, paddingHorizontal: 12, paddingTop: 8 },
   bar: {

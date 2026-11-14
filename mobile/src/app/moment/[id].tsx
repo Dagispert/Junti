@@ -74,26 +74,48 @@ export default function MomentView() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Exportar como foto"
-                onPress={() =>
-                  exporter.run(
-                    'photo',
-                    () =>
-                      renderMomentImage({
-                        image: moment.imageUri,
-                        note: moment.text ?? proposal?.title,
-                        stickers: emojis,
-                        footer: [
-                          author.name.split(' ')[0],
-                          date,
-                          moment.place?.name.split(',')[0] ?? author.city,
-                        ]
-                          .filter(Boolean)
-                          .join(' · '),
-                      }),
-                    'junti-foto',
-                    moment.text ?? 'Junti',
-                  )
-                }
+                onPress={() => {
+                  const make = (withComments: boolean) =>
+                    exporter.run(
+                      'photo',
+                      () =>
+                        renderMomentImage({
+                          image: moment.imageUri,
+                          note: moment.text ?? proposal?.title,
+                          stickers: emojis,
+                          footer: [
+                            author.name.split(' ')[0],
+                            date,
+                            moment.place?.name.split(',')[0] ?? author.city,
+                          ]
+                            .filter(Boolean)
+                            .join(' · '),
+                          comments: withComments
+                            ? [...moment.comments].reverse().map((c) => ({
+                                name: user(c.userId).name.split(' ')[0],
+                                text: c.text,
+                                color: user(c.userId).color,
+                              }))
+                            : undefined,
+                        }),
+                      'junti-foto',
+                      moment.text ?? 'Junti',
+                    );
+                  // Con comentarios, se pregunta si incluirlos.
+                  if (moment.comments.length)
+                    exporter.choose({
+                      title: 'Exportar la foto',
+                      choices: [
+                        {
+                          label: `Incluir los comentarios (${moment.comments.length})`,
+                          on: false,
+                        },
+                      ],
+                      action: 'Crear la foto',
+                      go: ([withComments]) => make(withComments),
+                    });
+                  else make(false);
+                }}
                 style={[styles.round, { backgroundColor: theme.card }]}>
                 <Icon icon={Share} size={18} color={theme.text} />
               </Pressable>

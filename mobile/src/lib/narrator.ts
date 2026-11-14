@@ -10,6 +10,8 @@ export function narratorAudio(): HTMLAudioElement | null {
   if (Platform.OS !== 'web' || typeof Audio === 'undefined') return null;
   if (!element) {
     element = new Audio();
+    // Para poder grabar la voz en los vídeos (las direcciones del almacén lo permiten).
+    element.crossOrigin = 'anonymous';
     element.preload = 'auto';
   }
   return element;
@@ -59,5 +61,31 @@ export function stopNarrator() {
     a.pause();
     a.removeAttribute('src');
     a.load();
+  }
+}
+
+let graph: { ctx: AudioContext; dest: MediaStreamAudioDestinationNode } | null = null;
+
+/**
+ * La voz de la narradora como pista de sonido, para grabarla en un vídeo
+ * mientras se sigue oyendo. Llamarlo dentro de un toque (por Safari).
+ */
+export function narratorStream(): MediaStream | null {
+  const a = narratorAudio();
+  if (!a) return null;
+  try {
+    if (!graph) {
+      const AC = window.AudioContext ?? (window as any).webkitAudioContext;
+      const ctx: AudioContext = new AC();
+      const src = ctx.createMediaElementSource(a);
+      const dest = ctx.createMediaStreamDestination();
+      src.connect(dest);
+      src.connect(ctx.destination);
+      graph = { ctx, dest };
+    }
+    graph.ctx.resume().catch(() => {});
+    return graph.dest.stream;
+  } catch {
+    return null;
   }
 }

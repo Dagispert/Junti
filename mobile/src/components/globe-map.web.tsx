@@ -803,7 +803,8 @@ export function GlobeMap({
     let disposed = false;
     let frame = 0;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    // preserveDrawingBuffer: para poder copiar el planeta al grabar vídeos.
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     root.appendChild(renderer.domElement);
