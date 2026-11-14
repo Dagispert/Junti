@@ -36,10 +36,12 @@ type Media = {
  * recuerdo de antes que se guarda en su fecha.
  */
 export default function Publish() {
-  const { groupId, proposalId, memory } = useLocalSearchParams<{
+  const { groupId, proposalId, memory, year } = useLocalSearchParams<{
     groupId: string;
     proposalId?: string;
     memory?: string;
+    /** Un recuerdo de un año concreto (al rellenar un hueco de la historia). */
+    year?: string;
   }>();
   const remembering = memory === '1';
   const theme = useTheme();
@@ -62,7 +64,8 @@ export default function Publish() {
   // Recuerdo: cuándo fue (por defecto, hace un año) y si la fecha salió de la foto.
   const [when, setWhen] = useState(() => {
     const d = new Date();
-    d.setFullYear(d.getFullYear() - 1);
+    if (year && /^\d{4}$/.test(year)) d.setFullYear(Number(year), 6, 1);
+    else d.setFullYear(d.getFullYear() - 1);
     d.setHours(12, 0, 0, 0);
     return d;
   });

@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Radius, SerifItalic, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
+import { buildStory, type Gap } from '@/lib/story';
 import { enablePush, pushState } from '@/lib/push';
 import { useVoiceClip } from '@/lib/voice-clip';
 
@@ -20,7 +21,7 @@ import { EASE } from './motion';
 // ajustes. Como mucho una cada 20 minutos; «Ahora no» la aparca unos días.
 
 type Nudge = {
-  id: 'instalar' | 'avisos' | 'ciudad' | 'foto' | 'cumple' | 'narradora';
+  id: 'instalar' | 'avisos' | 'ciudad' | 'foto' | 'cumple' | 'narradora' | 'hueco';
   title: string;
   text: string;
   action: string;
@@ -57,6 +58,12 @@ const NUDGES: Record<Nudge['id'], Nudge> = {
     text: '¿Cuándo es tu cumpleaños? Así nadie se olvida de felicitarte, y yo lo cuento en la historia del grupo.',
     action: 'Añadirlo',
   },
+  hueco: {
+    id: 'hueco',
+    title: 'Un hueco en vuestra historia',
+    text: 'Hay unos años de vuestra historia de los que no sé nada. ¿Me contáis qué pasó? Con un recuerdo, lo añado a vuestra historia.',
+    action: 'Añadir un recuerdo',
+  },
   narradora: {
     id: 'narradora',
     title: 'Actívame',
@@ -91,13 +98,15 @@ const until = (id: string) => `junti-burbuja-${id}`;
 export function Nudges({ groupId, paused }: { groupId: string; paused: boolean }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { me, user, group, setNarrative } = useStore();
+  const { me, user, group, setNarrative, moments } = useStore();
+  // El hueco de la historia del que se habla (para el texto y el año del recuerdo).
+  const [gap, setGap] = useState<Gap | null>(null);
   const [nudge, setNudge] = useState<Nudge | null>(null);
   const [state, setState] = useState<'idle' | 'busy' | 'done' | 'howto'>('idle');
   const voice = useVoiceClip(nudge ? `voz/avisos/${nudge.id}.mp3` : null);
   // Lo último del almacén, sin reiniciar la espera cada vez que se actualiza.
-  const latest = useRef({ me, user, group });
-  latest.current = { me, user, group };
+  const latest = useRef({ me, user, group, moments });
+  latest.current = { me, user, group, moments };
 
   // Qué falta, en orden de importancia.
   useEffect(() => {
@@ -105,7 +114,7 @@ export function Nudges({ groupId, paused }: { groupId: string; paused: boolean }
     const id = setTimeout(async () => {
       const now = Date.now();
       if (now - read(LAST) < GAP) return;
-      const { me: self, user: who, group: find } = latest.current;
+      const { me: self, user: who, group: find, moments: all } = latest.current;
       const profile = who(self);
       const g = find(groupId);
       const push = await pushState().catch(() => 'unsupported' as const);
@@ -116,6 +125,16 @@ export function Nudges({ groupId, paused }: { groupId: string; paused: boolean }
       if (!profile.avatarUri) missing.push('foto');
       if (!profile.about.birthMonth) missing.push('cumple');
       if (g?.isAdmin && !g.narrativeEnabled) missing.push('narradora');
+      // Años de la historia del grupo sin ningún recuerdo.
+      const story = g
+        ? buildStory(
+            g.origins,
+            all.filter((m) => m.groupId === groupId),
+          )
+        : null;
+      const hole = story?.gaps[0] ?? null;
+      if (hole) missing.push('hueco');
+      setGap(hole);
       const next = missing.find((m) => read(until(m)) < now);
       if (!next) return;
       write(LAST, now);
@@ -147,6 +166,17 @@ export function Nudges({ groupId, paused }: { groupId: string; paused: boolean }
         return;
       case 'instalar':
         setState('howto');
+        return;
+      case 'hueco':
+        close(SNOOZE);
+        router.push({
+          pathname: '/publish',
+          params: {
+            groupId,
+            memory: '1',
+            ...(gap ? { year: String(Math.round((gap.from + gap.to) / 2)) } : {}),
+          },
+        });
         return;
       case 'narradora':
         setState('busy');
@@ -197,7 +227,9 @@ export function Nudges({ groupId, paused }: { groupId: string; paused: boolean }
             ? 'En Safari, toca el botón de compartir (el cuadrado con la flecha) y elige «Añadir a pantalla de inicio». Luego abre Junti desde ese icono.'
             : state === 'done'
               ? 'Hecho. Gracias.'
-              : nudge.text}
+              : nudge.id === 'hueco' && gap
+                ? `No sé nada de ${gap.from === gap.to ? gap.from : `${gap.from} a ${gap.to}`}. ¿Qué pasó esos años? Contádmelo con un recuerdo y lo añado a vuestra historia.`
+                : nudge.text}
         </Text>
         {state !== 'done' && state !== 'howto' && (
           <View style={styles.actions}>

@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Play } from 'lucide-react-native';
+import { MapPin, Play, Plus } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInLeft, ZoomIn } from 'react-native-reanimated';
 
@@ -7,7 +7,8 @@ import { Hand, HandBold } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import { monthStart } from '@/lib/recap';
 import { primeNarrator } from '@/lib/narrator';
-import type { Moment } from '@/data/types';
+import type { GroupOrigin, Moment } from '@/data/types';
+import { buildStory, gapLabel } from '@/lib/story';
 
 import { Icon } from './icon';
 import { Sticker, StickyNote } from './scrapbook';
@@ -153,6 +154,159 @@ export function FilmRoll({
   );
 }
 
+/**
+ * «Nuestra historia»: un solo carrete con dónde empezó todo y los recuerdos de
+ * antes, en orden. Los años sin nada son fotogramas en blanco que preguntan
+ * qué pasó; al final, uno para añadir otro recuerdo.
+ */
+export function StoryRoll({
+  groupId,
+  origins,
+  moments,
+}: {
+  groupId: string;
+  origins: GroupOrigin[];
+  moments: Moment[];
+}) {
+  const { items } = buildStory(origins, moments);
+  const addMemory = (year?: number) =>
+    router.push({
+      pathname: '/publish',
+      params: { groupId, memory: '1', ...(year ? { year: String(year) } : {}) },
+    });
+  const stripW = 96 + 18 + (items.length + 1) * (FRAME_W + 10) + 24;
+  const holes = Math.ceil(stripW / 18);
+  const told = items.some((i) => i.type !== 'gap');
+
+  return (
+    <View style={{ gap: 4 }}>
+      <View style={styles.titleRow}>
+        <Text style={[styles.month, { flexShrink: 1 }]}>Nuestra historia</Text>
+        {told && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Escuchar vuestra historia"
+            onPress={() => {
+              primeNarrator();
+              router.push({ pathname: '/historia', params: { groupId } });
+            }}
+            style={styles.recapBtn}>
+            <Icon icon={Play} size={14} color="#FFFFFF" />
+            <Text style={styles.recapText}>Escuchar la historia</Text>
+          </Pressable>
+        )}
+      </View>
+      {!told && (
+        <Text style={[styles.noteText, { paddingHorizontal: 4, color: '#8B9096' }]}>
+          Aquí irá vuestra historia: dónde empezó todo y lo que vivisteis antes de Junti.
+        </Text>
+      )}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingVertical: 64, paddingRight: 32 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Canister label="Historia" />
+          <Animated.View entering={FadeInLeft.delay(200).duration(900)}>
+            <View style={[styles.strip, { width: stripW - 96 }]}>
+              <View style={[styles.holes, { top: 6 }]}>
+                {Array.from({ length: holes }, (_, i) => (
+                  <View key={i} style={styles.hole} />
+                ))}
+              </View>
+              <View style={[styles.holes, { bottom: 6 }]}>
+                {Array.from({ length: holes }, (_, i) => (
+                  <View key={i} style={styles.hole} />
+                ))}
+              </View>
+              <View style={styles.frames}>
+                {items.map((it, i) => {
+                  const up = i % 2 === 0;
+                  const note = (big: string, small?: string) => (
+                    <View
+                      style={[styles.note, up ? { bottom: FRAME_H + 30 } : { top: FRAME_H + 30 }]}>
+                      <Text numberOfLines={2} style={styles.noteText}>
+                        {up ? '' : '↖ '}
+                        {big}
+                        {up ? ' ↘' : ''}
+                      </Text>
+                      {!!small && (
+                        <Text numberOfLines={1} style={styles.noteSmall}>
+                          {small}
+                        </Text>
+                      )}
+                    </View>
+                  );
+                  if (it.type === 'origin') {
+                    return (
+                      <View key={`o-${it.origin.id}`}>
+                        <View style={[styles.frame, styles.paper, styles.origin]}>
+                          <Icon icon={MapPin} size={22} color="#C2477A" />
+                          <Text numberOfLines={2} style={styles.paperText}>
+                            {it.origin.place.split(',')[0]}
+                          </Text>
+                          {!!it.year && <Text style={styles.originYear}>{it.year}</Text>}
+                        </View>
+                        {note('Aquí empezó todo')}
+                      </View>
+                    );
+                  }
+                  if (it.type === 'gap') {
+                    return (
+                      <Pressable
+                        key={`g-${it.gap.from}`}
+                        accessibilityRole="button"
+                        accessibilityLabel={`¿Qué pasó de ${it.gap.from} a ${it.gap.to}? Añadir un recuerdo`}
+                        onPress={() => addMemory(Math.round((it.gap.from + it.gap.to) / 2))}>
+                        <View style={[styles.frame, styles.gap]}>
+                          <Text style={styles.gapYears}>{gapLabel(it.gap)}</Text>
+                          <Text style={styles.gapAsk}>¿Qué pasó?</Text>
+                          <Icon icon={Plus} size={18} color="#F4E9C8" />
+                        </View>
+                        {note('Un hueco', 'Contádmelo')}
+                      </Pressable>
+                    );
+                  }
+                  const m = it.moment;
+                  return (
+                    <Pressable
+                      key={m.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={m.text ?? `Recuerdo de ${it.year}`}
+                      onPress={() =>
+                        router.push({ pathname: '/moment/[id]', params: { id: m.id } })
+                      }>
+                      {m.imageUri || m.videoUri ? (
+                        <Photo moment={m} style={styles.frame} />
+                      ) : (
+                        <View style={[styles.frame, styles.paper]}>
+                          <Text numberOfLines={5} style={styles.paperText}>
+                            {m.text ?? ''}
+                          </Text>
+                        </View>
+                      )}
+                      {note(String(it.year), m.place?.name.split(',')[0])}
+                    </Pressable>
+                  );
+                })}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Añadir un recuerdo a la historia"
+                  onPress={() => addMemory()}>
+                  <View style={[styles.frame, styles.gap, { opacity: 0.85 }]}>
+                    <Icon icon={Plus} size={26} color="#F4E9C8" />
+                    <Text style={styles.gapAsk}>Añadir un recuerdo</Text>
+                  </View>
+                </Pressable>
+              </View>
+            </View>
+          </Animated.View>
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
 /** Cartucho de película, dibujado con piezas. */
 function Canister({ label }: { label: string }) {
   return (
@@ -221,6 +375,18 @@ const styles = StyleSheet.create({
     color: '#3C3F44',
     textAlign: 'center',
   },
+  origin: { backgroundColor: '#EAF3F6', alignItems: 'center', gap: 2 },
+  originYear: { fontFamily: HandBold, fontSize: 22, color: '#C2477A' },
+  gap: {
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(244,233,200,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  gapYears: { fontFamily: HandBold, fontSize: 24, color: '#F4E9C8' },
+  gapAsk: { fontFamily: Hand, fontSize: 19, color: '#F4E9C8', textAlign: 'center' },
   unexposed: { width: 70, backgroundColor: '#2A1D16', opacity: 0.8 },
   frameNo: {
     position: 'absolute',

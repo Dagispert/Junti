@@ -2,7 +2,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { AlbumShelf } from '@/components/album-shelf';
-import { FilmRoll } from '@/components/film-roll';
+import { FilmRoll, StoryRoll } from '@/components/film-roll';
 import { RecapCard } from '@/components/recap-card';
 import { GroupHeader } from '@/components/group-header';
 import { PolaroidPile, Scribble } from '@/components/scrapbook';
@@ -16,7 +16,7 @@ import { monthOf } from '@/lib/time';
 
 import { Missing } from './index';
 
-/** La memoria del grupo: lo de esta semana en un montón de polaroids, la banda sonora y un carrete por mes. */
+/** La memoria del grupo: lo de esta semana en un montón de polaroids, la banda sonora y un carrete por mes, y otro con vuestra historia. */
 export default function Memory() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
@@ -27,7 +27,8 @@ export default function Memory() {
   // Por fecha de lo que pasó (los recuerdos, en la suya).
   const all = moments.filter((m) => m.groupId === id).sort((a, b) => b.createdAt - a.createdAt);
   const months: { key: string; label: string; items: Moment[] }[] = [];
-  for (const moment of all) {
+  // Los recuerdos (lo de antes de Junti) van en «Nuestra historia», no por meses.
+  for (const moment of all.filter((m) => !m.memory)) {
     const { key, label } = monthOf(moment.createdAt);
     const last = months[months.length - 1];
     if (last?.key === key) last.items.push(moment);
@@ -66,6 +67,8 @@ export default function Memory() {
       )}
 
       {featured != null && <RecapCard groupId={group.id} kind="week" from={featured} />}
+
+      <StoryRoll groupId={group.id} origins={group.origins} moments={all} />
 
       <Soundtrack groupId={group.id} />
       <AlbumShelf groupId={group.id} />

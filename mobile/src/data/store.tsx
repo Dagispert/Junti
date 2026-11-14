@@ -137,7 +137,7 @@ type Store = {
   /** Pide (o recupera) la crónica de un periodo. */
   narrate: (args: {
     groupId: string;
-    kind: 'week' | 'month';
+    kind: 'week' | 'month' | 'story';
     from: number;
     to: number;
     label: string;
@@ -166,7 +166,7 @@ async function requestNarration({
   action,
 }: {
   groupId: string;
-  kind: 'week' | 'month';
+  kind: 'week' | 'month' | 'story';
   from: number;
   to: number;
   label: string;
@@ -181,7 +181,11 @@ async function requestNarration({
       kind,
       from: new Date(from).toISOString(),
       to: new Date(to).toISOString(),
-      periodStart: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+      // La historia del grupo no tiene periodo: el servidor usa el suyo.
+      periodStart:
+        kind === 'story'
+          ? '2000-01-01'
+          : `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
       label,
       force: !!force,
       action,

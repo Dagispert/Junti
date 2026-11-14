@@ -73,6 +73,10 @@ function Gate() {
           name="recap"
           options={{ presentation: 'fullScreenModal', animation: 'fade' }}
         />
+        <Stack.Screen
+          name="historia"
+          options={{ presentation: 'fullScreenModal', animation: 'fade' }}
+        />
         <Stack.Screen name="moment/[id]" options={{ presentation: 'modal' }} />
       </Stack>
       {intro && <IntroCinematic onDone={endIntro} />}
