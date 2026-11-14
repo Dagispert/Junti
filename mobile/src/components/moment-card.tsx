@@ -8,6 +8,7 @@ import { useStore } from '@/data/store';
 import type { Moment } from '@/data/types';
 import { clockIn, relative } from '@/lib/time';
 
+import { CommentLine } from './comment-line';
 import { type Burst, EmojiBursts } from './emoji-burst';
 import { EmojiPicker } from './emoji-picker';
 import { Icon } from './icon';
@@ -227,12 +228,7 @@ export function MomentCard({ moment }: { moment: Moment }) {
             </Pressable>
           )}
           {comments.map((comment) => (
-            <Text key={comment.id} style={[styles.comment, { color: theme.textSecondary }]}>
-              <Text style={{ color: theme.text, fontWeight: '500' }}>
-                {user(comment.userId).name}{' '}
-              </Text>
-              {comment.text}
-            </Text>
+            <CommentLine key={comment.id} comment={comment} />
           ))}
           <View style={styles.inputRow}>
             <TextInput

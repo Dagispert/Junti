@@ -81,6 +81,9 @@ type Store = {
   editMoment: (momentId: string, text: string) => Promise<void>;
   toggleReaction: (momentId: string, emoji: string) => Promise<void>;
   addComment: (momentId: string, text: string) => Promise<void>;
+  /** Solo quien lo escribió: corregir o retirar un comentario. */
+  editComment: (commentId: string, text: string) => Promise<void>;
+  deleteComment: (commentId: string) => Promise<void>;
   dismissProposal: (proposalId: string, state: 'snoozed' | 'skipped') => Promise<void>;
   /** Un reto para el grupo; «days» = cuántos días dura (sin fecha si se omite). */
   addChallenge: (groupId: string, title: string, body: string, days?: number) => Promise<void>;
@@ -307,7 +310,7 @@ async function load(me: string): Promise<Data> {
       .from('moments')
       .select(
         'id, group_id, author_id, text, created_at, shared_at, memory, edited_at, author_tz, proposal_id, place_name, lat, lng, ' +
-          'reactions(emoji, user_id), comments(id, user_id, text, created_at, deleted_at), ' +
+          'reactions(emoji, user_id), comments(id, user_id, text, created_at, deleted_at, edited_at), ' +
           'moment_media(position, media_assets(storage_path, kind, thumb_path, duration_s, waveform))',
       )
       .is('deleted_at', null)
@@ -520,6 +523,7 @@ async function load(me: string): Promise<Data> {
           userId: c.user_id,
           text: c.text,
           createdAt: Date.parse(c.created_at),
+          edited: !!c.edited_at,
         }))
         .sort((a: any, b: any) => a.createdAt - b.createdAt),
     };
@@ -976,6 +980,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     addComment: async (momentId, text) => {
       check(await supabase.from('comments').insert({ moment_id: momentId, text }));
+      await refresh();
+    },
+    editComment: async (commentId, text) => {
+      check(
+        await supabase
+          .from('comments')
+          .update({ text, edited_at: new Date().toISOString() })
+          .eq('id', commentId)
+          .eq('user_id', me),
+      );
+      await refresh();
+    },
+    deleteComment: async (commentId) => {
+      check(
+        await supabase
+          .from('comments')
+          .update({ deleted_at: new Date().toISOString() })
+          .eq('id', commentId)
+          .eq('user_id', me),
+      );
       await refresh();
     },
     dismissProposal: async (proposalId, state) => {

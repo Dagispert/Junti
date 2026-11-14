@@ -377,6 +377,8 @@ const CSS = `
 .jcountry.leaving .jc-art{animation:jc-leave .9s cubic-bezier(.4,0,.6,1) forwards}
 .jcountry.leaving .jc-head,.jcountry.leaving .jc-strip{opacity:0;transition:opacity .3s}
 @keyframes jc-leave{0%{opacity:1;transform:none;filter:blur(0)}100%{opacity:0;transform:scale(.55);filter:blur(10px)}}
+.jc-legend{display:flex;align-items:center;gap:6px;font:500 12px Inter,system-ui,sans-serif;color:#C2477A}
+.jc-legend i{width:9px;height:9px;border-radius:50%;background:#C2477A;border:2px solid #fff;box-shadow:0 2px 6px rgba(194,71,122,.4)}
 .jc-head{position:absolute;left:0;right:0;display:flex;flex-direction:column;align-items:center;gap:4px;font-family:Inter,system-ui,sans-serif;pointer-events:none}
 .jc-title{font:600 22px Inter,system-ui,sans-serif;color:#1D1F22;letter-spacing:-.4px}
 .jc-sub{font:500 12px Inter,system-ui,sans-serif;color:#6B7076}
@@ -896,7 +898,8 @@ export function GlobeMap({
       const f = facing(c.lat, c.lng);
       target.yaw = f.yaw;
       target.pitch = Math.max(-0.9, Math.min(0.9, f.pitch * (c.spread < 0.5 ? 1 : 0.8)));
-      target.dist = fitDist(c.spread);
+      // Sin nadie situado todavía: el mundo entero, no un trozo de mar.
+      target.dist = peopleRef.current.length ? fitDist(c.spread) : 3.4;
     }
     /** Nubes que pasan de largo y el cielo que se abre (al entrar y al salir del país). */
     function cloudBurst(into: HTMLElement) {
@@ -1030,16 +1033,13 @@ export function GlobeMap({
         <path d="${path(reg.lines as never) ?? ''}" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1.1" stroke-dasharray="3 4"/>
         ${originLines}${lines}${labels}</svg></div>`;
       const art = el.querySelector('.jc-art') as HTMLDivElement;
+      // En el mapa, solo el punto; lo que significa va en la leyenda, bajo el título.
       for (const o of startHere) {
         const [ox, oy] = proj([o.lng, o.lat]) ?? [0, 0];
         const mark = document.createElement('div');
         mark.className = 'jc-origin';
-        const crowded = people.some((p) => {
-          const [x, y] = at(p);
-          return Math.hypot(x - ox, y - oy) < 60;
-        });
-        mark.style.transform = `translate(${ox}px, ${oy + (crowded ? 44 : 0)}px) translate(-50%, -7px)`;
-        mark.innerHTML = `<div class="jc-origin-dot"></div><div class="jc-origin-label">${esc(o.label)}</div>`;
+        mark.style.transform = `translate(${ox}px, ${oy}px) translate(-50%, -50%)`;
+        mark.innerHTML = '<div class="jc-origin-dot"></div>';
         art.appendChild(mark);
       }
       // Los recuerdos del país: en el mapa, solo un punto naranja por sitio;
@@ -1132,7 +1132,9 @@ export function GlobeMap({
       const nProv = homes.size;
       head.innerHTML = `<div class="jc-title">${esc(name)}</div><div class="jc-sub">${people.length} ${
         people.length === 1 ? 'persona' : 'personas'
-      }${nProv ? ` · ${nProv} ${nProv === 1 ? 'provincia' : 'provincias'}` : ''}</div>`;
+      }${nProv ? ` · ${nProv} ${nProv === 1 ? 'provincia' : 'provincias'}` : ''}</div>${startHere
+        .map((o) => `<div class="jc-legend"><i></i>${esc(o.label)}</div>`)
+        .join('')}`;
       const back = document.createElement('button');
       back.className = 'jc-back';
       back.textContent = 'Volver al planeta';

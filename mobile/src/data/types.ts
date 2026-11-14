@@ -109,7 +109,14 @@ export type Proposal = {
 };
 
 export type Reaction = { emoji: string; userId: string };
-export type Comment = { id: string; userId: string; text: string; createdAt: number };
+export type Comment = {
+  id: string;
+  userId: string;
+  text: string;
+  createdAt: number;
+  /** Si su autor lo corrigió. */
+  edited?: boolean;
+};
 
 export type Moment = {
   id: string;

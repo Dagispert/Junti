@@ -1,3 +1,4 @@
+import { CommentLine } from '@/components/comment-line';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { ZoomIn } from 'react-native-reanimated';
@@ -106,10 +107,7 @@ export default function MomentView() {
         </Text>
       )}
       {moment.comments.map((c) => (
-        <Text key={c.id} style={[styles.comment, { color: theme.text }]}>
-          <Text style={{ color: theme.textSecondary }}>{user(c.userId).name.split(' ')[0]}: </Text>
-          {c.text}
-        </Text>
+        <CommentLine key={c.id} comment={c} size={17} />
       ))}
 
       {/* Guardarlo en un álbum del grupo. */}

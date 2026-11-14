@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, type PressableProps } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Nudges } from '@/components/nudges';
 import { GuidedTour } from '@/components/tour';
 import { Radius, useTheme } from '@/constants/theme';
 import { markTourSeen, shouldShowTour, subscribeTour } from '@/lib/tour';
@@ -58,6 +59,8 @@ export default function GroupLayout() {
           </Pressable>
         </View>
       </TabList>
+      {/* De vez en cuando, la narradora propone activar lo que falta. */}
+      <Nudges groupId={id} paused={touring} />
       {touring && (
         <GuidedTour
           groupId={id}
