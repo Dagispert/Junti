@@ -19,12 +19,13 @@ import { useClock } from '@/lib/clock';
 import { narratorAudio, stopNarrator } from '@/lib/narrator';
 import { buildStory, type Gap, gapLabel, parseGap, templateScenes } from '@/lib/story';
 
-type Scene =
+type Scene = (
   | { type: 'origin'; text: string; origin?: GroupOrigin }
   | { type: 'memory'; text: string; moment: Moment }
   | { type: 'gap'; text: string; gap: Gap }
   | { type: 'end'; text: string }
-  | { type: 'line'; text: string };
+  | { type: 'line'; text: string }
+) & { chapter?: string };
 
 const INK = '#1F2124';
 
@@ -91,7 +92,7 @@ export default function StoryScreen() {
 
   const scenes: Scene[] = useMemo(() => {
     const raw = narration?.scenes?.length ? narration.scenes : templateScenes(story.items);
-    return raw.map((e): Scene => {
+    const base = raw.map((e): Scene => {
       const memory = story.memories.find((m) => m.id === e.momentId);
       if (memory) return { type: 'memory', text: e.text, moment: memory };
       if (e.momentId === 'origin') {
@@ -107,7 +108,20 @@ export default function StoryScreen() {
       if (e.momentId === 'end') return { type: 'end', text: e.text };
       return { type: 'line', text: e.text };
     });
+    return base.map((x, i) => (raw[i].chapter ? { ...x, chapter: raw[i].chapter } : x));
   }, [narration, story]);
+  // Los capítulos: en qué capítulo está cada escena (número y nombre).
+  const chapterAt = useMemo(() => {
+    let n = 0;
+    let name = '';
+    return scenes.map((x) => {
+      if (x.chapter) {
+        n += 1;
+        name = x.chapter;
+      }
+      return n ? { n, name } : null;
+    });
+  }, [scenes]);
 
   // -1: la portada, mientras la narradora escribe y pone voz (como mucho 40 s).
   const [index, setIndex] = useState(-1);
@@ -320,6 +334,15 @@ export default function StoryScreen() {
               {year}
             </Animated.Text>
           )}
+          {/* El capítulo en el que estamos, discreto bajo la cabecera. */}
+          {!!chapterAt[index] && (
+            <Text
+              numberOfLines={1}
+              pointerEvents="none"
+              style={[styles.chapterLine, { top: insets.top + 48 }]}>
+              Capítulo {chapterAt[index]!.n} · {chapterAt[index]!.name}
+            </Text>
+          )}
           {/* La tarjeta de la escena */}
           <View style={[styles.cardWrap, { top: insets.top + 120 }]} pointerEvents="box-none">
             {scene?.type === 'memory' && (scene.moment.imageUri || scene.moment.text) && (
@@ -410,6 +433,19 @@ export default function StoryScreen() {
           )}
         </>
       )}
+      {/* Al empezar un capítulo, su título a toda pantalla, como en un libro. */}
+      {!!scene?.chapter && elapsed.current < 2600 && (
+        <Animated.View
+          key={`cap-${index}`}
+          entering={FadeIn.duration(500)}
+          exiting={FadeOut.duration(700)}
+          pointerEvents="none"
+          style={styles.chapterCard}>
+          <Text style={styles.chapterNo}>Capítulo {chapterAt[index]?.n}</Text>
+          <Text style={styles.chapterName}>{scene.chapter}</Text>
+          <View style={styles.chapterRule} />
+        </Animated.View>
+      )}
       {!!note && index <= 0 && (
         <Text style={[styles.note, { bottom: insets.bottom + 14 }]} pointerEvents="none">
           {note}
@@ -447,6 +483,37 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(255,255,255,0.95)',
     textShadowRadius: 12,
   },
+  chapterLine: {
+    position: 'absolute',
+    left: 24,
+    right: 24,
+    textAlign: 'center',
+    fontFamily: Hand,
+    fontSize: 18,
+    color: '#5A6168',
+  },
+  chapterCard: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingHorizontal: 32,
+    backgroundColor: 'rgba(250,247,240,0.94)',
+    zIndex: 20,
+  },
+  chapterNo: { fontSize: 14, letterSpacing: 2, color: '#A86A1F', fontWeight: '600' },
+  chapterName: {
+    fontFamily: HandBold,
+    fontSize: 46,
+    lineHeight: 50,
+    color: INK,
+    textAlign: 'center',
+  },
+  chapterRule: { width: 56, height: 2, borderRadius: 1, backgroundColor: '#A86A1F', marginTop: 4 },
   cardWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   polaroid: {
     backgroundColor: '#FFFFFF',

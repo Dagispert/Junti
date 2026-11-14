@@ -87,7 +87,8 @@ export type Narration = {
   body: string;
   /** La crónica por escenas: cada una acompaña a un momento (o a ninguno). */
   /** momentId: un momento, o «stats» (las cifras), «end» (despedida) o null (general). */
-  scenes: { momentId: string | null; text: string }[];
+  /** «chapter»: si con esta escena empieza un capítulo (en «Nuestra historia»). */
+  scenes: { momentId: string | null; text: string; chapter?: string }[];
   style: string;
   id: string;
   /** La voz: dirección temporal del audio y segundo en que empieza cada escena. */

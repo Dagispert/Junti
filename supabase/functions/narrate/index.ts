@@ -353,10 +353,11 @@ Estructura, en este orden:
 2. Una escena por recuerdo (con su número), en orden cronológico. Como mucho ESCENAS: si hay más, elige los que mejor cuentan la historia, repartidos en el tiempo y sin dejar fuera a nadie.
 3. Cada hueco («hueco 1», «hueco 2»…), en su sitio dentro del orden.
 4. «despedida»: la historia sigue, ahora en Junti; invita a seguir añadiendo recuerdos.
+Capítulos: si hay cuatro recuerdos o más, agrupa la historia en dos a cinco capítulos por épocas (por ejemplo «Los años de Erasmus», «Cuando cada uno se fue por su lado», «La vuelta»). Pon en la primera escena de cada capítulo el campo "capitulo" con su nombre: de dos a cinco palabras, evocador, sacado de lo que pasó (sin inventar), sin la palabra capítulo ni números. El primero puede empezar en «origen». Con menos de cuatro recuerdos, sin capítulos.
 Cada escena, 1 a 3 frases y como mucho 40 palabras. En total, como mucho LIMITE palabras.
 Y un título breve y evocador de 2 a 6 palabras.
 
-Responde solo con JSON: {"titulo": "...", "escenas": [{"momento": "origen", "texto": "..."}, {"momento": 1, "texto": "..."}, {"momento": "hueco 1", "texto": "..."}, {"momento": "despedida", "texto": "..."}]}`;
+Responde solo con JSON: {"titulo": "...", "escenas": [{"momento": "origen", "capitulo": "...", "texto": "..."}, {"momento": 1, "texto": "..."}, {"momento": "hueco 1", "texto": "..."}, {"momento": "despedida", "texto": "..."}]}`;
 
 type StoryMemory = {
   id: string;
@@ -441,7 +442,8 @@ async function tellStory(groupId: string, groupName: string, style: string, forc
         .order('created_at')
     : { data: [] as { moment_id: string; author_id: string; text: string | null }[] };
   const additions = (additionRows ?? []).filter((a) => !optedOut.has(a.author_id));
-  const signature = memories.length + 1000 * origins.length + 100_000 * additions.length;
+  // El último sumando es la versión de la historia (2: con capítulos): al cambiarla, se reescribe.
+  const signature = memories.length + 1000 * origins.length + 100_000 * additions.length + 2 * 10_000_000;
 
   const { data: existing } = await supabase
     .from('narrations')
@@ -583,6 +585,22 @@ async function tellStory(groupId: string, groupName: string, style: string, forc
     for (const g of gaps)
       items.push({ at: g.from - 0.5, scene: { moment_id: gapId(g), text: `De ${g.from} a ${g.to} no me habéis contado nada. ¿Qué pasó esos años?` } });
     items.sort((a, b) => a.at - b.at);
+    // Sin IA, los capítulos van por épocas: se corta donde hay huecos.
+    if (memories.length >= 4) {
+      let start = -1;
+      items.forEach((x, i) => {
+        if (start < 0 && x.scene.moment_id && !x.scene.moment_id.startsWith('gap:')) start = i;
+        const isGap = x.scene.moment_id?.startsWith('gap:');
+        const next = items[i + 1];
+        if (start >= 0 && (isGap || !next)) {
+          const span = items.slice(start, isGap ? i : i + 1).map((y) => y.at);
+          const from = Math.floor(Math.min(...span));
+          const to = Math.floor(Math.max(...span));
+          items[start].scene.chapter = from === to ? `${from}` : `De ${from} a ${to}`;
+          start = -1;
+        }
+      });
+    }
     scenes.push(...items.map((x) => x.scene));
     scenes.push({ moment_id: 'end', text: 'Y la historia sigue, ahora aquí. Cuando os acordéis de algo, añadidlo.' });
     parsed = { title: 'Nuestra historia', body: scenes.map((x) => x.text).join('\n\n'), scenes };
@@ -962,7 +980,8 @@ async function gemini(system: string, prompt: string): Promise<{ text: string; m
   throw new Error(`busy: ${busy || 'ningún modelo de Gemini disponible'} — ${log.join(' | ')}`);
 }
 
-type Scene = { moment_id: string | null; text: string };
+/** Una escena; «chapter», si con ella empieza un capítulo de la historia. */
+type Scene = { moment_id: string | null; text: string; chapter?: string };
 
 /** Lee la respuesta: título y escenas (cada una con el momento al que acompaña). */
 function parse(
@@ -974,7 +993,7 @@ function parse(
   try {
     const json = JSON.parse(clean) as {
       titulo?: string;
-      escenas?: { momento?: number | string; texto?: string }[];
+      escenas?: { momento?: number | string; texto?: string; capitulo?: string }[];
       parrafos?: string[];
     };
     let scenes: Scene[] = (json.escenas ?? [])
@@ -988,6 +1007,9 @@ function parse(
               ? 'end'
               : (ids[Number(e.momento) - 1] ?? null),
         text: String(e.texto ?? '').replace(/\s+/g, ' ').trim().slice(0, 400),
+        ...(e.capitulo && String(e.capitulo).trim()
+          ? { chapter: String(e.capitulo).replace(/\s+/g, ' ').trim().slice(0, 60) }
+          : {}),
       }))
       .filter((e) => e.text);
     if (!scenes.length && json.parrafos?.length) {

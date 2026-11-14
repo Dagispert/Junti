@@ -75,21 +75,57 @@ export function buildStory(origins: GroupOrigin[], groupMoments: Moment[]) {
   return { items: timed.map((x) => x.item), memories, gaps };
 }
 
+/**
+ * Capítulos por épocas, sin narradora: con cuatro recuerdos o más, la historia
+ * se corta donde hay huecos («De 2008 a 2011»). Devuelve, para cada posición de
+ * la historia donde empieza un capítulo, su nombre.
+ */
+export function autoChapters(items: StoryItem[]): Map<number, string> {
+  const out = new Map<number, string>();
+  if (items.filter((i) => i.type === 'memory').length < 4) return out;
+  const yearOf = (i: StoryItem) =>
+    i.type === 'memory' ? i.year : i.type === 'origin' ? i.year : undefined;
+  let start = -1;
+  let years: number[] = [];
+  const close = () => {
+    if (start >= 0 && years.length) {
+      const from = Math.min(...years);
+      const to = Math.max(...years);
+      out.set(start, from === to ? `${from}` : `De ${from} a ${to}`);
+    }
+    start = -1;
+    years = [];
+  };
+  items.forEach((it, i) => {
+    if (it.type === 'gap') return close();
+    if (start < 0) start = i;
+    const y = yearOf(it);
+    if (y) years.push(y);
+  });
+  close();
+  return out.size > 1 ? out : new Map();
+}
+
 const monthYear = (t: number) => {
   const s = new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' }).format(t);
   return s[0].toUpperCase() + s.slice(1);
 };
 
 /** La historia contada sin la narradora (si no está activada): frases sencillas. */
-export function templateScenes(items: StoryItem[]): { momentId: string | null; text: string }[] {
-  const scenes: { momentId: string | null; text: string }[] = [];
+export function templateScenes(
+  items: StoryItem[],
+): { momentId: string | null; text: string; chapter?: string }[] {
+  const chapters = autoChapters(items);
+  const scenes: { momentId: string | null; text: string; chapter?: string }[] = [];
   if (items[0]?.type !== 'origin') {
     scenes.push({
       momentId: 'origin',
       text: 'Esta es vuestra historia, desde el primer recuerdo.',
     });
   }
-  for (const it of items) {
+  for (const [i, it] of items.entries()) {
+    const chapter = chapters.get(i);
+    const before = scenes.length;
     if (it.type === 'origin') {
       const place = it.origin.place.split(',')[0];
       scenes.push({
@@ -109,6 +145,7 @@ export function templateScenes(items: StoryItem[]): { momentId: string | null; t
         text: `De ${it.gap.from} a ${it.gap.to} no me habéis contado nada. ¿Qué pasó esos años?`,
       });
     }
+    if (chapter && scenes[before]) scenes[before].chapter = chapter;
   }
   scenes.push({
     momentId: 'end',

@@ -292,7 +292,7 @@ async function requestNarration({
   }
   const row = data?.narration as
     | (Omit<Narration, 'scenes' | 'audioUrl' | 'sceneTimes' | 'audioDuration'> & {
-        scenes?: { moment_id: string | null; text: string }[];
+        scenes?: { moment_id: string | null; text: string; chapter?: string }[];
         audio_url?: string | null;
         scene_times?: number[] | null;
         audio_duration?: number | null;
@@ -306,7 +306,11 @@ async function requestNarration({
       body: row.body,
       style: row.style,
       generations: row.generations,
-      scenes: (row.scenes ?? []).map((e) => ({ momentId: e.moment_id, text: e.text })),
+      scenes: (row.scenes ?? []).map((e) => ({
+        momentId: e.moment_id,
+        text: e.text,
+        ...(e.chapter ? { chapter: e.chapter } : {}),
+      })),
       audioUrl: row.audio_url,
       sceneTimes: row.scene_times,
       audioDuration: row.audio_duration,

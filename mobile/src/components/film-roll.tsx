@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
 import { MapPin, Play, Plus } from 'lucide-react-native';
+import { Fragment, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInLeft, ZoomIn } from 'react-native-reanimated';
 
@@ -8,13 +9,15 @@ import { useStore } from '@/data/store';
 import { monthStart } from '@/lib/recap';
 import { primeNarrator } from '@/lib/narrator';
 import type { GroupOrigin, Moment } from '@/data/types';
-import { buildStory, gapLabel } from '@/lib/story';
+import { autoChapters, buildStory, gapId, gapLabel, type StoryItem } from '@/lib/story';
+import { supabase } from '@/lib/supabase';
 
 import { Icon } from './icon';
 import { Sticker, StickyNote } from './scrapbook';
 import { Photo } from './ui';
 
 const FRAME_W = 132;
+const CHAPTER_W = 104;
 const FRAME_H = 118;
 const STRIP_H = FRAME_H + 44;
 const FILM = '#3E2C22';
@@ -169,12 +172,42 @@ export function StoryRoll({
   moments: Moment[];
 }) {
   const { items } = buildStory(origins, moments);
+  // Los capítulos: los que puso la narradora o, si no hay, por épocas.
+  const [aiChapters, setAiChapters] = useState<Map<string, string>>(new Map());
+  const memoryCount = items.filter((i) => i.type === 'memory').length;
+  useEffect(() => {
+    let alive = true;
+    supabase
+      .from('narrations')
+      .select('scenes')
+      .match({ group_id: groupId, kind: 'story', period_start: '2000-01-01' })
+      .maybeSingle()
+      .then(({ data }) => {
+        const map = new Map<string, string>();
+        for (const sc of (data?.scenes ?? []) as { moment_id?: string; chapter?: string }[])
+          if (sc.chapter && sc.moment_id) map.set(sc.moment_id, sc.chapter);
+        if (alive) setAiChapters(map);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [groupId, memoryCount]);
+  const keyOf = (it: StoryItem) =>
+    it.type === 'memory' ? it.moment.id : it.type === 'gap' ? gapId(it.gap) : 'origin';
+  const chapters = new Map<number, string>();
+  if (aiChapters.size)
+    items.forEach(
+      (it, i) => aiChapters.has(keyOf(it)) && chapters.set(i, aiChapters.get(keyOf(it))!),
+    );
+  else autoChapters(items).forEach((name, i) => chapters.set(i, name));
+  const chapterNo = new Map([...chapters.keys()].sort((a, b) => a - b).map((k, n) => [k, n + 1]));
   const addMemory = (year?: number) =>
     router.push({
       pathname: '/publish',
       params: { groupId, memory: '1', ...(year ? { year: String(year) } : {}) },
     });
-  const stripW = 96 + 18 + (items.length + 1) * (FRAME_W + 10) + 24;
+  const stripW =
+    96 + 18 + (items.length + 1) * (FRAME_W + 10) + chapters.size * (CHAPTER_W + 10) + 24;
   const holes = Math.ceil(stripW / 18);
   const told = items.some((i) => i.type !== 'gap');
 
@@ -220,75 +253,90 @@ export function StoryRoll({
                 ))}
               </View>
               <View style={styles.frames}>
-                {items.map((it, i) => {
-                  const up = i % 2 === 0;
-                  const note = (big: string, small?: string) => (
-                    <View
-                      style={[styles.note, up ? { bottom: FRAME_H + 30 } : { top: FRAME_H + 30 }]}>
-                      <Text numberOfLines={2} style={styles.noteText}>
-                        {up ? '' : '↖ '}
-                        {big}
-                        {up ? ' ↘' : ''}
-                      </Text>
-                      {!!small && (
-                        <Text numberOfLines={1} style={styles.noteSmall}>
-                          {small}
+                {items.map((it, i) => (
+                  <Fragment key={`f-${i}`}>
+                    {chapters.has(i) && (
+                      <View style={[styles.frame, styles.chapter]}>
+                        <Text style={styles.chapterNo}>CAPÍTULO {chapterNo.get(i)}</Text>
+                        <Text numberOfLines={4} style={styles.chapterName}>
+                          {chapters.get(i)}
                         </Text>
-                      )}
-                    </View>
-                  );
-                  if (it.type === 'origin') {
-                    return (
-                      <View key={`o-${it.origin.id}`}>
-                        <View style={[styles.frame, styles.paper, styles.origin]}>
-                          <Icon icon={MapPin} size={22} color="#C2477A" />
-                          <Text numberOfLines={2} style={styles.paperText}>
-                            {it.origin.place.split(',')[0]}
-                          </Text>
-                          {!!it.year && <Text style={styles.originYear}>{it.year}</Text>}
-                        </View>
-                        {note('Aquí empezó todo')}
                       </View>
-                    );
-                  }
-                  if (it.type === 'gap') {
-                    return (
-                      <Pressable
-                        key={`g-${it.gap.from}`}
-                        accessibilityRole="button"
-                        accessibilityLabel={`¿Qué pasó de ${it.gap.from} a ${it.gap.to}? Añadir un recuerdo`}
-                        onPress={() => addMemory(Math.round((it.gap.from + it.gap.to) / 2))}>
-                        <View style={[styles.frame, styles.gap]}>
-                          <Text style={styles.gapYears}>{gapLabel(it.gap)}</Text>
-                          <Text style={styles.gapAsk}>¿Qué pasó?</Text>
-                          <Icon icon={Plus} size={18} color="#F4E9C8" />
-                        </View>
-                        {note('Un hueco', 'Contádmelo')}
-                      </Pressable>
-                    );
-                  }
-                  const m = it.moment;
-                  return (
-                    <Pressable
-                      key={m.id}
-                      accessibilityRole="button"
-                      accessibilityLabel={m.text ?? `Recuerdo de ${it.year}`}
-                      onPress={() =>
-                        router.push({ pathname: '/moment/[id]', params: { id: m.id } })
-                      }>
-                      {m.imageUri || m.videoUri ? (
-                        <Photo moment={m} style={styles.frame} />
-                      ) : (
-                        <View style={[styles.frame, styles.paper]}>
-                          <Text numberOfLines={5} style={styles.paperText}>
-                            {m.text ?? ''}
+                    )}
+                    {((it: StoryItem, i: number) => {
+                      const up = i % 2 === 0;
+                      const note = (big: string, small?: string) => (
+                        <View
+                          style={[
+                            styles.note,
+                            up ? { bottom: FRAME_H + 30 } : { top: FRAME_H + 30 },
+                          ]}>
+                          <Text numberOfLines={2} style={styles.noteText}>
+                            {up ? '' : '↖ '}
+                            {big}
+                            {up ? ' ↘' : ''}
                           </Text>
+                          {!!small && (
+                            <Text numberOfLines={1} style={styles.noteSmall}>
+                              {small}
+                            </Text>
+                          )}
                         </View>
-                      )}
-                      {note(String(it.year), m.place?.name.split(',')[0])}
-                    </Pressable>
-                  );
-                })}
+                      );
+                      if (it.type === 'origin') {
+                        return (
+                          <View key={`o-${it.origin.id}`}>
+                            <View style={[styles.frame, styles.paper, styles.origin]}>
+                              <Icon icon={MapPin} size={22} color="#C2477A" />
+                              <Text numberOfLines={2} style={styles.paperText}>
+                                {it.origin.place.split(',')[0]}
+                              </Text>
+                              {!!it.year && <Text style={styles.originYear}>{it.year}</Text>}
+                            </View>
+                            {note('Aquí empezó todo')}
+                          </View>
+                        );
+                      }
+                      if (it.type === 'gap') {
+                        return (
+                          <Pressable
+                            key={`g-${it.gap.from}`}
+                            accessibilityRole="button"
+                            accessibilityLabel={`¿Qué pasó de ${it.gap.from} a ${it.gap.to}? Añadir un recuerdo`}
+                            onPress={() => addMemory(Math.round((it.gap.from + it.gap.to) / 2))}>
+                            <View style={[styles.frame, styles.gap]}>
+                              <Text style={styles.gapYears}>{gapLabel(it.gap)}</Text>
+                              <Text style={styles.gapAsk}>¿Qué pasó?</Text>
+                              <Icon icon={Plus} size={18} color="#F4E9C8" />
+                            </View>
+                            {note('Un hueco', 'Contádmelo')}
+                          </Pressable>
+                        );
+                      }
+                      const m = it.moment;
+                      return (
+                        <Pressable
+                          key={m.id}
+                          accessibilityRole="button"
+                          accessibilityLabel={m.text ?? `Recuerdo de ${it.year}`}
+                          onPress={() =>
+                            router.push({ pathname: '/moment/[id]', params: { id: m.id } })
+                          }>
+                          {m.imageUri || m.videoUri ? (
+                            <Photo moment={m} style={styles.frame} />
+                          ) : (
+                            <View style={[styles.frame, styles.paper]}>
+                              <Text numberOfLines={5} style={styles.paperText}>
+                                {m.text ?? ''}
+                              </Text>
+                            </View>
+                          )}
+                          {note(String(it.year), m.place?.name.split(',')[0])}
+                        </Pressable>
+                      );
+                    })(it, i)}
+                  </Fragment>
+                ))}
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Añadir un recuerdo a la historia"
@@ -385,6 +433,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 2,
   },
+  chapter: {
+    width: CHAPTER_W,
+    backgroundColor: '#F4E9C8',
+    padding: 10,
+    justifyContent: 'center',
+    gap: 4,
+  },
+  chapterNo: { fontSize: 10, letterSpacing: 1.5, fontWeight: '700', color: '#A86A1F' },
+  chapterName: { fontFamily: HandBold, fontSize: 21, lineHeight: 21, color: '#3C2A1E' },
   gapYears: { fontFamily: HandBold, fontSize: 24, color: '#F4E9C8' },
   gapAsk: { fontFamily: Hand, fontSize: 19, color: '#F4E9C8', textAlign: 'center' },
   unexposed: { width: 70, backgroundColor: '#2A1D16', opacity: 0.8 },
