@@ -70,8 +70,7 @@ export function QuestionCard({ question }: { question: Question }) {
   useEffect(() => {
     if (!celebrate.current || !mine || question.correct === undefined) return;
     celebrate.current = false;
-    if (mine.choice === question.correct)
-      setBursts(['🎉', '✨', '🎉', '🥳'].map((emoji, i) => ({ id: Date.now() + i, emoji })));
+    if (mine.choice === question.correct) setBursts([{ id: Date.now(), emoji: '🎉' }]);
   }, [mine, question.correct]);
   const canAnswer = !closed && !(question.kind === 'quiz' && (isAuthor || mine));
   const first = (id: string) => user(id).name.split(' ')[0];

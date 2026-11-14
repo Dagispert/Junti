@@ -5,7 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Hand, Radius, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import type { Moment, Proposal } from '@/data/types';
-import { useFamily } from '@/lib/families';
+import { useFamily, useFamilyColorMode } from '@/lib/families';
 import { daysLeft } from '@/lib/time';
 
 import { FamilyCard, FamilyTag } from './family';
@@ -22,7 +22,11 @@ const TILE_H = 196;
  */
 export function ChallengeBlock({ challenge, answers }: { challenge: Proposal; answers: Moment[] }) {
   const theme = useTheme();
-  const f = useFamily('challenge');
+  const fam = useFamily('challenge');
+  const theme0 = useTheme();
+  // Sin color: el botón de participar, neutro.
+  const plain = useFamilyColorMode() === 'plain';
+  const f = plain ? { ...fam, color: theme0.text, tint: theme0.soft } : fam;
   const { me, user } = useStore();
   const open = !challenge.endsAt || challenge.endsAt > Date.now();
   const left = challenge.endsAt && open ? daysLeft(challenge.endsAt) : undefined;
