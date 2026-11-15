@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
 import { LogoMark } from '@/components/logo';
-import { Atmosphere } from '@/components/atmosphere';
+import { Backdrop } from '@/components/backdrop';
 import {
   Captions,
   EXIT_MS,
@@ -40,6 +40,7 @@ import { usePreview } from '@/lib/music';
 import { narratorAudio, narratorStream, primeNarrator, stopNarrator } from '@/lib/narrator';
 import { styleOf } from '@/lib/narrative';
 import { buildRecap } from '@/lib/recap';
+import { usePhotoColors } from '@/lib/photo-color';
 import { coverDoodle, type DoodleSpec, momentDoodle, statsChart } from '@/lib/doodles';
 import { clockIn } from '@/lib/time';
 import { fetchWeatherAt, type PastWeather } from '@/lib/weather';
@@ -367,7 +368,7 @@ export default function RecapScreen() {
   }, [recap]);
 
   // Cómo se ve cada escena: su cielo, su ambiente, su plano y su rótulo.
-  const looks: SceneLook[] = useMemo(() => {
+  const skyLooks: SceneLook[] = useMemo(() => {
     let nth = 0;
     let before: ReturnType<typeof whereOf> & { tz?: string } = null as never;
     const titleSky = (hour: number, cover = 0.1): Sky => ({
@@ -434,6 +435,28 @@ export default function RecapScreen() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slides, weather]);
+
+  // El fondo: plano, nunca degradado. En un momento con foto, un tono suave
+  // sacado de la propia foto; en la portada, las cifras y los textos, el
+  // papel de la app; al final, casi negro. La letra se adapta (clara/oscura).
+  const photoColors = usePhotoColors(recap.moments.map((m) => m.imageUri));
+  const backdrops = useMemo(
+    () =>
+      slides.map((sl) => {
+        if (sl.type === 'end') return { color: '#1D1F22', dark: true };
+        if (sl.type === 'stats') return { color: '#FFFFFF', dark: false };
+        if (sl.type === 'moment' || sl.type === 'loved') {
+          const uri = sl.moment.imageUri;
+          return { color: (uri && photoColors[uri]) || (uri ? '#EDEDEF' : '#F6F6F7'), dark: false };
+        }
+        return { color: '#F6F6F7', dark: false };
+      }),
+    [slides, photoColors],
+  );
+  const looks: SceneLook[] = useMemo(
+    () => skyLooks.map((l, i) => ({ ...l, dark: backdrops[i]?.dark ?? false })),
+    [skyLooks, backdrops],
+  );
   // El dibujo a mano de cada escena: lo elige el «director de dibujos» según
   // lo que cuenta (la fecha, la hora, el tiempo que hacía, el viaje, el ánimo).
   const doodles = useMemo(() => {
@@ -632,8 +655,8 @@ export default function RecapScreen() {
 
   return (
     <View ref={rootRef as never} style={styles.root}>
-      {/* El cielo de la escena: la hora y el tiempo que hacía, y lo que flota en el aire. */}
-      <Atmosphere sky={look.sky} mood={look.mood} travel={look.travel} paused={paused} />
+      {/* Fondo plano: el color lo pone lo que hay en primer plano. */}
+      <Backdrop color={backdrops[index]?.color ?? '#F6F6F7'} />
 
       {/* Tocar a la derecha: seguir; a la izquierda: volver; mantener: pausa. */}
       <Pressable
@@ -762,7 +785,7 @@ export default function RecapScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#0A1030', overflow: 'hidden' },
+  root: { flex: 1, backgroundColor: '#F6F6F7', overflow: 'hidden' },
   chrome: { position: 'absolute', top: 0, left: 0, right: 0 },
   signature: {
     position: 'absolute',

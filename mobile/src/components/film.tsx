@@ -26,7 +26,7 @@ import { Avatar, Photo } from './ui';
 // Las piezas del resumen narrado, pensado como una película: cada escena
 // es un plano (portada, foto a toda pantalla, polaroid, collage, cita,
 // cifras, final) con su coreografía de entrada y de salida, sobre el cielo
-// de <Atmosphere>. Entradas que frenan, salidas que aceleran, y siempre tres
+// de <Backdrop> (plano). Entradas que frenan, salidas que aceleran, y siempre tres
 // capas: lo principal (la foto), lo secundario (notas, pegatinas, rótulos) y
 // el ambiente (el cielo, la deriva lenta de la cámara).
 
@@ -44,8 +44,9 @@ type Pose = { x?: number; y?: number; scale?: number; rotate?: number };
 export const tone = (dark: boolean) => ({
   ink: dark ? '#F8F4EA' : '#23201D',
   soft: dark ? 'rgba(248,244,234,0.78)' : 'rgba(35,32,29,0.66)',
-  accent: dark ? '#FFD27D' : '#C2477A',
-  glow: dark ? 'rgba(6,10,30,0.6)' : 'rgba(255,255,255,0.8)',
+  accent: dark ? '#F28DB5' : '#C2477A',
+  // Sobre fondos planos no hace falta halo detrás de la letra.
+  glow: 'rgba(0,0,0,0)',
 });
 
 /**
@@ -245,9 +246,9 @@ function Slug({
 const STICKER: DoodleColors = { ink: '#23201D', accent: '#C2477A', paper: '#FFFDF6' };
 /** Los colores de un dibujo directamente sobre el cielo. */
 export const skyDoodle = (dark: boolean): DoodleColors => ({
-  ink: dark ? '#F8F4EA' : '#23201D',
-  accent: dark ? '#FFD27D' : '#C2477A',
-  paper: dark ? '#141A3A' : '#FFFDF6',
+  ink: dark ? '#F3F3F4' : '#1D1F22',
+  accent: '#C2477A',
+  paper: dark ? '#1B1C1E' : '#FFFFFF',
 });
 
 /** Lo visual de un momento: sus fotos (o las portadas de sus vídeos). */
@@ -310,7 +311,7 @@ export const MomentShot = memo(function MomentShot({
   nth: number;
 }) {
   // Con viaje, primero se ve el cielo y el avión; luego llega la foto.
-  const delay = look.travel ? 1500 : 480;
+  const delay = 480;
   const side = nth % 2 ? 1 : -1;
   const { photoW: w, photoH: h } = layout;
   const video = moment.videoUri;
