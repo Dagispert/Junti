@@ -6,10 +6,10 @@ import { Hand, HandBold } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import type { Moment } from '@/data/types';
 import { type CanisterPose, makeCanister } from '@/lib/canister3d';
+import { FilmString, filmPaths, straightTrack, windowPath } from '@/lib/filmstrip';
 import { primeNarrator } from '@/lib/narrator';
 import { monthStart } from '@/lib/recap';
-import { filmPaths, straightTrack } from '@/lib/filmstrip';
-import { serpentine, unrollSchedule } from '@/lib/serpentine';
+import { filmLayout, unrollSchedule } from '@/lib/serpentine';
 
 import { Icon } from './icon';
 
@@ -19,21 +19,30 @@ const { createPortal } = require('react-dom') as {
 };
 
 // El carrete a pantalla completa. Llega como el planeta: pequeño, desde el
-// centro, girando y acercándose. Queda flotando con la punta de la cinta
-// fuera; se tira de ella a la derecha y, si se lanza fuerte (o se toca
-// «Abrir»), el carrete se va a la esquina de arriba a la izquierda mientras la
-// cinta sale disparada y rebota de pared a pared hasta enseñar todas las fotos.
+// centro, girando y acercándose. Queda flotando con la lengüeta fuera; se tira
+// de ella y, si se lanza fuerte (o se toca «Abrir»), la lengüeta se guarda, el
+// carrete se va a la esquina de arriba a la izquierda y desde ahí sale la
+// cinta entera, con las fotos montadas en ella, rebotando de pared a pared.
+// La cinta tiene física: vibra al salir, se aplasta y rebota en cada pared, y
+// se puede pellizcar con el dedo.
 
 const FILM = '#24150D';
 const AMBER = '#7A4322';
-const FRAME_W = 84;
-const FRAME_H = 74;
-const THICK = FRAME_H + 22;
-const ROW_H = THICK + 50;
+const FILL = '#4A2A18';
+const FRAME_W = 80;
+const FRAME_H = 72;
+const THICK = 100;
+const ROW_H = THICK + 46;
+const GAP = 8;
 const PEEK = 30;
 const REST = 4.6;
 /** Lo que la cinta se esconde dentro del carrete (bajo la boca). */
 const TUCK = 16;
+const TAB = THICK * 0.9;
+/** Cinta libre al final: la lengüeta y su curva, sin fotos. */
+const TAIL = TAB + THICK * 0.55 + 14;
+/** Cinta libre al principio, junto al carrete. */
+const LEAD = TUCK + 26;
 
 type Phase =
   | 'enter'
@@ -65,6 +74,8 @@ function paint(g: SVGGElement | null, f: ReturnType<typeof filmPaths> | null) {
   holes.setAttribute('d', f?.holes ?? '');
 }
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+/** El giro de un fotograma según la cinta: casi derecho, se ladea un poco en las curvas. */
+const lean = (tx: number, ty: number) => 0.28 * Math.sin(2 * Math.atan2(ty, tx));
 
 export function RollViewer({
   moments,
@@ -84,7 +95,7 @@ export function RollViewer({
   onClose: () => void;
 }) {
   const { user } = useStore();
-  const maskId = `jrv${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
+  const uid = `jrv${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const [vp, setVp] = useState({ w: window.innerWidth, h: window.innerHeight });
   useEffect(() => {
     const on = () => setVp({ w: window.innerWidth, h: window.innerHeight });
@@ -93,7 +104,6 @@ export function RollViewer({
   }, []);
 
   const [phase, setPhaseState] = useState<Phase>('enter');
-  const [revealed, setRevealed] = useState(0);
   const canister = useMemo(
     () => makeCanister(color, month, year, moments.length),
     [color, month, year, moments.length],
@@ -114,27 +124,37 @@ export function RollViewer({
   }, [canister, B, BH]);
   const cs = Math.max(0.4, Math.min(0.85, THICK / fit.len));
   const corner = { x: -B * cs * 0.12, y: 44, s: cs };
-  const endMouth = {
-    x: corner.x + fit.m.x * B * cs - TUCK,
-    y: corner.y + fit.m.y * BH * cs,
-  };
+  const mouthX = corner.x + fit.m.x * B * cs - TUCK;
+  const mouthY = corner.y + fit.m.y * BH * cs;
+
   const sp = useMemo(
     () =>
-      serpentine({
-        x0: endMouth.x,
-        y0: endMouth.y,
+      filmLayout({
+        x0: mouthX,
+        y0: mouthY,
         left: 6,
         right: vp.w - 6,
         rowH: ROW_H,
-        frameW: FRAME_W,
-        frameH: FRAME_H,
-        gap: 10,
+        win: FRAME_W,
+        gap: GAP,
         n: moments.length,
-        pad: 10,
+        lead: LEAD,
+        tail: TAIL,
       }),
-    [endMouth.x, endMouth.y, vp.w, moments.length],
+    [mouthX, mouthY, vp.w, moments.length],
   );
   const L = sp.length;
+  const photoWins = useMemo(() => sp.windows.filter((w) => w.photo != null), [sp]);
+  const fillWins = useMemo(() => sp.windows.filter((w) => w.photo == null), [sp]);
+  // Los fotogramas de relleno llevan las reacciones del mes (las más usadas primero).
+  const fills = useMemo(() => {
+    const count = new Map<string, number>();
+    for (const m of moments)
+      for (const r of m.reactions) count.set(r.emoji, (count.get(r.emoji) ?? 0) + 1);
+    const list = [...count.entries()].sort((a, b) => b[1] - a[1]).map(([e, n]) => ({ e, n }));
+    return list.length ? list : ['📷', '✨', '♡', '☀️'].map((e) => ({ e, n: 0 }));
+  }, [moments]);
+  const string = useMemo(() => new FilmString(L + 40), [L]);
 
   // Todo lo que se mueve va por referencias (sin repintar React a cada fotograma).
   const st = useRef({
@@ -149,10 +169,11 @@ export function RollViewer({
     shown: 0,
     t0: 0,
     fade: 0,
-    revealed: 0,
+    still: 0,
   });
   const setPhase = (p: Phase) => {
     st.current.phase = p;
+    st.current.still = 0;
     if (p === 'opening' || p === 'unroll' || p === 'return') st.current.t0 = performance.now();
     setPhaseState(p);
   };
@@ -162,17 +183,68 @@ export function RollViewer({
   const shadow = useRef<HTMLDivElement>(null);
   const strip = useRef<SVGGElement>(null);
   const tongue = useRef<SVGGElement>(null);
+  const fillPath = useRef<SVGPathElement>(null);
+  const fillText = useRef<(SVGTextElement | null)[]>([]);
+  const frameEls = useRef<(HTMLDivElement | null)[]>([]);
+  const developed = useRef<boolean[]>([]);
   const root = useRef<HTMLDivElement>(null);
   const titleBig = useRef<HTMLDivElement>(null);
   const titleTop = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
-  const geo = useRef({ B, BH, center, corner, sp, L });
-  geo.current = { B, BH, center, corner, sp, L };
+  const geo = useRef({ B, BH, center, corner, sp, L, photoWins, fillWins, string });
+  geo.current = { B, BH, center, corner, sp, L, photoWins, fillWins, string };
 
   useEffect(() => {
     let raf = 0;
     let last = performance.now();
     const born = last;
+
+    // La cinta, sus fotogramas de relleno y las fotos, montadas sobre ella.
+    const paintFilm = (g: typeof geo.current, shown: number) => {
+      const tr = g.string.bend(g.sp.at);
+      paint(strip.current, shown > 0.5 ? filmPaths(tr, 0, shown, THICK, TAB) : null);
+      // cada fotograma va con la cinta: su sitio final menos lo que falta por salir
+      const back = g.L - shown;
+      const usable = shown - TAB - THICK * 0.55;
+      let d = '';
+      g.fillWins.forEach((w, i) => {
+        const qc = w.q - back;
+        const qa = Math.max(0, qc - FRAME_W / 2);
+        const qb = Math.min(usable, qc + FRAME_W / 2);
+        if (qb > qa) d += windowPath(tr, qa, qb, FRAME_H / 2);
+        const t = fillText.current[i];
+        if (!t) return;
+        if (qc < FRAME_W * 0.2 || qc > usable) {
+          t.setAttribute('opacity', '0');
+          return;
+        }
+        const p = tr(qc);
+        t.setAttribute('opacity', '1');
+        t.setAttribute(
+          'transform',
+          `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)}) rotate(${((lean(-p.ny, p.nx) * 180) / Math.PI).toFixed(1)})`,
+        );
+      });
+      fillPath.current?.setAttribute('d', d);
+      g.photoWins.forEach((w, i) => {
+        const el = frameEls.current[i];
+        if (!el) return;
+        const qc = w.q - back;
+        if (qc < -FRAME_W / 2) {
+          el.style.visibility = 'hidden';
+          return;
+        }
+        const p = tr(qc);
+        el.style.visibility = 'visible';
+        el.style.transform = `translate(${(p.x - FRAME_W / 2).toFixed(1)}px, ${(p.y - FRAME_H / 2).toFixed(1)}px) rotate(${lean(-p.ny, p.nx).toFixed(3)}rad)`;
+        // se revela al salir del carrete
+        if (qc > 0 && !developed.current[i]) {
+          developed.current[i] = true;
+          el.dataset.dev = '1';
+        }
+      });
+    };
+
     const loop = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
@@ -187,10 +259,10 @@ export function RollViewer({
         s.yaw += (0 - s.yaw) * k(0.055);
       }
       if (s.phase === 'enter' && s.dist < REST + 0.25) setPhase('closed');
-      // flotando, se mece un poco
       const idle = s.phase === 'closed' || s.phase === 'drag' || s.phase === 'enter';
       const sway = idle ? Math.sin(life * 1.3) * 0.08 : 0;
-      // la cinta que asoma (y que se guarda antes de moverse)
+
+      // la lengüeta que asoma (y que se guarda antes de moverse)
       const peekGoal = s.phase === 'closed' ? PEEK : s.phase === 'drag' ? s.peekTarget : 0;
       const prevPeek = s.peek;
       s.peek +=
@@ -203,24 +275,21 @@ export function RollViewer({
       if (s.phase === 'opening') {
         const t = (now - s.t0) / 1000 / 0.75;
         s.p = Math.min(1, t);
-        if (t >= 0.94) {
-          sched.current = unrollSchedule(g.sp, 1150);
+        if (t >= 1) {
+          sched.current = unrollSchedule(g.sp, 1050);
           setPhase('unroll');
         }
       }
       const prevShown = s.shown;
       if (s.phase === 'unroll' && sched.current) {
-        s.p = Math.min(1, s.p + dt / 0.08);
         const tt = (now - s.t0) / 1000;
         s.shown = sched.current.at(tt);
-        const hit = sched.current.hits.filter((h) => h <= tt).pop();
-        const jig = hit != null ? Math.exp(-7 * (tt - hit)) * Math.sin((tt - hit) * 34) * 5 : 0;
-        if (strip.current)
-          strip.current.setAttribute('transform', `translate(${jig.toFixed(2)} 0)`);
-        if (tt >= sched.current.total + 0.3) setPhase('open');
+        // la punta culebrea al salir
+        g.string.drive(s.shown - 6, 8 * Math.sin(tt * 13), 0.22);
+        if (tt >= sched.current.total + 0.2) setPhase('open');
       } else if (s.phase === 'rewind') {
         // la cinta vuelve a entrar entera, y solo entonces el carrete vuelve al centro
-        s.shown -= Math.max(260, s.shown * 2.2) * dt;
+        s.shown -= Math.max(300, s.shown * 2.2) * dt;
         if (s.shown <= 0) {
           s.shown = 0;
           sched.current = null;
@@ -230,6 +299,18 @@ export function RollViewer({
         s.p = Math.max(0, 1 - (now - s.t0) / 1000 / 0.7);
         if (s.p <= 0) setPhase('closed');
       }
+      // cada vez que la cinta llena una vuelta, choca con la pared y rebota
+      if (s.shown > prevShown) {
+        for (const seg of g.sp.segs) {
+          if (seg.kind !== 'arc') continue;
+          const mid = seg.s0 + seg.len * 0.6;
+          if (prevShown < mid && s.shown >= mid) {
+            g.string.kick(seg.s0 + seg.len * 0.5, -seg.side * 520, seg.len * 0.32);
+            g.string.kick(seg.s0 - 50, seg.side * 160, 40);
+          }
+        }
+      }
+      g.string.step(dt, s.shown);
       // el eje gira con la cinta que entra o sale
       s.spin -= (s.shown - prevShown + (s.peek - prevPeek)) * 0.025;
 
@@ -257,10 +338,13 @@ export function RollViewer({
         shadow.current.style.transform = `translate(${x + g.B * sc * 0.2}px, ${y + g.BH * sc * 0.93}px) scale(${sc * (1 - bob / 80)})`;
         shadow.current.style.opacity = String(near * (1 - e) * 0.9);
       }
-      const pose = { dist: s.dist, yaw: s.yaw + sway, tilt, spin: s.spin };
-      const c = canvas.current;
-      if (c) {
-        const ctx = c.getContext('2d');
+      // con la cinta abierta y quieta, se deja de redibujar
+      const settled = s.phase === 'open' && g.string.energy() < 0.03;
+      s.still = settled ? s.still + 1 : 0;
+      if (s.still < 3) {
+        const pose = { dist: s.dist, yaw: s.yaw + sway, tilt, spin: s.spin };
+        const c = canvas.current;
+        const ctx = c?.getContext('2d');
         if (ctx) canister.draw(ctx, g.B, g.BH, pose);
         // la lengüeta, saliendo de la ranura con su mismo alto
         const sl = canister.slot();
@@ -274,23 +358,13 @@ export function RollViewer({
         const nx = (t1.x - t2.x) / h,
           ny = (t1.y - t2.y) / h;
         const track = straightTrack((t1.x + t2.x) / 2, (t1.y + t2.y) / 2, -ny, nx, nx, ny);
-        const f = s.peek > 0.5 ? filmPaths(track, -TUCK, s.peek, h, h * 0.9) : null;
-        paint(tongue.current, f);
-      }
-      if (strip.current) {
-        const f = s.shown > 0.5 ? filmPaths(g.sp.at, 0, s.shown, THICK, THICK * 0.9) : null;
-        paint(strip.current, f);
+        paint(tongue.current, s.peek > 0.5 ? filmPaths(track, -TUCK, s.peek, h, h * 0.9) : null);
+        paintFilm(g, s.shown);
       }
       if (titleBig.current) titleBig.current.style.opacity = String(1 - Math.min(1, e * 2));
       if (titleTop.current) {
         titleTop.current.style.opacity = String(Math.max(0, e * 2 - 1));
         titleTop.current.style.transform = `translateY(${(1 - e) * 10}px)`;
-      }
-      // los fotogramas aparecen cuando la cinta llega a ellos
-      const n = g.sp.frames.filter((f) => s.shown >= f.end - FRAME_W * 0.35).length;
-      if (n !== s.revealed) {
-        s.revealed = n;
-        setRevealed(n);
       }
       raf = requestAnimationFrame(loop);
     };
@@ -314,15 +388,49 @@ export function RollViewer({
     setPhase('stow');
   };
 
-  // ── Tirar de la cinta ──
+  // ── Tirar de la lengüeta (cerrado) o pellizcar la cinta (abierta) ──
   const drag = useRef<{ x: number; vx: number; lastX: number; lastT: number } | null>(null);
+  const grab = useRef<{ q: number; nx: number; ny: number; x: number; y: number } | null>(null);
+  const local = (e: React.PointerEvent) => {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  };
   const onDown = (e: React.PointerEvent) => {
-    if (st.current.phase !== 'closed') return;
+    const s = st.current;
+    if (s.phase === 'open') {
+      // ¿se ha tocado la cinta? (el punto más cercano)
+      const pt = local(e);
+      let best = { q: -1, d: Infinity };
+      for (let q = LEAD; q < L; q += 6) {
+        const p = sp.at(q);
+        const dd = Math.hypot(p.x - pt.x, p.y - pt.y);
+        if (dd < best.d) best = { q, d: dd };
+      }
+      if (best.d < THICK / 2 + 14) {
+        const p = sp.at(best.q);
+        const side = (pt.x - p.x) * p.nx + (pt.y - p.y) * p.ny;
+        // un pellizco: la cinta se aparta del dedo y vibra
+        string.kick(best.q, (side > 0 ? -1 : 1) * 420, 30);
+        grab.current = { q: best.q, nx: p.nx, ny: p.ny, x: pt.x, y: pt.y };
+        s.still = 0;
+      }
+      return;
+    }
+    if (s.phase !== 'closed') return;
     drag.current = { x: e.clientX, vx: 0, lastX: e.clientX, lastT: performance.now() };
     (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
     setPhase('drag');
   };
   const onMove = (e: React.PointerEvent) => {
+    const gb = grab.current;
+    if (gb) {
+      // arrastrar la cinta con el dedo: tira de ella por su normal
+      const pt = local(e);
+      const off = (pt.x - gb.x) * gb.nx + (pt.y - gb.y) * gb.ny;
+      string.drive(gb.q, Math.max(-24, Math.min(24, off * 0.6)), 0.4);
+      st.current.still = 0;
+      return;
+    }
     const d = drag.current;
     if (!d) return;
     const now = performance.now();
@@ -333,22 +441,18 @@ export function RollViewer({
     st.current.peekTarget = PEEK + Math.min(170, dx * 0.8 - (dx * dx) / 2600);
   };
   const onUp = () => {
+    grab.current = null;
     const d = drag.current;
     drag.current = null;
     if (!d) return;
     const dx = d.lastX - d.x;
-    if (d.vx > 0.5 || dx > 130) {
-      setPhase('closed');
-      open();
-    } else if (Math.abs(dx) < 6) {
-      // un toque: también abre
-      setPhase('closed');
-      open();
-    } else setPhase('closed');
+    setPhase('closed');
+    // lanzada fuerte, o un toque: se abre
+    if (d.vx > 0.5 || dx > 130 || Math.abs(dx) < 6) open();
   };
 
   const tint = mix(color, '#F7F4EE', 0.13);
-  const isOpen = phase === 'unroll' || phase === 'open' || phase === 'rewind';
+  const isOpen = phase !== 'enter' && phase !== 'closed' && phase !== 'drag' && phase !== 'leave';
   const contentH = Math.max(vp.h, sp.height + 150);
   const top = (m: Moment) => [...new Set(m.reactions.map((r) => r.emoji))].slice(0, 2);
   const go = (fn: () => void) => {
@@ -383,108 +487,139 @@ export function RollViewer({
           onPointerMove={onMove}
           onPointerUp={onUp}
           onPointerCancel={onUp}
+          data-open={phase === 'open' ? '1' : '0'}
           style={{
             position: 'relative',
             height: isOpen ? contentH : vp.h,
             touchAction: phase === 'closed' || phase === 'drag' ? 'none' : 'pan-y',
             userSelect: 'none',
+            WebkitUserSelect: 'none',
             cursor: phase === 'closed' ? 'grab' : phase === 'drag' ? 'grabbing' : 'default',
           }}>
-          {/* la cinta abierta */}
-          <div style={{ position: 'absolute', inset: 0, zIndex: 1 }}>
-            <svg
-              width={vp.w}
-              height={contentH}
-              style={{ position: 'absolute', inset: 0, overflow: 'visible' }}
-              aria-hidden>
-              <defs>
-                <filter id={`${maskId}s`} x="-10%" y="-10%" width="120%" height="120%">
-                  <feDropShadow dx="0" dy="5" stdDeviation="5" floodOpacity="0.2" />
-                </filter>
-              </defs>
-              <g ref={strip}>
-                <path fill={FILM} filter={`url(#${maskId}s)`} />
-                <path fill={AMBER} opacity={0.4} />
-                <path fill={tint} />
-              </g>
-              {/* la lengüeta (con el carrete cerrado), por debajo del carrete */}
-              <g ref={tongue}>
-                <path fill={FILM} filter={`url(#${maskId}s)`} />
-                <path fill={AMBER} opacity={0.4} />
-                <path fill={tint} />
-              </g>
-            </svg>
-            {sp.frames.map((f) => {
-              const m = moments[f.i];
-              const on = f.i < revealed && isOpen;
-              const emojis = top(m);
-              const comment = m.comments[m.comments.length - 1];
+          <svg
+            width={vp.w}
+            height={contentH}
+            style={{ position: 'absolute', inset: 0, overflow: 'visible', zIndex: 1 }}
+            aria-hidden>
+            <defs>
+              <filter id={`${uid}s`} x="-10%" y="-10%" width="120%" height="120%">
+                <feDropShadow dx="0" dy="5" stdDeviation="5" floodOpacity="0.2" />
+              </filter>
+            </defs>
+            <g ref={strip}>
+              <path fill={FILM} filter={`url(#${uid}s)`} />
+              <path fill={AMBER} opacity={0.4} />
+              <path fill={tint} />
+            </g>
+            {/* los fotogramas de relleno (en las vueltas): las reacciones del mes */}
+            <path ref={fillPath} fill={FILL} stroke="#140B06" strokeWidth={1.5} />
+            {fillWins.map((w, i) => {
+              const f = fills[i % fills.length];
               return (
-                <div
-                  key={m.id}
-                  style={{
-                    position: 'absolute',
-                    left: f.x,
-                    top: f.y,
-                    width: FRAME_W,
-                    opacity: on ? 1 : 0,
-                    transform: on ? 'none' : 'scale(.9)',
-                    transition: 'opacity 240ms ease, transform 460ms cubic-bezier(.2,1.5,.4,1)',
-                    pointerEvents: on && phase === 'open' ? 'auto' : 'none',
-                  }}>
-                  <button
-                    type="button"
-                    aria-label={m.text ?? `Foto de ${user(m.authorId).name}`}
-                    onClick={() =>
-                      go(() => router.push({ pathname: '/moment/[id]', params: { id: m.id } }))
-                    }
-                    style={frameStyle}>
-                    {m.imageUri ? (
-                      <img
-                        src={m.imageUri}
-                        alt=""
-                        draggable={false}
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'cover',
-                          display: 'block',
-                        }}
-                      />
-                    ) : (
-                      <div style={paperStyle}>{m.text ?? (m.voice ? 'Nota de voz' : '')}</div>
-                    )}
-                  </button>
-                  {emojis.length > 0 && (
-                    <div style={stickerStyle(f.i)}>
-                      {emojis.join('')}
-                      {m.reactions.length > 1 && (
-                        <span style={{ fontSize: 11, marginLeft: 2, fontWeight: 600 }}>
-                          {m.reactions.length}
-                        </span>
-                      )}
-                    </div>
+                <text
+                  key={w.q}
+                  ref={(el) => {
+                    fillText.current[i] = el;
+                  }}
+                  opacity={0}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  style={{ fontSize: 22 }}>
+                  {f.e}
+                  {f.n > 1 && (
+                    <tspan dx={2} dy={9} style={{ fontSize: 12, fontWeight: 700 }} fill="#F1D9B8">
+                      {f.n}
+                    </tspan>
                   )}
-                  <div style={noteStyle}>
-                    {comment ? (
-                      <>
-                        <b>{user(comment.userId).name.split(' ')[0]}</b>: {comment.text}
-                        {m.comments.length > 1 ? ` · +${m.comments.length - 1}` : ''}
-                      </>
-                    ) : (
-                      <>
-                        {user(m.authorId).name.split(' ')[0]} ·{' '}
-                        {new Intl.DateTimeFormat('es-ES', {
-                          day: 'numeric',
-                          month: 'short',
-                        }).format(m.createdAt)}
-                      </>
-                    )}
-                  </div>
-                </div>
+                </text>
               );
             })}
-          </div>
+            {/* la lengüeta (con el carrete cerrado), por debajo del carrete */}
+            <g ref={tongue}>
+              <path fill={FILM} filter={`url(#${uid}s)`} />
+              <path fill={AMBER} opacity={0.4} />
+              <path fill={tint} />
+            </g>
+          </svg>
+
+          {/* las fotos, montadas en la cinta */}
+          {photoWins.map((w, i) => {
+            const m = moments[w.photo!];
+            const emojis = top(m);
+            const comment = m.comments[m.comments.length - 1];
+            return (
+              <div
+                key={m.id}
+                ref={(el) => {
+                  frameEls.current[i] = el;
+                }}
+                className="jrv-frame"
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  top: 0,
+                  width: FRAME_W,
+                  height: FRAME_H,
+                  zIndex: 1,
+                  visibility: 'hidden',
+                  pointerEvents: phase === 'open' ? 'auto' : 'none',
+                }}>
+                <button
+                  type="button"
+                  aria-label={m.text ?? `Foto de ${user(m.authorId).name}`}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() =>
+                    go(() => router.push({ pathname: '/moment/[id]', params: { id: m.id } }))
+                  }
+                  style={frameStyle}>
+                  {m.imageUri ? (
+                    <img
+                      src={m.imageUri}
+                      alt=""
+                      draggable={false}
+                      className="jrv-img"
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        display: 'block',
+                      }}
+                    />
+                  ) : (
+                    <div className="jrv-img" style={paperStyle}>
+                      {m.text ?? (m.voice ? 'Nota de voz' : '')}
+                    </div>
+                  )}
+                </button>
+                {emojis.length > 0 && (
+                  <div style={stickerStyle(i)}>
+                    {emojis.join('')}
+                    {m.reactions.length > 1 && (
+                      <span style={{ fontSize: 11, marginLeft: 2, fontWeight: 600 }}>
+                        {m.reactions.length}
+                      </span>
+                    )}
+                  </div>
+                )}
+                <div className="jrv-note" style={noteStyle}>
+                  {comment ? (
+                    <>
+                      <b>{user(comment.userId).name.split(' ')[0]}</b>: {comment.text}
+                      {m.comments.length > 1 ? ` · +${m.comments.length - 1}` : ''}
+                    </>
+                  ) : (
+                    <>
+                      {user(m.authorId).name.split(' ')[0]} ·{' '}
+                      {new Intl.DateTimeFormat('es-ES', {
+                        day: 'numeric',
+                        month: 'short',
+                      }).format(m.createdAt)}
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })}
 
           {/* la sombra y el carrete */}
           <div
@@ -622,28 +757,28 @@ const frameStyle: React.CSSProperties = {
   height: FRAME_H,
   padding: 0,
   border: 0,
-  borderRadius: 5,
+  borderRadius: 3,
   overflow: 'hidden',
   background: '#F3EEE2',
-  boxShadow: '0 0 0 2px rgba(20,10,4,.55) inset',
+  boxShadow: '0 0 0 2px rgba(20,10,4,.6) inset',
   cursor: 'pointer',
   display: 'block',
 };
 const paperStyle: React.CSSProperties = {
   width: '100%',
   height: '100%',
-  padding: 8,
+  padding: 7,
   boxSizing: 'border-box',
   fontFamily: Hand,
-  fontSize: 15,
-  lineHeight: '16px',
+  fontSize: 14,
+  lineHeight: '15px',
   color: '#1D1F22',
   overflow: 'hidden',
   textAlign: 'left',
 };
 const stickerStyle = (i: number): React.CSSProperties => ({
   position: 'absolute',
-  top: -14,
+  top: -16,
   right: -10,
   padding: '2px 7px',
   borderRadius: 14,
@@ -656,7 +791,7 @@ const stickerStyle = (i: number): React.CSSProperties => ({
 });
 const noteStyle: React.CSSProperties = {
   position: 'absolute',
-  top: FRAME_H + 15,
+  top: FRAME_H + 18,
   left: -6,
   width: FRAME_W + 12,
   fontFamily: Hand,
@@ -713,6 +848,12 @@ if (typeof document !== 'undefined' && !document.getElementById('jrv-css')) {
   s.id = 'jrv-css';
   s.textContent =
     '@keyframes jrv-in{from{opacity:0}to{opacity:1}}' +
-    '@keyframes jrv-hint{0%,100%{transform:translateX(0)}50%{transform:translateX(8px)}}';
+    '@keyframes jrv-hint{0%,100%{transform:translateX(0)}50%{transform:translateX(8px)}}' +
+    // la foto sale como un negativo y se revela
+    '.jrv-frame .jrv-img{filter:sepia(1) brightness(.35) contrast(1.3);transition:filter 1.2s ease-out}' +
+    '.jrv-frame[data-dev="1"] .jrv-img{filter:none}' +
+    // los comentarios, solo con la cinta quieta
+    '.jrv-note{opacity:0;transition:opacity .4s}' +
+    '[data-open="1"] .jrv-note{opacity:1}';
   document.head.appendChild(s);
 }

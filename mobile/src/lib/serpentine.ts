@@ -152,12 +152,28 @@ export function offsetPath(sp: Serpentine, off: number, step = 4) {
  * instante (s), la distancia desplegada y el último choque con la pared.
  */
 export function unrollSchedule(sp: Serpentine, speed: number) {
-  const parts: { s0: number; s1: number; t0: number; t1: number; arc: boolean }[] = [];
+  const parts: {
+    s0: number;
+    s1: number;
+    t0: number;
+    t1: number;
+    arc: boolean;
+    last: boolean;
+  }[] = [];
   let t = 0;
   let v = Math.max(900, speed);
   for (const g of sp.segs) {
-    const dur = g.kind === 'arc' ? 0.22 : g.len / v;
-    parts.push({ s0: g.s0, s1: g.s0 + g.len, t0: t, t1: t + dur, arc: g.kind === 'arc' });
+    const last = g === sp.segs[sp.segs.length - 1];
+    // el último tramo frena hasta pararse (dura más y acaba suave)
+    const dur = (g.kind === 'arc' ? 0.26 : g.len / v) * (last ? 1.9 : 1);
+    parts.push({
+      s0: g.s0,
+      s1: g.s0 + g.len,
+      t0: t,
+      t1: t + dur,
+      arc: g.kind === 'arc',
+      last,
+    });
     t += dur;
     if (g.kind === 'arc') v = Math.max(620, v * 0.86);
   }
@@ -170,10 +186,104 @@ export function unrollSchedule(sp: Serpentine, speed: number) {
       const p = parts.find((x) => time >= x.t0 && time <= x.t1) ?? parts[parts.length - 1];
       const k = (time - p.t0) / Math.max(1e-6, p.t1 - p.t0);
       // en las vueltas, entra frenando y sale acelerando (el rebote)
-      const e = p.arc ? (k < 0.5 ? 2 * k * k : 1 - 2 * (1 - k) * (1 - k)) : k;
+      const e = p.last
+        ? 1 - (1 - k) * (1 - k)
+        : p.arc
+          ? k < 0.5
+            ? 2 * k * k
+            : 1 - 2 * (1 - k) * (1 - k)
+          : k;
       return p.s0 + (p.s1 - p.s0) * e;
     },
     /** Momentos (s) en que la punta toca pared. */
     hits: parts.filter((p) => p.arc).map((p) => p.t0),
+  };
+}
+
+/** Un fotograma de la cinta: dónde cae (q, por la cinta) y qué lleva. */
+export type Window = {
+  q: number;
+  /** índice de la foto, o null si es un fotograma de relleno (vuelta o sobrante) */
+  photo: number | null;
+};
+
+export type FilmLayout = Serpentine & { windows: Window[]; pitch: number; win: number };
+
+/**
+ * La cinta entera como una película de verdad: fotogramas seguidos a paso
+ * fijo desde el principio hasta el final, sin huecos. Las fotos van en los
+ * fotogramas que caen enteros en un tramo recto; los que caen en una vuelta
+ * llevan relleno. La punta (la lengüeta) queda libre y la cinta termina justo
+ * después de la última foto: nunca sobra cinta vacía.
+ */
+export function filmLayout(o: {
+  x0: number;
+  y0: number;
+  left: number;
+  right: number;
+  rowH: number;
+  win: number;
+  gap: number;
+  n: number;
+  /** cinta libre antes del primer fotograma (lo que queda junto al carrete) */
+  lead: number;
+  /** cinta libre después del último (la lengüeta) */
+  tail: number;
+}): FilmLayout {
+  // Un zigzag largo de sobra; luego se recorta.
+  const base = serpentine({
+    x0: o.x0,
+    y0: o.y0,
+    left: o.left,
+    right: o.right,
+    rowH: o.rowH,
+    frameW: 1,
+    frameH: 1,
+    gap: 1e6,
+    n: Math.max(4, o.n * 2 + 4),
+    pad: 0,
+    tail: 1e6,
+  });
+  const pitch = o.win + o.gap;
+  const lines = base.segs.filter((s) => s.kind === 'line');
+  const straight = (a: number, b: number) =>
+    lines.some((s) => a >= s.s0 + 2 && b <= s.s0 + s.len - 2);
+  const windows: Window[] = [];
+  let placed = 0;
+  for (let k = 0; placed < o.n && k < 2000; k++) {
+    const q = o.lead + o.win / 2 + k * pitch;
+    if (q + o.win / 2 > base.length) break;
+    const ok = straight(q - o.win / 2, q + o.win / 2);
+    windows.push({ q, photo: ok ? placed++ : null });
+  }
+  const lastQ = windows[windows.length - 1]?.q ?? o.lead;
+  const length = lastQ + o.win / 2 + o.tail;
+  // recorta los tramos
+  const segs: Serpentine['segs'] = [];
+  for (const s of base.segs) {
+    if (s.s0 >= length) break;
+    if (s.s0 + s.len <= length) segs.push(s);
+    else if (s.kind === 'line') {
+      const dir = s.to[0] >= s.from[0] ? 1 : -1;
+      const len = length - s.s0;
+      segs.push({ ...s, len, to: [s.from[0] + dir * len, s.to[1]] });
+    } else segs.push({ ...s, len: length - s.s0 });
+  }
+  const at = (d: number) => base.at(Math.max(0, Math.min(length, d)));
+  // el alto: el punto más bajo por el que pasa la cinta
+  let bottom = o.y0;
+  for (let q = 0; q <= length; q += 8) bottom = Math.max(bottom, base.at(q).y);
+  const rows = Math.round((bottom - o.y0) / o.rowH) + 1;
+  return {
+    segs,
+    length,
+    frames: [],
+    walls: base.walls.filter((w) => w < length),
+    height: bottom + o.rowH / 2,
+    rows,
+    at,
+    windows,
+    pitch,
+    win: o.win,
   };
 }
