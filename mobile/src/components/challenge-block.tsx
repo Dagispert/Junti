@@ -12,6 +12,7 @@ import { daysLeft } from '@/lib/time';
 import { FamilyCard, FamilyTag } from './family';
 import { Icon } from './icon';
 import { MomentCard } from './moment-card';
+import { NudgeBell } from './nudge-bell';
 import { Avatar, AvatarRow, Photo } from './ui';
 
 const TILE_W = 150;
@@ -156,9 +157,20 @@ export function ChallengeBlock({ challenge, answers }: { challenge: Proposal; an
                   : 'sin fecha'
           }
         />
-        <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
-          {ordered.length} {ordered.length === 1 ? 'respuesta' : 'respuestas'}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
+            {ordered.length} {ordered.length === 1 ? 'respuesta' : 'respuestas'}
+          </Text>
+          {open && (
+            <NudgeBell
+              targetId={challenge.id}
+              groupId={challenge.groupId}
+              done={people}
+              owner={challenge.createdBy}
+              label={isChallenge ? 'el reto' : 'la propuesta'}
+            />
+          )}
+        </View>
       </View>
       <Pressable
         accessibilityRole="button"

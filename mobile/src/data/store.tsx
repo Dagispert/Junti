@@ -161,6 +161,8 @@ type Store = {
   setNarrative: (groupId: string, enabled: boolean, style: string) => Promise<void>;
   /** Guarda cómo es la narradora (lo ya contado se vuelve a contar con ella). */
   setNarrator: (groupId: string, persona: NarratorPersona | null) => Promise<void>;
+  /** La campanita: avisa a quien aún no ha participado; devuelve a cuántos. */
+  nudge: (targetId: string) => Promise<number>;
   /** Que mis momentos no se usen (o sí) en la narración de este grupo. */
   setNarrativeOptOut: (groupId: string, optOut: boolean) => Promise<void>;
   /** Pide (o recupera) la crónica de un periodo. */
@@ -1502,6 +1504,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           .eq('id', groupId),
       );
       await refresh();
+    },
+    nudge: async (targetId) => {
+      const { data, error } = await supabase.rpc('nudge', { target: targetId });
+      if (error) throw new Error(error.message);
+      return Number(data ?? 0);
     },
     setNarrator: async (groupId, persona) => {
       check(await supabase.from('groups').update({ narrator: persona }).eq('id', groupId));

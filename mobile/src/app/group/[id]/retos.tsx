@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { GroupHeader } from '@/components/group-header';
+import { NudgeBell } from '@/components/nudge-bell';
 import { OwnerActions } from '@/components/owner-actions';
 import { QuestionCard } from '@/components/question-card';
 import { AvatarRow, Button, Card, PhotoFan, Screen, Tag } from '@/components/ui';
@@ -47,6 +48,17 @@ export default function Challenges() {
     const left = challenge.endsAt ? daysLeft(challenge.endsAt) : undefined;
     return (
       <Card key={challenge.id} style={styles.card}>
+        {open && (
+          <View style={styles.bell}>
+            <NudgeBell
+              targetId={challenge.id}
+              groupId={challenge.groupId}
+              done={participants}
+              owner={challenge.createdBy}
+              label="el reto"
+            />
+          </View>
+        )}
         {answers.length > 0 && <PhotoFan moments={answers} size={120} />}
         <View style={{ alignItems: 'center', gap: 12 }}>
           <Tag center>
@@ -164,6 +176,7 @@ export default function Challenges() {
 
 const styles = StyleSheet.create({
   card: { padding: 24, gap: 20 },
+  bell: { position: 'absolute', top: 16, right: 16, zIndex: 2 },
   title: {
     fontSize: 24,
     lineHeight: 30,

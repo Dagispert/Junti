@@ -9,6 +9,7 @@ import { daysLeft, relative } from '@/lib/time';
 
 import { type Burst, EmojiBursts } from './emoji-burst';
 import { FamilyCard, FamilyTag } from './family';
+import { NudgeBell } from './nudge-bell';
 import { Icon } from './icon';
 import { OwnerActions } from './owner-actions';
 import { Avatar, AvatarRow, Notice } from './ui';
@@ -116,15 +117,32 @@ export function QuestionCard({ question }: { question: Question }) {
       />
       <View style={styles.top}>
         <FamilyTag family={question.kind} />
-        <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
-          {closed
-            ? 'Cerrada'
-            : left
-              ? left === 1
-                ? 'Queda 1 día'
-                : `Quedan ${left} días`
-              : relative(question.createdAt)}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
+            {closed
+              ? 'Cerrada'
+              : left
+                ? left === 1
+                  ? 'Queda 1 día'
+                  : `Quedan ${left} días`
+                : relative(question.createdAt)}
+          </Text>
+          {!closed && (
+            <NudgeBell
+              targetId={question.id}
+              groupId={question.groupId}
+              done={question.answers.map((a) => a.userId)}
+              owner={question.createdBy}
+              label={
+                question.kind === 'poll'
+                  ? 'la encuesta'
+                  : question.kind === 'quiz'
+                    ? 'el quiz'
+                    : 'la pregunta'
+              }
+            />
+          )}
+        </View>
       </View>
       <View style={styles.who}>
         <Avatar userId={question.createdBy} size={28} />
