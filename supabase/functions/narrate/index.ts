@@ -109,7 +109,35 @@ Estructura, en este orden:
 Cada escena, 1 a 3 frases y como mucho 40 palabras. En total, como mucho LIMITE palabras.
 Y un título breve y evocador de 2 a 6 palabras.
 
-Responde solo con JSON: {"titulo": "...", "escenas": [{"momento": 0, "texto": "..."}, {"momento": 3, "texto": "..."}, {"momento": "cifras", "texto": "..."}, {"momento": "despedida", "texto": "..."}]}`;
+El vídeo empieza mirando por una ventanilla. Elige la vista que mejor resume el periodo (por lo que se compartió, el tiempo que hizo, si alguien viajó…), una de estas:
+VENTANILLAS
+La escena de apertura se oye mientras se mira por esa ventanilla: que encaje con ella sin describirla literalmente.
+
+Responde solo con JSON: {"titulo": "...", "ventanilla": "campo", "escenas": [{"momento": 0, "texto": "..."}, {"momento": 3, "texto": "..."}, {"momento": "cifras", "texto": "..."}, {"momento": "despedida", "texto": "..."}]}`;
+
+/** Las vistas de la ventanilla del vídeo (las mismas que en la app: src/pelicula/guion.ts). */
+const VENTANILLAS: [string, string][] = [
+  ['campo', 'campo tranquilo pasando por la ventana del tren (una semana tranquila, rutina)'],
+  ['nubes', 'mar de nubes desde la ventanilla del avión (viajes, distancia, alguien vuela)'],
+  ['lluvia', 'gotas de lluvia en el cristal (días grises, nostalgia, lluvia)'],
+  ['nieve', 'paisaje nevado con pinos (frío, invierno, nieve)'],
+  ['playa', 'playa con sol y olas (vacaciones, verano, mar)'],
+  ['montana', 'montañas con cumbres nevadas (excursiones, naturaleza, retos)'],
+  ['ciudad_noche', 'ciudad de noche con ventanas encendidas (noches, desvelos, salir)'],
+  ['ciudad', 'ciudad de día con edificios (trabajo, prisas, vida diaria)'],
+  ['fiesta', 'globos y banderines (cumpleaños, celebraciones, buenas noticias)'],
+  ['cena', 'una mesa con velas y dos copas (cenas, comidas juntos, brindis)'],
+  ['cafe', 'café humeante al amanecer (mañanas, desayunos, calma)'],
+  ['musica', 'notas musicales flotando (canciones, conciertos, bailar)'],
+  ['deporte', 'un balón botando en un campo (deporte, partidos, moverse)'],
+  ['otono', 'árboles soltando hojas (otoño, cambios, despedidas suaves)'],
+  ['primavera', 'flores que se abren y una mariposa (primavera, comienzos, alegría)'],
+  ['estrellas', 'cielo estrellado con luna y estrella fugaz (deseos, noches tranquilas, echar de menos)'],
+  ['tormenta', 'tormenta con rayos (semana difícil, líos, días intensos)'],
+  ['mar', 'el mar desde el ojo de buey de un barco (lejanía entre países, travesías)'],
+  ['anden', 'un andén donde dos personas se abrazan (reencuentros, visitas, os visteis)'],
+  ['casa', 'la ventana de casa con una planta y un gato dormido (hogar, quedarse en casa, cuidarse)'],
+];
 
 type Body = {
   groupId?: string;
@@ -267,7 +295,9 @@ Deno.serve(async (req) => {
     const prompt = await describePeriod(groupId, group.name, kind!, from, to, body.label, moments, optedOut);
     const limit = kind === 'week' ? 230 : 320;
     const system =
-      SYSTEM.replace('LIMITE', String(limit)).replace('ESCENAS', kind === 'week' ? '7' : '10') +
+      SYSTEM.replace('LIMITE', String(limit))
+        .replace('ESCENAS', kind === 'week' ? '7' : '10')
+        .replace('VENTANILLAS', VENTANILLAS.map(([id, d]) => `- ${id}: ${d}`).join('\n')) +
       `\n\nEstilo: ${(STYLES[style] ?? STYLES.emotivo).text}`;
     let parsed: { title: string; body: string; scenes: Scene[] } | null;
     let model: string;
@@ -993,6 +1023,7 @@ function parse(
   try {
     const json = JSON.parse(clean) as {
       titulo?: string;
+      ventanilla?: string;
       escenas?: { momento?: number | string; texto?: string; capitulo?: string }[];
       parrafos?: string[];
     };
@@ -1016,6 +1047,11 @@ function parse(
       scenes = json.parrafos.map((p) => ({ moment_id: null, text: String(p).trim() }));
     }
     if (!scenes.length) return null;
+    // La vista de la ventanilla viaja en la escena de apertura (sin momento).
+    const view = String(json.ventanilla ?? '').trim();
+    if (VENTANILLAS.some(([id]) => id === view) && scenes[0] && !scenes[0].moment_id) {
+      scenes[0] = { ...scenes[0], moment_id: `ventanilla:${view}` };
+    }
     return {
       title: String(json.titulo ?? '').trim(),
       body: scenes.map((e) => e.text).join('\n\n'),

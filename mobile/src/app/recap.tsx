@@ -1,11 +1,12 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
 import { LogoMark } from '@/components/logo';
 import { Backdrop } from '@/components/backdrop';
+import RecapFilm from '@/components/recap-film';
 import {
   Captions,
   EXIT_MS,
@@ -70,7 +71,12 @@ const INK = '#2A2724';
  * la derecha para seguir y a la izquierda para volver, y se mantiene pulsado
  * para pausar. De fondo, una canción de vuestra banda sonora.
  */
+/** En la web, el resumen es una película dibujada a mano; fuera, las escenas de siempre. */
 export default function RecapScreen() {
+  return Platform.OS === 'web' ? <RecapFilm /> : <RecapSlides />;
+}
+
+function RecapSlides() {
   const { groupId, kind, from } = useLocalSearchParams<{
     groupId: string;
     kind: 'week' | 'month';

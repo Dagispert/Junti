@@ -3,7 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MapPin, Plus, Share, Volume2, VolumeX, X } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { popIn } from '@/components/motion';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGlobePeople } from '@/components/connection-card';
 import { useExport } from '@/components/export-sheet';
 import { Doodle } from '@/components/doodle';
+import StoryFilm from '@/components/story-film';
 import { GlobeMap } from '@/components/globe-map';
 import type { GlobeMemory } from '@/components/globe-map.types';
 import { Icon } from '@/components/icon';
@@ -46,7 +47,12 @@ const INK = '#1F2124';
  * dice y pregunta qué pasó (con un botón para contarlo). Se toca a la derecha
  * para seguir y a la izquierda para volver.
  */
+/** En la web, la historia es una película dibujada a mano; fuera, la del planeta. */
 export default function StoryScreen() {
+  return Platform.OS === 'web' ? <StoryFilm /> : <StoryGlobe />;
+}
+
+function StoryGlobe() {
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
   const { group: groupById, moments, narrate } = useStore();
   const group = groupById(groupId);
