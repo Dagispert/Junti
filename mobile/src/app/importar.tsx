@@ -23,6 +23,8 @@ export default function Importar() {
   const [chat, setChat] = useState<ChatImport | null>(null);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [names, setNames] = useState(true);
+  // juntar en una publicación las fotos que alguien mandó seguidas
+  const [together, setTogether] = useState(true);
   // quién es quién: el nombre en WhatsApp → la persona del grupo ('' = nadie de Junti)
   const [who, setWho] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState('');
@@ -113,37 +115,69 @@ export default function Importar() {
       return n;
     });
 
+  /** Las publicaciones que saldrán: fotos de la misma persona mandadas seguidas, juntas. */
+  const batches = (list: ChatPhoto[]) => {
+    const out: ChatPhoto[][] = [];
+    for (const p of list) {
+      const last = out[out.length - 1];
+      const prev = last?.[last.length - 1];
+      if (
+        together &&
+        prev &&
+        prev.sender === p.sender &&
+        p.at - prev.at <= 5 * 60_000 &&
+        last.length < 10
+      )
+        last.push(p);
+      else out.push([p]);
+    }
+    return out;
+  };
+  const chosen = (chat?.photos ?? []).filter((p) => picked.has(p.name));
+  const posts = batches(chosen).length;
+
   const save = async () => {
-    const list = (chat?.photos ?? []).filter((p) => picked.has(p.name));
-    setProgress({ done: 0, total: list.length, failed: 0 });
+    const groups = batches(chosen);
+    setProgress({ done: 0, total: groups.length, failed: 0 });
     setStage('saving');
     let failed = 0;
-    for (let i = 0; i < list.length; i++) {
-      const p = list[i];
+    for (let i = 0; i < groups.length; i++) {
+      const batch = groups[i];
+      const first = batch[0];
+      const urls: string[] = [];
       try {
-        const blob = await p.load();
-        const uri = URL.createObjectURL(blob);
+        const blobs = await Promise.all(batch.map((p) => p.load()));
+        const media = blobs.map((b) => {
+          const uri = URL.createObjectURL(b);
+          urls.push(uri);
+          return { uri, kind: 'photo' as const, mime: b.type || 'image/jpeg' };
+        });
         // a nombre de quien la mandó (si está en el grupo); si no, su nombre en el texto
-        const credited = p.sender ? who[p.sender] || undefined : undefined;
+        const credited = first.sender ? who[first.sender] || undefined : undefined;
+        const caption = batch
+          .map((p) => p.caption)
+          .filter(Boolean)
+          .join('\n');
         const text =
-          !credited && names && p.sender
-            ? p.caption
-              ? `${p.caption} — ${p.sender}`
-              : `De ${p.sender}`
-            : p.caption;
+          !credited && names && first.sender
+            ? caption
+              ? `${caption} — ${first.sender}`
+              : `De ${first.sender}`
+            : caption || undefined;
         await addMoment({
           groupId,
-          media: { uri, kind: 'photo', mime: blob.type || 'image/jpeg' },
+          media: media[0],
+          more: media.slice(1),
           text: text?.slice(0, 1000),
-          rememberedAt: p.at,
+          rememberedAt: first.at,
           creditedTo: credited,
         });
-        URL.revokeObjectURL(uri);
       } catch (e) {
         failed++;
         if (failed === 1) setNotice(errorText(e));
       }
-      setProgress({ done: i + 1, total: list.length, failed });
+      urls.forEach((u) => URL.revokeObjectURL(u));
+      setProgress({ done: i + 1, total: groups.length, failed });
     }
     setStage('done');
   };
@@ -292,6 +326,22 @@ export default function Importar() {
               )}
             </View>
           )}
+          <Pressable
+            accessibilityRole="switch"
+            aria-checked={together}
+            onPress={() => setTogether((v) => !v)}
+            style={[styles.toggle, { backgroundColor: theme.soft }]}>
+            <View
+              style={[
+                styles.check,
+                { backgroundColor: together ? theme.text : 'transparent', borderColor: theme.text },
+              ]}>
+              {together && <Icon icon={Check} size={14} color={theme.background} />}
+            </View>
+            <Text style={{ color: theme.text, fontSize: 14, flex: 1 }}>
+              Juntar en una publicación las fotos que alguien mandó seguidas
+            </Text>
+          </Pressable>
           {years.map(([year, list]) => {
             const all = list.every((p) => picked.has(p.name));
             return (
@@ -367,7 +417,11 @@ export default function Importar() {
       {stage === 'choose' && picked.size > 0 && (
         <View style={styles.footer}>
           <Button
-            label={`Guardar ${picked.size} ${picked.size === 1 ? 'recuerdo' : 'recuerdos'}`}
+            label={
+              posts === picked.size
+                ? `Guardar ${picked.size} ${picked.size === 1 ? 'recuerdo' : 'recuerdos'}`
+                : `Guardar ${picked.size} fotos en ${posts} ${posts === 1 ? 'recuerdo' : 'recuerdos'}`
+            }
             onPress={save}
           />
         </View>
