@@ -4,11 +4,12 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { ConnectionCard } from '@/components/connection-card';
 import { GroupHeader } from '@/components/group-header';
-import type { Moment, Proposal, Question } from '@/data/types';
+import type { Moment, Proposal, Question, Song } from '@/data/types';
 import { ChallengeBlock } from '@/components/challenge-block';
 import { FamilyCard, FamilyTag } from '@/components/family';
 import { MomentCard } from '@/components/moment-card';
 import { QuestionCard } from '@/components/question-card';
+import { SongCard } from '@/components/song-card';
 import { OnThisDay } from '@/components/on-this-day';
 import { UpcomingCard } from '@/components/upcoming-card';
 import { RecapCard } from '@/components/recap-card';
@@ -28,6 +29,7 @@ export default function Today() {
     moments,
     proposals,
     questions,
+    songs,
     dismissed,
     dismissProposal,
   } = useStore();
@@ -73,7 +75,8 @@ export default function Today() {
   type Entry =
     | { kind: 'moment'; moment: Moment; at: number }
     | { kind: 'challenge'; challenge: Proposal; answers: Moment[]; at: number }
-    | { kind: 'question'; question: Question; at: number };
+    | { kind: 'question'; question: Question; at: number }
+    | { kind: 'song'; song: Song; at: number };
   const entries: Entry[] = [];
   const blocks = new Map<string, Entry & { kind: 'challenge' }>();
   const block = (challenge: Proposal, at: number) => {
@@ -94,6 +97,9 @@ export default function Today() {
   for (const c of proposals) if (c.groupId === id && c.kind === 'challenge') block(c, c.startsAt);
   for (const q of groupQuestions)
     if (!pending.includes(q)) entries.push({ kind: 'question', question: q, at: q.createdAt });
+  // y las canciones que se añaden a la banda sonora
+  for (const song of songs)
+    if (song.groupId === id) entries.push({ kind: 'song', song, at: song.createdAt });
   entries.sort((a, b) => b.at - a.at);
 
   return (
@@ -155,6 +161,10 @@ export default function Today() {
         entry.kind === 'challenge' ? (
           <Appear key={`reto-${entry.challenge.id}`} index={i + 1}>
             <ChallengeBlock challenge={entry.challenge} answers={entry.answers} />
+          </Appear>
+        ) : entry.kind === 'song' ? (
+          <Appear key={`cancion-${entry.song.id}`} index={i + 1}>
+            <SongCard song={entry.song} />
           </Appear>
         ) : entry.kind === 'question' ? (
           <Appear key={`pregunta-${entry.question.id}`} index={i + 1}>

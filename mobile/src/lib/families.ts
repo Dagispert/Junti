@@ -7,6 +7,7 @@ import {
   Lightbulb,
   type LucideIcon,
   MessageCircle,
+  Music,
 } from 'lucide-react-native';
 import { useSyncExternalStore } from 'react';
 import { useColorScheme } from 'react-native';
@@ -15,7 +16,15 @@ import { useColorScheme } from 'react-native';
 // tiene nombre, icono y color propios para que en «Hoy» se entienda de un
 // vistazo qué es cada cosa.
 
-export type FamilyId = 'moment' | 'memory' | 'challenge' | 'poll' | 'quiz' | 'open' | 'prompt';
+export type FamilyId =
+  | 'moment'
+  | 'memory'
+  | 'challenge'
+  | 'poll'
+  | 'quiz'
+  | 'open'
+  | 'prompt'
+  | 'song';
 
 type Family = {
   label: string;
@@ -68,6 +77,12 @@ export const FAMILIES: Record<FamilyId, Family> = {
     icon: Lightbulb,
     color: { light: '#9A7A0C', dark: '#E5C74F' },
     tint: { light: '#FBF6DF', dark: '#28240F' },
+  },
+  song: {
+    label: 'Banda sonora',
+    icon: Music,
+    color: { light: '#5B4FC9', dark: '#A89CF5' },
+    tint: { light: '#F2F0FD', dark: '#1E1C2B' },
   },
 };
 
