@@ -84,8 +84,10 @@ export function MomentCard({
     // importado de WhatsApp por otra persona
     (moment.uploaderId && moment.uploaderId !== moment.authorId
       ? moment.uploaderId === me
-        ? ' · lo importaste tú'
-        : ` · lo importó ${user(moment.uploaderId).name.split(' ')[0]}`
+        ? moment.memory
+          ? ' · lo importaste tú'
+          : ' · lo compartiste tú'
+        : ` · lo ${moment.memory ? 'importó' : 'compartió'} ${user(moment.uploaderId).name.split(' ')[0]}`
       : '');
 
   /** Reaccionar: al ponerla, el emoji sale volando por encima de la publicación. */

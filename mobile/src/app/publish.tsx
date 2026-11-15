@@ -44,8 +44,10 @@ type Media = {
  * recuerdo de antes que se guarda en su fecha.
  */
 export default function Publish() {
-  const { groupId, proposalId, memory, year, addTo } = useLocalSearchParams<{
+  const { groupId, proposalId, memory, year, addTo, creditedTo } = useLocalSearchParams<{
     groupId: string;
+    /** A nombre de quién sale (lo compartido desde WhatsApp por otra persona). */
+    creditedTo?: string;
     proposalId?: string;
     memory?: string;
     /** Añadir mi versión a este recuerdo (de otra persona). */
@@ -290,6 +292,7 @@ export default function Publish() {
         text: text.trim() || undefined,
         place: place ?? undefined,
         rememberedAt: remembering ? when.getTime() : undefined,
+        creditedTo: creditedTo || undefined,
       });
       setSent(true);
     } catch (error) {
@@ -334,7 +337,10 @@ export default function Publish() {
       }>
       <View style={{ gap: 12 }}>
         {/* El destino siempre a la vista antes de publicar. */}
-        <Tag>Para {group.name}</Tag>
+        <Tag>
+          Para {group.name}
+          {creditedTo ? ` · a nombre de ${user(creditedTo).name.split(' ')[0]}` : ''}
+        </Tag>
         <Title>
           {adding
             ? 'Tu versión'

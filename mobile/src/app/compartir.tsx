@@ -24,9 +24,11 @@ import { clearInbox, handOff, loadShared, type Shared } from '@/lib/shared';
  */
 export default function Compartir() {
   const theme = useTheme();
-  const { groups } = useStore();
+  const { groups, me, user } = useStore();
   const [shared, setShared] = useState<Shared | null>(null);
   const [groupId, setGroupId] = useState<string | null>(null);
+  // quién lo mandó en WhatsApp ('' = yo)
+  const [sender, setSender] = useState('');
 
   useEffect(() => {
     loadShared().then(setShared);
@@ -42,7 +44,11 @@ export default function Compartir() {
     if (shared.inboxIds.length) clearInbox();
     router.replace({
       pathname: '/publish',
-      params: { groupId, ...(memory ? { memory: '1' } : {}) },
+      params: {
+        groupId,
+        ...(memory ? { memory: '1' } : {}),
+        ...(sender ? { creditedTo: sender } : {}),
+      },
     });
   };
 
@@ -115,7 +121,10 @@ export default function Compartir() {
                   key={g.id}
                   accessibilityRole="radio"
                   aria-checked={on}
-                  onPress={() => setGroupId(g.id)}
+                  onPress={() => {
+                    setGroupId(g.id);
+                    setSender('');
+                  }}
                   style={[styles.chip, { backgroundColor: on ? theme.accent : theme.soft }]}>
                   <Text
                     style={{
@@ -129,6 +138,39 @@ export default function Compartir() {
               );
             })}
           </View>
+
+          {/* quién lo mandó en WhatsApp: saldrá a su nombre */}
+          <Text style={[styles.label, { color: theme.textSecondary }]}>¿Quién lo mandó?</Text>
+          <View style={styles.row}>
+            {[
+              '',
+              ...(groups.find((g) => g.id === groupId)?.memberIds ?? []).filter((id) => id !== me),
+            ].map((id) => {
+              const on = sender === id;
+              return (
+                <Pressable
+                  key={id || 'yo'}
+                  accessibilityRole="radio"
+                  aria-checked={on}
+                  onPress={() => setSender(id)}
+                  style={[styles.chip, { backgroundColor: on ? theme.accent : theme.soft }]}>
+                  <Text
+                    style={{
+                      color: on ? theme.onAccent : theme.text,
+                      fontSize: 15,
+                      fontWeight: '500',
+                    }}>
+                    {id ? user(id).name.split(' ')[0] : 'Yo'}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {!!sender && (
+            <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
+              Saldrá a nombre de {user(sender).name.split(' ')[0]}, con «lo compartiste tú».
+            </Text>
+          )}
 
           <Text style={[styles.label, { color: theme.textSecondary }]}>¿Qué es?</Text>
           <View style={{ gap: 10 }}>

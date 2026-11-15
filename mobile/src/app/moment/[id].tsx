@@ -71,8 +71,10 @@ export default function MomentView() {
                 · {date}
                 {moment.uploaderId && moment.uploaderId !== moment.authorId
                   ? moment.uploaderId === me
-                    ? ' · lo importaste tú'
-                    : ` · lo importó ${user(moment.uploaderId).name.split(' ')[0]}`
+                    ? moment.memory
+                      ? ' · lo importaste tú'
+                      : ' · lo compartiste tú'
+                    : ` · lo ${moment.memory ? 'importó' : 'compartió'} ${user(moment.uploaderId).name.split(' ')[0]}`
                   : ''}
               </Text>
             </View>

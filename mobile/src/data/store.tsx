@@ -1065,8 +1065,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             ...(rememberedAt && {
               memory: true,
               created_at: new Date(rememberedAt).toISOString(),
-              ...(creditedTo && { credited_to: creditedTo }),
             }),
+            // a nombre de quien lo mandó (alguien del grupo), si no es quien lo sube
+            ...(creditedTo && { credited_to: creditedTo }),
             place_name: place ? [place.name, place.country].filter(Boolean).join(', ') : null,
             lat: place?.lat ?? null,
             lng: place?.lng ?? null,
