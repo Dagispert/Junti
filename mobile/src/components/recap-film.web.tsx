@@ -157,7 +157,7 @@ export default function RecapFilm() {
   const [time, setTime] = useState({ t: 0, total: 1 });
   const [ended, setEnded] = useState(false);
   // La música suena entera hasta que habla la narradora; en cuanto empieza a
-  // hablar, baja al 5 % y se queda de fondo. Solo vuelve a subir si la voz
+  // hablar, baja al 2 % y se queda de fondo. Solo vuelve a subir si la voz
   // calla un buen rato (al final, o en pausa).
   const [speaking, setSpeaking] = useState(false);
   useEffect(() => {
@@ -182,7 +182,7 @@ export default function RecapFilm() {
     };
   }, [player]);
   useEffect(() => {
-    audio.volume(voiceOn && voice && speaking ? 0.05 : 0.8);
+    audio.volume(voiceOn && voice && speaking ? 0.02 : 0.8);
   });
 
   const start = () => {
