@@ -21,6 +21,11 @@ const NOCHE = { bg: '#141518', ink: '#F3F1E7', accent: '#E5568E', foco: '#23252A
 const DIA = { bg: '#F4F3EF', ink: '#1D1F22', accent: '#C2477A' };
 const CRISTAL = { glass: '#FBFAF3', ink: '#1D1F22', accent: '#C2477A' };
 
+/** Segundos desde que empieza el calendario hasta el flash de la cámara (noche → día). */
+export const FLASH = 1.45;
+/** Cuánto crece la foto de cada momento al posarse. */
+const ZOOM = 1.36;
+
 const tile = (inset = 0, dx = 0, dy = 0) => squircle(CX + dx, CY + dy, L - 2 * inset, L - 2 * inset);
 const S = (t: number, a: number, d: number, c = ease.out) => span(t, a, d, c);
 
@@ -137,7 +142,7 @@ export class Pelicula {
     svg.innerHTML = '';
     svg.setAttribute('viewBox', `0 0 ${STAGE.w} ${STAGE.h}`);
     const defs = el('defs', {}, svg);
-    const dayAt = P.calendario[0] + 2.15;
+    const dayAt = P.calendario[0] + FLASH + 0.2;
     const isDay = (t: number) => t >= dayAt && t < P.final[0];
 
     // ── Fondo plano, que cambia con el flash ──
@@ -309,13 +314,13 @@ export class Pelicula {
       const goma = el('path', { fill: 'none', stroke: NOCHE.ink, 'stroke-width': 9, 'stroke-linecap': 'round' }, lTapa);
       const tension = el('path', { fill: 'none', stroke: NOCHE.accent, 'stroke-width': 2, 'stroke-linecap': 'round' }, lTapa);
       this.paint.push((t) => {
-        ver(lTapa, t >= la && t < la + 3.4);
-        if (t < la || t > la + 3.4) return;
+        ver(lTapa, t >= la && t < la + 2.8);
+        if (t < la || t > la + 2.8) return;
         revelar(borde, S(t, la, 0.55, ease.inOut));
         opacidad(relleno, S(t, la + 0.3, 0.25));
-        opacidad(nombre, S(t, la + 0.6, 0.4));
-        const ke = S(t, la + 1.0, 0.42), ks = S(t, la + 1.6, 0.24, ease.in);
-        const vib = damped(t, la + 1.42, 5, 6);
+        opacidad(nombre, S(t, la + 0.5, 0.35));
+        const ke = S(t, la + 0.8, 0.36), ks = S(t, la + 1.3, 0.22, ease.in);
+        const vib = damped(t, la + 1.16, 5, 6);
         const x = 900 - (900 - (X0 + L - 4)) * ke + 300 * ks;
         const comba = 60 * (1 - ke) + 40 * vib + 44 * ks;
         const on = ke > 0 && ks < 1;
@@ -326,7 +331,7 @@ export class Pelicula {
           const lg = 40 * (1 - ke * 0.6) + 26 * ks + 14 * Math.abs(vib);
           tension.setAttribute('d', `M${x + 6},${Y0 - 6} l${lg},0 M${x + 6},${Y0 + L + 6} l${lg},0`);
         }
-        const ka = S(t, la + 1.85, 0.62, ease.inOut), kt = S(t, la + 2.45, 0.42, ease.in);
+        const ka = S(t, la + 1.5, 0.55, ease.inOut), kt = S(t, la + 2.0, 0.4, ease.in);
         voltearX(tapa, Math.PI * ka * 0.97, X0, CY);
         if (kt > 0) tapa.setAttribute('transform', `translate(${(-300 * kt).toFixed(1)},0) ${tapa.getAttribute('transform')}`);
         opacidad(tapa, 1 - kt);
@@ -404,7 +409,7 @@ export class Pelicula {
       T.tinta(pluma, 'M132,-10 L144,-10 L144,10 L132,10 Z', { ...po, fill: NOCHE.accent });
       mover(pluma, {});
       const medidor = el('path', {}, defs);
-      const t0 = la + 3.0, t1 = lb - 1.5;
+      const t0 = la + 2.5, t1 = lb - 1.0;
       const per = tramos.length ? (t1 - t0) / tramos.length : 0;
       this.paint.push((t) => {
         ver(lPagina, t >= la + 0.3 && t < lb + 0.6);
@@ -413,7 +418,7 @@ export class Pelicula {
         mover(cinta, { y: -120 * (1 - kc) });
         opacidad(cinta, kc * 3);
         puntos.forEach((n, i) => {
-          const k = S(t, la + 2.8 + i * 0.25, 0.35, ease.linear);
+          const k = S(t, la + 2.2 + i * 0.2, 0.35, ease.linear);
           opacidad(n, k * 3);
           mover(n, { ox: groups[i].x, oy: groups[i].y, s: 0.4 + 0.6 * ease.back(k) });
         });
@@ -516,11 +521,13 @@ export class Pelicula {
       const marcos = d.pieces.map((p) => {
         const g = el('g', {}, lCamara);
         const mov = el('g', {}, g);
-        const card = el('g', {}, mov);
+        // al posarse, la foto crece para verse bien (más grande que la cámara)
+        const zoom = el('g', {}, mov);
+        const card = el('g', {}, zoom);
         marco(T, card, defs, p.photo, p.text, p.wave);
         const notas = p.comments.slice(0, 2).map((c, j) => {
           const n = el('g', {}, g);
-          const x = j % 2 ? CX + 70 : CX - 270, y = Y0 + L + 40 + j * 70;
+          const x = j % 2 ? CX + 60 : CX - 260, y = Y0 + L + 150 + j * 40;
           T.tinta(n, roundRect(x, y, 200, 110, 10), { color: DIA.ink, width: 2, fill: j % 2 ? '#FFF6B8' : '#FFFFFF' });
           const ls = lineas(`${c.who}: ${c.text}`, 18, 3);
           ls.forEach((ln, k) => texto(n, ln, { x: x + 14, y: y + 34 + k * 26, size: 24, color: DIA.ink, anchor: 'start' }));
@@ -528,16 +535,16 @@ export class Pelicula {
         });
         const pega = el('g', {}, g);
         if (p.reactions.length) {
-          el('circle', { cx: X0 + L - 10, cy: Y0 + 14, r: 34, fill: '#FFFFFF', stroke: DIA.ink, 'stroke-width': 2 }, pega);
-          texto(pega, [...new Set(p.reactions)].slice(0, 2).join(''), { x: X0 + L - 10, y: Y0 + 26, size: 30, hand: false });
-          if (p.reactions.length > 2) texto(pega, `${p.reactions.length}`, { x: X0 + L + 30, y: Y0 - 14, size: 26, color: DIA.accent });
+          el('circle', { cx: CX + 272, cy: CY - 272, r: 38, fill: '#FFFFFF', stroke: DIA.ink, 'stroke-width': 2 }, pega);
+          texto(pega, [...new Set(p.reactions)].slice(0, 2).join(''), { x: CX + 272, y: CY - 259, size: 32, hand: false });
+          if (p.reactions.length > 2) texto(pega, `${p.reactions.length}`, { x: CX + 322, y: CY - 300, size: 28, color: DIA.accent });
         }
         const pie = el('g', {}, g);
-        texto(pie, [p.author, p.when, p.place].filter(Boolean).join(' · '), { x: CX, y: Y0 - 30, size: 30, color: DIA.ink });
+        texto(pie, [p.author, p.when, p.place].filter(Boolean).join(' · '), { x: CX, y: CY - 310, size: 32, color: DIA.ink });
         const tension = el('path', { fill: 'none', stroke: DIA.accent, 'stroke-width': 2 }, g);
-        return { p, g, mov, card, notas, pega, pie, tension };
+        return { p, g, mov, zoom, card, notas, pega, pie, tension };
       });
-      const tCal = { sube: ca + 0.9, flash: ca + 1.95 };
+      const tCal = { sube: ca + 0.55, flash: ca + FLASH };
       this.paint.push((t) => {
         const on = t >= ca - 0.2 && t < cb + 1.6;
         ver(lCal, on);
@@ -585,7 +592,8 @@ export class Pelicula {
           if (enRanura) mover(m.card, { y: lerp(fuera, fuera + 200, ke) });
           else if (t < pz.a + 0.84) mover(m.card, { y: lerp(fuera + 200, 60, ksu), ox: CX, oy: Y0, sy: lerp(1, 0.1, ksu) });
           else mover(m.card, { y: 60, ox: CX, oy: Y0, sy: lerp(0.1, 1, kd) });
-          mover(m.mov, { x: -520 * kx, r: -14 * kx, ox: CX, oy: CY });
+          mover(m.zoom, { ox: CX, oy: CY + 60, s: 1 + (ZOOM - 1) * S(t, pz.a + 1.15, 0.5, ease.inOut) });
+          mover(m.mov, { x: -560 * kx, r: -14 * kx, ox: CX, oy: CY });
           opacidad(m.mov, 1 - kx);
           m.tension.setAttribute('d', enRanura && ke > 0 ? `M${X0 + 10},${RANURA + 6} l0,${200 * ke} M${X0 + L - 10},${RANURA + 6} l0,${200 * ke}` : '');
           m.notas.forEach((n, j) => {
@@ -594,7 +602,7 @@ export class Pelicula {
             opacidad(n.n, kn * 3 * (1 - kx));
           });
           const kp = S(t, pz.a + 1.2, 0.35, ease.linear);
-          mover(m.pega, { ox: X0 + L - 10, oy: Y0 + 14, s: 0.4 + 0.6 * ease.back(kp), y: 60 });
+          mover(m.pega, { ox: CX + 272, oy: CY - 272, s: 0.4 + 0.6 * ease.back(kp), y: 60 });
           opacidad(m.pega, kp * 3 * (1 - kx));
           opacidad(m.pie, S(t, pz.a + 1.0, 0.4) * (1 - kx));
           mover(m.pie, { y: 60 - 10 * (1 - S(t, pz.a + 1.0, 0.4)) });
@@ -781,10 +789,10 @@ export class Pelicula {
         [vb - 0.8, { s: 0.88, x: 0, y: 60 }],
         [vb, { s: 1, x: 0, y: 0 }],
         [ra, { s: 1, x: 0, y: 0 }],
-        [ra + 1.4, { s: 0.5, x: 0, y: 0 }],
-        [rb, { s: 0.55, x: -40, y: 20 }],
+        [ra + 1.4, { s: 0.52, x: 0, y: 0 }],
+        [rb + 5, { s: 0.52, x: 0, y: 0 }],
       ];
-      const flashT = P.calendario[0] + 1.95;
+      const flashT = P.calendario[0] + FLASH;
       this.paint.push((t) => {
         let k = keys[keys.length - 1][1];
         for (let i = 1; i < keys.length; i++)

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Hand } from '@/constants/theme';
 import type { DatosPelicula, Plan } from '@/pelicula/guion';
-import { Pelicula } from '@/pelicula/pelicula';
+import { FLASH, Pelicula } from '@/pelicula/pelicula';
 
 // El reproductor de la película: la pinta fotograma a fotograma, lleva la voz
 // de la narradora a cada tramo y pone los subtítulos.
@@ -62,7 +62,8 @@ export function FilmPlayer({
     let raf = 0;
     let last = performance.now();
     let lastSub = '';
-    const dayAt = plan.calendario[0] + 2.15;
+    let playing: Plan['voces'][number] | null = null;
+    const dayAt = plan.calendario[0] + FLASH + 0.2;
     const loop = (now: number) => {
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
@@ -77,11 +78,28 @@ export function FilmPlayer({
       // la voz y los subtítulos del tramo en curso
       const seg = plan.voces.find((v) => time >= v.a && time < v.b);
       if (voice) {
-        if (seg && seg.voz.from != null && !stop.current && !ended.current) {
-          const want = seg.voz.from + (time - seg.a);
-          if (Math.abs(voice.currentTime - want) > 0.45) voice.currentTime = want;
-          if (voice.paused) voice.play().catch(() => {});
-        } else if (!voice.paused) voice.pause();
+        if (stop.current || ended.current) {
+          if (!voice.paused) voice.pause();
+        } else {
+          // Cada frase se coloca una sola vez, al empezar su tramo, y suena
+          // entera hasta su final (sin perseguir a la película fotograma a
+          // fotograma, que la hacía cortarse).
+          if (seg && seg.voz.from != null && playing !== seg) {
+            playing = seg;
+            voice.currentTime = seg.voz.from + Math.max(0, time - seg.a);
+            voice.play().catch(() => {});
+          } else if (playing && playing.voz.from != null) {
+            const end = playing.voz.to ?? Infinity;
+            const want = playing.voz.from + (time - playing.a);
+            if (voice.currentTime >= end - 0.02 || time > playing.b + 1.5) {
+              if (!voice.paused) voice.pause();
+            } else {
+              if (voice.paused) voice.play().catch(() => {});
+              // solo si se ha ido muy lejos (p. ej. tras saltar en la película)
+              if (Math.abs(voice.currentTime - want) > 1.5) voice.currentTime = want;
+            }
+          }
+        }
       }
       const key = seg ? `${seg.a}|${Math.floor(((time - seg.a) / (seg.b - seg.a)) * 40)}` : '';
       if (key !== lastSub) {

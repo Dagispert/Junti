@@ -108,29 +108,32 @@ export function planificar(d: DatosPelicula): Plan {
   const say = (a: number, v?: Voz) => {
     if (v) voces.push({ a, b: a + durVoz(v), voz: v });
   };
+  // La voz manda: los tramos se ajustan a lo que dura y entre una frase y la
+  // siguiente apenas hay silencio. La apertura sigue sonando sobre la libreta.
   const reloj: Tramo = [0, 2.8];
   const persiana: Tramo = [2.5, 4.7];
   const v0 = 4.3;
-  const introStart = v0 + 1.0;
+  const introStart = v0 + 0.8;
+  const introEnd = introStart + durVoz(d.voices.intro);
   say(introStart, d.voices.intro);
-  const ventanilla: Tramo = [v0, Math.max(v0 + 7, introStart + durVoz(d.voices.intro) + 1.2)];
-  const libreta: Tramo = [ventanilla[1] - 0.6, ventanilla[1] - 0.6 + 8.5];
+  const ventanilla: Tramo = [v0, Math.max(v0 + 5.5, introStart + durVoz(d.voices.intro) * 0.6)];
+  const libreta: Tramo = [ventanilla[1] - 0.6, ventanilla[1] - 0.6 + 6.2];
   const c0 = libreta[1] - 0.4;
   // Primero el calendario y el flash de la cámara; luego, un momento tras otro.
-  let t = c0 + 3.0;
+  let t = Math.max(c0 + 2.2, introEnd - 0.4);
   const piezas = d.pieces.map((p) => {
     const v = d.voices.pieces[p.id];
     const a = t;
-    say(a + 0.9, v);
-    const b = a + Math.max(4.6, durVoz(v) + 1.6 + Math.min(2, p.comments.length) * 0.4);
+    say(a + 0.5, v);
+    const b = a + Math.max(3.8, 0.5 + durVoz(v) + 0.5 + Math.min(2, p.comments.length) * 0.3);
     t = b;
     return { id: p.id, a, b };
   });
   const calendario: Tramo = [c0, t];
-  const recuerdos: Tramo = [t, t + Math.max(8, durVoz(d.voices.stats) + 2.4)];
-  say(t + 1.4, d.voices.stats);
-  const final: Tramo = [recuerdos[1], recuerdos[1] + Math.max(5, durVoz(d.voices.end) + 2)];
-  say(final[0] + 0.8, d.voices.end);
+  const recuerdos: Tramo = [t, t + Math.max(6.5, durVoz(d.voices.stats) + 1.4)];
+  say(t + 0.7, d.voices.stats);
+  const final: Tramo = [recuerdos[1], recuerdos[1] + Math.max(4.5, durVoz(d.voices.end) + 1.2)];
+  say(final[0] + 0.4, d.voices.end);
   return { reloj, persiana, ventanilla, libreta, calendario, piezas, recuerdos, final, total: final[1] + 0.3, voces };
 }
 
