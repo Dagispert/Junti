@@ -42,6 +42,8 @@ export function datosPelicula(
   recap: Recap,
   opts: {
     group: string;
+    /** El color del grupo. */
+    accent?: string;
     user: (id: string) => User;
     narration?: Narration | null;
     /** El tiempo que hacía en cada momento (código WMO). */
@@ -155,6 +157,7 @@ export function datosPelicula(
     range: recap.range,
     title,
     group: opts.group,
+    accent: opts.accent,
     clock: days.map((n) => String(n).padStart(2, '0')),
     header: mes.slice(0, 3),
     closing: recap.ongoing
@@ -382,6 +385,7 @@ export function datosHistoria(
     range: `desde ${startYear}`,
     title: opts.title,
     group: opts.group.name,
+    accent: opts.group.color,
     clock,
     header: 'AÑO',
     closing: 'y la historia sigue…',

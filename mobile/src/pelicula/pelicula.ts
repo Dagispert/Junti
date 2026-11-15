@@ -18,6 +18,8 @@ import {
   squircle,
 } from '@/lib/doodle-ink';
 
+import { accentDay, accentDeep, accentNight, accentTint, DEFAULT_ACCENT } from '@/lib/accent';
+
 import { dibujarEscenario } from './escenarios';
 import { ESCENARIOS, type DatosPelicula, type Plan, planificar } from './guion';
 import {
@@ -42,9 +44,20 @@ const X0 = CX - L / 2,
   Y0 = CY - L / 2;
 
 /** Colores: de noche (hasta el flash de la cámara) y de día. */
-const NOCHE = { bg: '#141518', ink: '#F3F1E7', accent: '#E5568E', foco: '#23252A' };
-const DIA = { bg: '#F4F3EF', ink: '#1D1F22', accent: '#C2477A' };
-const CRISTAL = { glass: '#FBFAF3', ink: '#1D1F22', accent: '#C2477A' };
+// El acento sale del color del grupo (ver usarColor, al empezar cada película).
+let NOCHE = { bg: '#141518', ink: '#F3F1E7', accent: '#E5568E', foco: '#23252A' };
+let DIA = { bg: '#F4F3EF', ink: '#1D1F22', accent: '#C2477A' };
+let CRISTAL = { glass: '#FBFAF3', ink: '#1D1F22', accent: '#C2477A' };
+let TINTE = '#FBE3EC';
+let PROFUNDO = '#8A1F4A';
+/** Pone el color del grupo como acento de toda la película. */
+function usarColor(hex: string) {
+  NOCHE = { ...NOCHE, accent: accentNight(hex) };
+  DIA = { ...DIA, accent: accentDay(hex) };
+  CRISTAL = { ...CRISTAL, accent: accentDay(hex) };
+  TINTE = accentTint(hex);
+  PROFUNDO = accentDeep(hex);
+}
 
 /** Segundos desde que empieza el calendario hasta el flash de la cámara (noche → día). */
 export const FLASH = 1.45;
@@ -192,6 +205,7 @@ export class Pelicula {
     private svg: SVGSVGElement,
     private d: DatosPelicula,
   ) {
+    usarColor(d.accent ?? DEFAULT_ACCENT);
     this.plan = planificar(d);
     this.build();
   }
@@ -826,7 +840,7 @@ export class Pelicula {
           T.tinta(n, roundRect(x, y, 200, 110, 10), {
             color: DIA.ink,
             width: 2,
-            fill: j % 2 ? '#FFF6B8' : '#FFFFFF',
+            fill: j % 2 ? TINTE : '#FFFFFF',
           });
           const ls = lineas(`${c.who}: ${c.text}`, 18, 3);
           ls.forEach((ln, k) =>
@@ -1077,7 +1091,7 @@ export class Pelicula {
           T.tinta(g, ellipse(px, py, 28), {
             color: DIA.ink,
             width: 2.4,
-            fill: i % 2 ? '#FFF6B8' : '#FBE3EC',
+            fill: i % 2 ? '#FFFFFF' : TINTE,
           });
           texto(g, p.name.slice(0, 1).toUpperCase(), {
             x: px,
@@ -1130,7 +1144,7 @@ export class Pelicula {
             T.tinta(g, dibujos[k % dibujos.length], {
               color: k % 2 ? DIA.accent : DIA.ink,
               width: 3.4,
-              fill: k % 3 === 0 ? '#FBE3EC' : 'none',
+              fill: k % 3 === 0 ? TINTE : 'none',
             });
           }
         }),
@@ -1143,7 +1157,7 @@ export class Pelicula {
         cursor,
       );
       T.tinta(cursor, 'M0,0 L0,46 L12,35 L22,56 L31,51 L22,32 L38,32 Z', {
-        color: '#8A1F4A',
+        color: PROFUNDO,
         width: 2,
         fill: DIA.accent,
       });

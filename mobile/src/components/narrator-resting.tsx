@@ -17,8 +17,11 @@ export function Resting({
   onWatch,
   onRetry,
   onLater,
+  accent = '#E5568E',
 }: {
   kind: 'semana' | 'mes' | 'historia';
+  /** El color del grupo (ya aclarado para fondo oscuro). */
+  accent?: string;
   onWatch: () => void;
   onRetry: () => void;
   onLater: () => void;
@@ -41,8 +44,8 @@ export function Resting({
       </Pressable>
       <View style={styles.row}>
         <Pressable accessibilityRole="button" onPress={onRetry} hitSlop={8} style={styles.link}>
-          <Icon icon={RotateCw} size={15} color="#E5568E" />
-          <Text style={styles.linkText}>Probar otra vez</Text>
+          <Icon icon={RotateCw} size={15} color={accent} />
+          <Text style={[styles.linkText, { color: accent }]}>Probar otra vez</Text>
         </Pressable>
         <Pressable accessibilityRole="button" onPress={onLater} hitSlop={8} style={styles.link}>
           <Text style={[styles.linkText, { color: '#A9A79C' }]}>Volver más tarde</Text>

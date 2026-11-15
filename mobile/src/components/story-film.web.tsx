@@ -9,6 +9,7 @@ import { type FilmControl, FilmPlayer } from '@/components/film-player';
 import { Icon } from '@/components/icon';
 import { LogoMark } from '@/components/logo';
 import { Resting } from '@/components/narrator-resting';
+import { accentNight, DEFAULT_ACCENT } from '@/lib/accent';
 import { Hand } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import type { Narration } from '@/data/types';
@@ -29,6 +30,8 @@ export default function StoryFilm() {
   const { group: groupById, moments, narrate, user } = useStore();
   const group = groupById(groupId);
   const insets = useSafeAreaInsets();
+  // El acento de la pantalla: el color del grupo (aclarado sobre el fondo oscuro).
+  const accent = accentNight(group?.color ?? DEFAULT_ACCENT);
   const story = useMemo(
     () =>
       buildStory(
@@ -202,6 +205,7 @@ export default function StoryFilm() {
           <Text style={styles.waitTitle}>{narration?.title || 'Nuestra historia'}</Text>
           {ready && resting ? (
             <Resting
+              accent={accent}
               kind="historia"
               onWatch={() => {
                 primeNarrator();
@@ -229,7 +233,7 @@ export default function StoryFilm() {
                   : 'La narradora está repasando vuestros recuerdos…'}
               </Text>
               <Pressable accessibilityRole="button" onPress={() => setWaited(true)} hitSlop={10}>
-                <Text style={styles.skip}>Empezar sin esperar</Text>
+                <Text style={[styles.skip, { color: accent }]}>Empezar sin esperar</Text>
               </Pressable>
             </>
           )}
@@ -243,7 +247,13 @@ export default function StoryFilm() {
         {!!data && (
           <View style={styles.bar}>
             <View
-              style={[styles.barFill, { width: `${Math.min(100, (time.t / time.total) * 100)}%` }]}
+              style={[
+                styles.barFill,
+                {
+                  backgroundColor: accent,
+                  width: `${Math.min(100, (time.t / time.total) * 100)}%`,
+                },
+              ]}
             />
           </View>
         )}
@@ -354,7 +364,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(160,160,150,0.35)',
     overflow: 'hidden',
   },
-  barFill: { height: 3, backgroundColor: '#E5568E' },
+  barFill: { height: 3 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   topTitle: { flex: 1, color: '#A9A79C', fontSize: 13, fontWeight: '600' },
   round: {

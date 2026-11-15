@@ -9,6 +9,7 @@ import { type FilmControl, FilmPlayer } from '@/components/film-player';
 import { Icon } from '@/components/icon';
 import { LogoMark } from '@/components/logo';
 import { Resting } from '@/components/narrator-resting';
+import { accentNight, DEFAULT_ACCENT } from '@/lib/accent';
 import { Hand } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import type { Narration } from '@/data/types';
@@ -34,6 +35,8 @@ export default function RecapFilm() {
   }>();
   const { moments, user, proposals, songs, group, events, narrate } = useStore();
   const insets = useSafeAreaInsets();
+  // El acento de la pantalla: el color del grupo (aclarado sobre el fondo oscuro).
+  const accent = accentNight(group(groupId)?.color ?? DEFAULT_ACCENT);
 
   const recap = useMemo(
     () =>
@@ -124,6 +127,7 @@ export default function RecapFilm() {
     () =>
       started
         ? datosPelicula(recap, {
+            accent: group(groupId)?.color,
             group: group(groupId)?.name ?? 'Junti',
             user,
             narration,
@@ -234,6 +238,7 @@ export default function RecapFilm() {
           <Text style={styles.waitTitle}>{narration?.title || recap.range}</Text>
           {ready && resting ? (
             <Resting
+              accent={accent}
               kind={recap.kind === 'week' ? 'semana' : 'mes'}
               onWatch={start}
               onRetry={() => write(true)}
@@ -255,7 +260,7 @@ export default function RecapFilm() {
           )}
           {!ready && (
             <Pressable accessibilityRole="button" onPress={() => setWaited(true)} hitSlop={10}>
-              <Text style={styles.skip}>Empezar sin esperar</Text>
+              <Text style={[styles.skip, { color: accent }]}>Empezar sin esperar</Text>
             </Pressable>
           )}
         </View>
@@ -269,7 +274,13 @@ export default function RecapFilm() {
         {!!data && (
           <View style={styles.bar}>
             <View
-              style={[styles.barFill, { width: `${Math.min(100, (time.t / time.total) * 100)}%` }]}
+              style={[
+                styles.barFill,
+                {
+                  backgroundColor: accent,
+                  width: `${Math.min(100, (time.t / time.total) * 100)}%`,
+                },
+              ]}
             />
           </View>
         )}
@@ -386,7 +397,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(160,160,150,0.35)',
     overflow: 'hidden',
   },
-  barFill: { height: 3, backgroundColor: '#E5568E' },
+  barFill: { height: 3 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   topTitle: { flex: 1, color: '#A9A79C', fontSize: 13, fontWeight: '600' },
   round: {

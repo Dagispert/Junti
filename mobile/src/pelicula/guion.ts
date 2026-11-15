@@ -134,6 +134,8 @@ export type DatosPelicula = {
   range: string;
   title: string;
   group: string;
+  /** El color del grupo: todo el acento de la película sale de él. */
+  accent?: string;
   /** Lo que cuenta el reloj de paletas (días o años, mismo largo) y la cabecera (el mes). */
   clock: string[];
   header: string;
