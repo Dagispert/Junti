@@ -179,7 +179,21 @@ export function FilmPlayer({
             color: sub?.day ? '#1D1F22' : '#F3F1E7',
             pointerEvents: 'none',
           }}>
-          {shown.said}
+          {/* Con su fondo propio: se leen sobre cualquier escena, y aunque el
+              navegador cambie los colores (modo oscuro forzado en Android). */}
+          <span
+            style={{
+              background: sub?.day ? 'rgba(255,253,246,.72)' : 'rgba(10,11,13,.5)',
+              boxShadow: sub?.day
+                ? '0 0 0 6px rgba(255,253,246,.72)'
+                : '0 0 0 6px rgba(10,11,13,.5)',
+              borderRadius: 6,
+              WebkitBoxDecorationBreak: 'clone',
+              boxDecorationBreak: 'clone',
+              textShadow: sub?.day ? '0 0 6px #FFFDF6' : '0 1px 6px #000',
+            }}>
+            {shown.said}
+          </span>
           <span style={{ color: 'transparent' }}>{shown.rest}</span>
         </div>
       )}

@@ -28,6 +28,17 @@ export default function RootLayout() {
   );
 }
 
+// La app ya trae su propio modo oscuro: se lo decimos al navegador para que
+// no «oscurezca» la página por su cuenta (Samsung Internet y otros Android
+// cambian los colores del texto y dejan letras invisibles sobre el fondo).
+if (typeof document !== 'undefined' && !document.querySelector('meta[name="color-scheme"]')) {
+  const m = document.createElement('meta');
+  m.name = 'color-scheme';
+  m.content = 'light dark';
+  document.head.appendChild(m);
+  document.documentElement.style.colorScheme = 'light dark';
+}
+
 /** Sin sesión no se llega a ninguna pantalla de la app. */
 function Gate() {
   const { status } = useStore();
