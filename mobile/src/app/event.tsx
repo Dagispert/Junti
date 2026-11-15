@@ -95,8 +95,8 @@ export default function EventScreen() {
         {(Object.keys(KINDS) as EventKind[]).map((k) => (
           <Pressable
             key={k}
-            accessibilityRole="button"
-            accessibilityState={{ selected: kind === k }}
+            accessibilityRole="radio"
+            aria-checked={kind === k}
             disabled={!canEdit}
             onPress={() => setKind(k)}
             style={[
@@ -121,8 +121,8 @@ export default function EventScreen() {
             {(g?.memberIds ?? []).map((pid) => (
               <Pressable
                 key={pid}
-                accessibilityRole="button"
-                accessibilityState={{ selected: personId === pid }}
+                accessibilityRole="radio"
+                aria-checked={personId === pid}
                 disabled={!canEdit}
                 onPress={() => setPersonId(personId === pid ? undefined : pid)}
                 style={[

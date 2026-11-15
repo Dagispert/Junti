@@ -149,7 +149,7 @@ export function EmojiPicker({
                 key={t.i}
                 accessibilityRole="tab"
                 accessibilityLabel={t.name}
-                accessibilityState={{ selected: tab === t.i }}
+                aria-selected={tab === t.i}
                 onPress={() => setTab(t.i)}
                 style={[styles.tab, tab === t.i && { backgroundColor: theme.soft }]}>
                 <Text style={{ fontSize: 20 }}>{t.icon}</Text>

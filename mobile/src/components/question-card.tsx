@@ -153,9 +153,9 @@ export function QuestionCard({ question }: { question: Question }) {
             return (
               <Pressable
                 key={i}
-                accessibilityRole="button"
+                accessibilityRole="radio"
                 accessibilityLabel={option}
-                accessibilityState={{ selected: chosen }}
+                aria-checked={chosen}
                 disabled={busy || !canAnswer || chosen}
                 onPress={() => answer({ choice: i })}
                 style={[

@@ -211,7 +211,7 @@ export default function MomentView() {
                 <Pressable
                   key={a.id}
                   accessibilityRole="checkbox"
-                  accessibilityState={{ checked: on }}
+                  aria-checked={on}
                   accessibilityLabel={`Álbum ${a.title}`}
                   onPress={() =>
                     setAlbumMoments(a.id, on ? [] : [moment.id], on ? [moment.id] : []).catch(

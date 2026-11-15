@@ -219,8 +219,8 @@ export function PhotoCropper({
         {SHAPES.map((s) => (
           <Pressable
             key={s.id}
-            accessibilityRole="button"
-            accessibilityState={{ selected: shape === s.id }}
+            accessibilityRole="radio"
+            aria-checked={shape === s.id}
             onPress={() => setShape(s.id)}
             style={[styles.shape, shape === s.id && styles.shapeOn]}>
             <Text style={[styles.shapeText, shape === s.id && { color: '#14161A' }]}>

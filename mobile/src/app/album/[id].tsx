@@ -70,7 +70,7 @@ export default function AlbumScreen() {
       <Pressable
         key={m.id}
         accessibilityRole={selectable ? 'checkbox' : 'button'}
-        accessibilityState={selectable ? { checked: on } : undefined}
+        aria-checked={selectable ? on : undefined}
         accessibilityLabel={m.text ?? 'Momento'}
         onPress={() =>
           selectable

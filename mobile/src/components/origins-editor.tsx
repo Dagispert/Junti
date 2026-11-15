@@ -195,8 +195,8 @@ export function OriginsEditor({
             <Text style={{ color: theme.textSecondary, fontSize: 13 }}>Quiénes</Text>
             <View style={styles.chips}>
               <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ selected: !draft.memberIds.length }}
+                accessibilityRole="checkbox"
+                aria-checked={!draft.memberIds.length}
                 onPress={() => setDraft({ ...draft, memberIds: [] })}
                 style={[
                   styles.chip,
@@ -216,8 +216,8 @@ export function OriginsEditor({
                 return (
                   <Pressable
                     key={id}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: on }}
+                    accessibilityRole="checkbox"
+                    aria-checked={on}
                     onPress={() => toggle(id)}
                     style={[
                       styles.chip,

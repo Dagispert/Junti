@@ -135,7 +135,7 @@ export default function Ask() {
                 <Pressable
                   accessibilityRole="radio"
                   accessibilityLabel={`Marcar la opción ${i + 1} como la buena`}
-                  accessibilityState={{ checked: correct === i }}
+                  aria-checked={correct === i}
                   onPress={() => setCorrect(i)}
                   style={[
                     styles.radio,
@@ -187,8 +187,8 @@ export default function Ask() {
             return (
               <Pressable
                 key={d.days}
-                accessibilityRole="button"
-                accessibilityState={{ selected: on }}
+                accessibilityRole="radio"
+                aria-checked={on}
                 onPress={() => setDays(d.days)}
                 style={[styles.chip, { backgroundColor: on ? theme.accent : theme.card }]}>
                 <Text style={{ color: on ? theme.onAccent : theme.text, fontSize: 15 }}>

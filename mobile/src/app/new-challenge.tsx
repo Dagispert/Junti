@@ -84,8 +84,8 @@ export default function NewChallenge() {
             return (
               <Pressable
                 key={d.days}
-                accessibilityRole="button"
-                accessibilityState={{ selected: on }}
+                accessibilityRole="radio"
+                aria-checked={on}
                 onPress={() => setDays(d.days)}
                 style={[styles.chip, { backgroundColor: on ? theme.accent : theme.card }]}>
                 <Text style={{ color: on ? theme.onAccent : theme.text, fontSize: 15 }}>

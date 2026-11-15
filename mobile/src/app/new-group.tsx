@@ -350,7 +350,7 @@ export default function NewGroup() {
                   key={c}
                   accessibilityRole="radio"
                   accessibilityLabel={`Color ${c}`}
-                  accessibilityState={{ checked: color === c }}
+                  aria-checked={color === c}
                   onPress={() => setColor(c)}
                   style={[
                     styles.swatch,
@@ -367,7 +367,7 @@ export default function NewGroup() {
                   key={e}
                   accessibilityRole="radio"
                   accessibilityLabel={`Pegatina ${e}`}
-                  accessibilityState={{ checked: sticker === e }}
+                  aria-checked={sticker === e}
                   onPress={() => setSticker(sticker === e ? null : e)}
                   style={[
                     styles.sticker,
@@ -417,7 +417,7 @@ export default function NewGroup() {
                     <Pressable
                       key={s.id}
                       accessibilityRole="radio"
-                      accessibilityState={{ checked: style === s.id }}
+                      aria-checked={style === s.id}
                       onPress={() => {
                         setStyle(s.id);
                         playTone(s.id);
@@ -556,7 +556,7 @@ function Choices({
           <Pressable
             key={o.id}
             accessibilityRole="radio"
-            accessibilityState={{ checked: value === o.id }}
+            aria-checked={value === o.id}
             onPress={() => onChange(o.id)}
             style={[
               styles.choice,
@@ -590,7 +590,7 @@ function Option({
   return (
     <Pressable
       accessibilityRole="radio"
-      accessibilityState={{ checked: selected }}
+      aria-checked={selected}
       onPress={onPress}
       style={[styles.option, { backgroundColor: selected ? theme.accent : theme.soft }]}>
       <Text style={{ color: selected ? theme.onAccent : theme.text, fontSize: 16, flex: 1 }}>

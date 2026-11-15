@@ -189,7 +189,7 @@ export default function Settings() {
                   <Pressable
                     key={value}
                     accessibilityRole="radio"
-                    accessibilityState={{ checked: on }}
+                    aria-checked={on}
                     onPress={() => setGender(on ? undefined : value)}
                     style={[styles.chip, { backgroundColor: on ? theme.accent : theme.soft }]}>
                     <Text style={{ color: on ? theme.onAccent : theme.text, fontSize: 15 }}>
@@ -204,7 +204,7 @@ export default function Settings() {
           <View style={{ gap: 8 }}>
             <Pressable
               accessibilityRole="checkbox"
-              accessibilityState={{ checked: hasBirthday }}
+              aria-checked={hasBirthday}
               onPress={() => setHasBirthday(!hasBirthday)}
               style={styles.checkRow}>
               <View
@@ -226,7 +226,7 @@ export default function Settings() {
                 />
                 <Pressable
                   accessibilityRole="checkbox"
-                  accessibilityState={{ checked: shareYear }}
+                  aria-checked={shareYear}
                   onPress={() => setShareYear(!shareYear)}
                   style={styles.checkRow}>
                   <View
@@ -337,7 +337,7 @@ export default function Settings() {
                 <Pressable
                   key={value}
                   accessibilityRole="radio"
-                  accessibilityState={{ checked: on }}
+                  aria-checked={on}
                   onPress={() => setFamilyColorMode(value)}
                   style={[styles.chip, { backgroundColor: on ? theme.accent : theme.soft }]}>
                   <Text style={{ color: on ? theme.onAccent : theme.text, fontSize: 15 }}>

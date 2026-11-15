@@ -107,8 +107,8 @@ export default function MapScreen() {
   const chip = (on: boolean, label: string, onPress: () => void, icon?: LucideIcon) => (
     <Pressable
       key={label}
-      accessibilityRole="button"
-      accessibilityState={{ selected: on }}
+      accessibilityRole="radio"
+      aria-checked={on}
       onPress={onPress}
       style={[styles.filter, { backgroundColor: on ? theme.accent : theme.card }]}>
       {icon && <Icon icon={icon} size={16} color={on ? theme.onAccent : theme.textSecondary} />}

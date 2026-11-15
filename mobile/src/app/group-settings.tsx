@@ -247,7 +247,7 @@ export default function GroupSettings() {
                     key={c}
                     accessibilityRole="radio"
                     accessibilityLabel={`Color ${c}`}
-                    accessibilityState={{ checked: group.color === c }}
+                    aria-checked={group.color === c}
                     disabled={busy}
                     onPress={() => run(() => store.styleGroup(group.id, { color: c }))}
                     style={[
@@ -265,7 +265,7 @@ export default function GroupSettings() {
                     key={e}
                     accessibilityRole="radio"
                     accessibilityLabel={`Pegatina ${e}`}
-                    accessibilityState={{ checked: group.sticker === e }}
+                    aria-checked={group.sticker === e}
                     disabled={busy}
                     onPress={() =>
                       run(() =>
@@ -398,9 +398,9 @@ export default function GroupSettings() {
                     return (
                       <Pressable
                         key={option.id}
-                        accessibilityRole="button"
+                        accessibilityRole="radio"
                         accessibilityLabel={`Estilo ${option.label}`}
-                        accessibilityState={{ selected: on }}
+                        aria-checked={on}
                         disabled={busy}
                         onPress={() => {
                           // Al elegirlo se oye cómo suena; quien no administra solo lo escucha.
@@ -700,7 +700,7 @@ function Row({
     <View style={styles.rowWrap}>
       <Pressable
         accessibilityRole="button"
-        accessibilityState={{ expanded: open }}
+        aria-expanded={open}
         accessibilityLabel={title}
         onPress={onToggle}
         style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}>

@@ -185,7 +185,7 @@ export function useExport() {
                 <Pressable
                   key={c.label}
                   accessibilityRole="checkbox"
-                  accessibilityState={{ checked: c.on }}
+                  aria-checked={c.on}
                   onPress={() =>
                     setState((s) =>
                       s.phase === 'options'
