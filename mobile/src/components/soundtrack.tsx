@@ -85,23 +85,44 @@ export function Soundtrack({ groupId }: { groupId: string }) {
     }
     const target = anim(box.querySelector(open ? '[data-record]' : `[data-flow="${f.id}"]`));
     if (f.from && target) {
+      // Vuela una copia de la portada que ya está a la vista (su imagen está
+      // cargada): la de destino puede tardar un instante en pintarse y se
+      // veía un cuadrado blanco. La de destino se enseña al aterrizar.
       const to = target.getBoundingClientRect();
       // el reproductor mide el disco + la funda: la portada es su parte cuadrada
       const side = open ? to.height : to.width;
-      const sx = f.from.width / side;
-      target.animate(
+      const art = list.find((x) => x.id === f.id)?.artwork;
+      const ghost = document.createElement('div');
+      Object.assign(ghost.style, {
+        position: 'fixed',
+        left: `${f.from.left}px`,
+        top: `${f.from.top}px`,
+        width: `${f.from.width}px`,
+        height: `${f.from.width}px`,
+        borderRadius: '10px',
+        background: art ? `#2B2E33 url("${art}") center / cover no-repeat` : '#2B2E33',
+        boxShadow: '0 16px 30px rgba(20,22,26,0.3)',
+        transformOrigin: 'top left',
+        zIndex: '999',
+        pointerEvents: 'none',
+      });
+      document.body.appendChild(ghost);
+      target.style.visibility = 'hidden';
+      const fly = ghost.animate(
         [
+          { transform: 'none' },
           {
-            transformOrigin: 'top left',
-            transform: `translate(${f.from.left - to.left}px, ${f.from.top - to.top}px) scale(${sx})`,
-          },
-          {
-            transformOrigin: 'top left',
-            transform: open ? 'none' : getComputedStyle(target).transform,
+            transform: `translate(${to.left - f.from.left}px, ${to.top - f.from.top}px) scale(${side / f.from.width})`,
           },
         ],
-        { duration: 640, easing: SPRINGY },
+        { duration: 600, easing: SPRINGY, fill: 'forwards' },
       );
+      const land = () => {
+        target.style.visibility = '';
+        ghost.remove();
+      };
+      fly.onfinish = land;
+      fly.oncancel = land;
     }
     // lo demás aparece escalonado, sin prisa
     box.querySelectorAll('[data-rise]').forEach((n, i) =>
@@ -485,7 +506,7 @@ function Player({
             song={song}
             size={COVER}
             playing={audio.playing}
-            delay={first.current && isWeb ? 470 : 0}
+            delay={first.current && isWeb ? 600 : 0}
             out={!closing}
           />
         </View>
