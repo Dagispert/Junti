@@ -156,7 +156,10 @@ export class FilmString {
       for (let i = 1; i <= head; i++) {
         const right = i === head ? u[i - 1] : u[i + 1];
         const lap = (u[i - 1] - 2 * u[i] + right) / (dx * dx);
-        v[i] += (c2 * lap - 46 * u[i] - 3.2 * v[i]) * h;
+        // la rigidez de la película: amortigua los pliegues cortos (sin dientes de sierra)
+        const vr = i === head ? v[i - 1] : v[i + 1];
+        const lapV = (v[i - 1] - 2 * v[i] + vr) / (dx * dx);
+        v[i] += (c2 * lap + 1400 * lapV - 46 * u[i] - 3.2 * v[i]) * h;
       }
       for (let i = 1; i <= head; i++) {
         u[i] += v[i] * h;
@@ -181,9 +184,17 @@ export class FilmString {
     }
   }
   /** Fija el desplazamiento cerca de un punto (para sacudir la punta). */
-  drive(q: number, value: number, k: number) {
-    const i = Math.min(this.u.length - 1, Math.max(1, Math.round(q / this.dx)));
-    this.u[i] += (value - this.u[i]) * k;
+  drive(q: number, value: number, k: number, spread = 22) {
+    // se reparte como una campana: nunca se mueve un punto suelto
+    const { u, v, dx } = this;
+    const a = Math.max(1, Math.floor((q - spread * 2.5) / dx));
+    const b = Math.min(u.length - 1, Math.ceil((q + spread * 2.5) / dx));
+    for (let i = a; i <= b; i++) {
+      const d = (i * dx - q) / spread;
+      const w = k * Math.exp(-d * d);
+      u[i] += (value - u[i]) * w;
+      v[i] *= 1 - w;
+    }
   }
   at(q: number) {
     const { u, dx } = this;
@@ -204,7 +215,7 @@ export class FilmString {
     return (q) => {
       const p = base(q);
       const uq = this.at(q);
-      const du = (this.at(q + 6) - this.at(q - 6)) / 12;
+      const du = Math.max(-0.5, Math.min(0.5, (this.at(q + 6) - this.at(q - 6)) / 12));
       // la normal se inclina con la pendiente
       const tx = -p.ny,
         ty = p.nx;

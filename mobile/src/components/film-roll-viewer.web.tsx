@@ -401,7 +401,7 @@ export function RollViewer({
       // ¿se ha tocado la cinta? (el punto más cercano)
       const pt = local(e);
       let best = { q: -1, d: Infinity };
-      for (let q = LEAD; q < L; q += 6) {
+      for (let q = LEAD; q < L - TAB; q += 6) {
         const p = sp.at(q);
         const dd = Math.hypot(p.x - pt.x, p.y - pt.y);
         if (dd < best.d) best = { q, d: dd };
@@ -427,7 +427,7 @@ export function RollViewer({
       // arrastrar la cinta con el dedo: tira de ella por su normal
       const pt = local(e);
       const off = (pt.x - gb.x) * gb.nx + (pt.y - gb.y) * gb.ny;
-      string.drive(gb.q, Math.max(-24, Math.min(24, off * 0.6)), 0.4);
+      string.drive(gb.q, Math.max(-20, Math.min(20, off * 0.5)), 0.25);
       st.current.still = 0;
       return;
     }
