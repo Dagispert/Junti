@@ -3,6 +3,7 @@ import { History, Camera } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  TextInput,
   Image,
   Pressable,
   ScrollView,
@@ -22,6 +23,9 @@ import { clearInbox, handOff, loadShared, type Shared } from '@/lib/shared';
  * (WhatsApp, la galería…). Se elige el grupo y si es un momento de ahora o un
  * recuerdo de antes, y se pasa a «Publicar» con todo ya puesto.
  */
+const canPaste =
+  typeof navigator !== 'undefined' && !!navigator.clipboard && 'readText' in navigator.clipboard;
+
 export default function Compartir() {
   const theme = useTheme();
   const { groups, me, user } = useStore();
@@ -106,9 +110,36 @@ export default function Compartir() {
               ))}
             </ScrollView>
           )}
-          {!!shared.text && (
-            <Text style={[styles.text, { color: theme.text, backgroundColor: theme.card }]}>
-              «{shared.text}»
+          {/* la frase que acompañaba la foto: llega sola si WhatsApp la manda; si no, se pega */}
+          <View style={[styles.textBox, { backgroundColor: theme.card }]}>
+            <TextInput
+              multiline
+              value={shared.text}
+              onChangeText={(text) => setShared({ ...shared, text })}
+              placeholder="¿Llevaba una frase? Escríbela o pégala aquí"
+              placeholderTextColor={theme.textSecondary}
+              style={[styles.text, { color: theme.text }]}
+            />
+            {canPaste && (
+              <Pressable
+                accessibilityRole="button"
+                onPress={async () => {
+                  const text = await navigator.clipboard.readText().catch(() => '');
+                  if (text.trim())
+                    setShared({
+                      ...shared,
+                      text: [shared.text, text.trim()].filter(Boolean).join('\n'),
+                    });
+                }}
+                style={[styles.paste, { backgroundColor: theme.soft }]}>
+                <Text style={{ color: theme.text, fontSize: 14, fontWeight: '600' }}>Pegar</Text>
+              </Pressable>
+            )}
+          </View>
+          {!shared.text && (
+            <Text style={{ color: theme.textSecondary, fontSize: 13, lineHeight: 18 }}>
+              Si la foto llevaba un texto en WhatsApp: mantén pulsado el mensaje → Copiar, y aquí →
+              Pegar.
             </Text>
           )}
 
@@ -231,6 +262,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#2B2E33',
   },
   video: { alignItems: 'center', justifyContent: 'center' },
+  textBox: { borderRadius: 16, padding: 6, gap: 6 },
+  paste: { alignSelf: 'flex-end', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
   text: { fontFamily: Hand, fontSize: 22, lineHeight: 26, padding: 16, borderRadius: 16 },
   label: { fontSize: 13, marginTop: 4 },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
