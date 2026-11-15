@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Heart, MessageCircle, Plus, X } from 'lucide-react-native';
+import { Heart, MessageCircle, Mic, Play, Plus, X } from 'lucide-react-native';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -39,6 +39,8 @@ export function ChallengeBlock({ challenge, answers }: { challenge: Proposal; an
   const isChallenge = challenge.kind === 'challenge';
   // un plan: varias publicaciones (de varias personas) de un mismo día, importadas
   const isPlan = challenge.kind === 'plan';
+  // un minijuego de karaoke: se canta en su pantalla y se ve el montaje
+  const karaoke = challenge.game?.type === 'karaoke';
   const family = isChallenge ? 'challenge' : isPlan ? 'memory' : 'prompt';
   const fam = useFamily(family);
   const theme0 = useTheme();
@@ -234,6 +236,19 @@ export function ChallengeBlock({ challenge, answers }: { challenge: Proposal; an
           </Text>
         )}
       </Pressable>
+      {karaoke && answers.length > 0 && (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() =>
+            router.push({ pathname: '/karaoke/[id]', params: { id: challenge.id, watch: '1' } })
+          }
+          style={[styles.watch, { backgroundColor: f.color }]}>
+          <Icon icon={Play} size={16} color="#FFFFFF" />
+          <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>
+            {people.length > 1 ? `Ver el karaoke · ${people.length} voces` : 'Ver el karaoke'}
+          </Text>
+        </Pressable>
+      )}
 
       {opened && (
         <View
@@ -316,15 +331,25 @@ export function ChallengeBlock({ challenge, answers }: { challenge: Proposal; an
                   : 'Responder a la propuesta'
             }
             onPress={() =>
-              router.push({
-                pathname: '/publish',
-                params: { groupId: challenge.groupId, proposalId: challenge.id },
-              })
+              karaoke
+                ? router.push({ pathname: '/karaoke/[id]', params: { id: challenge.id } })
+                : router.push({
+                    pathname: '/publish',
+                    params: { groupId: challenge.groupId, proposalId: challenge.id },
+                  })
             }
             style={[styles.tile, styles.join, { borderColor: f.color }]}>
-            <Icon icon={Plus} size={26} color={f.color} />
+            <Icon icon={karaoke ? Mic : Plus} size={26} color={f.color} />
             <Text style={[styles.joinText, { color: f.color }]}>
-              {mine ? 'Añadir otra' : isChallenge ? 'Participar' : 'Responder'}
+              {karaoke
+                ? mine
+                  ? 'Cantar otra vez'
+                  : 'Cantar'
+                : mine
+                  ? 'Añadir otra'
+                  : isChallenge
+                    ? 'Participar'
+                    : 'Responder'}
             </Text>
           </Pressable>
         )}
@@ -395,6 +420,16 @@ function flyInto(tile: HTMLElement, from: DOMRect, image?: string) {
 }
 
 const styles = StyleSheet.create({
+  watch: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 44,
+    borderRadius: 22,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 18,
+  },
   // Al colocarse en pantalla, que no quede bajo la cabecera.
   panel: { position: 'relative', scrollMarginTop: 150 } as never,
   close: {

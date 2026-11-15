@@ -16,6 +16,7 @@ import {
   History,
   Import,
   MessageCircle,
+  Mic,
   type LucideIcon,
 } from 'lucide-react-native';
 
@@ -37,7 +38,7 @@ export default function AddScreen() {
 
   // Se sustituye esta pantalla para que «Cancelar» vuelva directo al grupo.
   const open = (
-    pathname: '/publish' | '/new-challenge' | '/ask' | '/importar',
+    pathname: '/publish' | '/new-challenge' | '/new-karaoke' | '/ask' | '/importar',
     params: Record<string, string>,
   ) => router.replace({ pathname, params: { groupId, ...params } } as never);
 
@@ -69,6 +70,13 @@ export default function AddScreen() {
       title: 'Un reto',
       hint: 'Algo que hacer todos',
       go: () => open('/new-challenge', {}),
+    },
+    {
+      family: 'challenge',
+      icon: Mic,
+      title: 'Un karaoke',
+      hint: 'Cantad todos la misma canción',
+      go: () => open('/new-karaoke', {}),
     },
     {
       family: 'poll',

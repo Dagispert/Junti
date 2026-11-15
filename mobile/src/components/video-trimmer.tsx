@@ -22,8 +22,15 @@ export function VideoTrimmer({
   value,
   onChange,
   max,
+  strip,
+  label = 'Tramo del vídeo',
+  verb = 'se verán',
 }: {
-  uri: string;
+  /** El vídeo (para su tira de fotogramas); sin él, se pinta «strip». */
+  uri?: string;
+  strip?: React.ReactNode;
+  label?: string;
+  verb?: string;
   duration: number;
   value: Clip;
   onChange: (clip: Clip) => void;
@@ -34,6 +41,7 @@ export function VideoTrimmer({
   const [width, setWidth] = useState(1);
   useEffect(() => {
     let alive = true;
+    if (!uri) return;
     videoFrames(uri, 8).then((f) => alive && setFrames(f));
     return () => {
       alive = false;
@@ -82,13 +90,14 @@ export function VideoTrimmer({
   return (
     <View style={{ gap: 8 }}>
       <View
-        accessibilityLabel="Tramo del vídeo"
+        accessibilityLabel={label}
         onLayout={(e) => setWidth(Math.max(1, e.nativeEvent.layout.width))}
         style={[styles.track, { backgroundColor: theme.soft }]}>
         <View style={[StyleSheet.absoluteFill, styles.frames]} pointerEvents="none">
-          {frames.map((f, i) => (
-            <Image key={i} source={{ uri: f }} style={{ flex: 1 }} contentFit="cover" />
-          ))}
+          {strip ??
+            frames.map((f, i) => (
+              <Image key={i} source={{ uri: f }} style={{ flex: 1 }} contentFit="cover" />
+            ))}
         </View>
         {/* Lo que no se enseña, apagado. */}
         <View pointerEvents="none" style={[styles.dim, { left: 0, width: left }]} />
@@ -111,7 +120,7 @@ export function VideoTrimmer({
         </View>
       </View>
       <Text style={{ color: theme.textSecondary, fontSize: 13, textAlign: 'center' }}>
-        {mmss(value.start)} – {mmss(value.end)} · se verán {Math.round(value.end - value.start)} s
+        {mmss(value.start)} – {mmss(value.end)} · {verb} {Math.round(value.end - value.start)} s
         {duration > max + 0.5 ? ` (como mucho ${max} s)` : ''}
       </Text>
     </View>

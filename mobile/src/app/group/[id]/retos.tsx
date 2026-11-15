@@ -46,6 +46,7 @@ export default function Challenges() {
     // Se muestra quién ha participado; nunca quién falta.
     const participants = [...new Set(answers.map((m) => m.authorId))];
     const left = challenge.endsAt ? daysLeft(challenge.endsAt) : undefined;
+    const karaoke = challenge.game?.type === 'karaoke';
     return (
       <Card key={challenge.id} style={styles.card}>
         {open && (
@@ -68,7 +69,9 @@ export default function Challenges() {
                 ? left === 1
                   ? 'Queda 1 día'
                   : `Quedan ${left} días`
-                : 'Reto'}
+                : karaoke
+                  ? 'Karaoke'
+                  : 'Reto'}
           </Tag>
           <Text style={[styles.title, { color: theme.text }]}>{challenge.title}</Text>
           {!!challenge.body && (
@@ -77,17 +80,33 @@ export default function Challenges() {
         </View>
         <View style={styles.row}>
           <AvatarRow userIds={participants} size={32} />
-          {open && (
-            <Button
-              label="Participar"
-              onPress={() =>
-                router.push({
-                  pathname: '/publish',
-                  params: { groupId: id, proposalId: challenge.id },
-                })
-              }
-            />
-          )}
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {karaoke && answers.length > 0 && (
+              <Button
+                variant="light"
+                label="Ver"
+                onPress={() =>
+                  router.push({
+                    pathname: '/karaoke/[id]',
+                    params: { id: challenge.id, watch: '1' },
+                  })
+                }
+              />
+            )}
+            {open && (
+              <Button
+                label={karaoke ? 'Cantar' : 'Participar'}
+                onPress={() =>
+                  karaoke
+                    ? router.push({ pathname: '/karaoke/[id]', params: { id: challenge.id } })
+                    : router.push({
+                        pathname: '/publish',
+                        params: { groupId: id, proposalId: challenge.id },
+                      })
+                }
+              />
+            )}
+          </View>
         </View>
         {/* Quien lo propuso (o quien administra el grupo) puede corregirlo o quitarlo. */}
         {(challenge.createdBy === me || (group.isAdmin && !!challenge.createdBy)) && (
@@ -121,6 +140,12 @@ export default function Challenges() {
           compact
           label="Nuevo reto"
           onPress={() => router.push({ pathname: '/new-challenge', params: { groupId: id } })}
+        />
+        <Button
+          compact
+          variant="light"
+          label="Karaoke"
+          onPress={() => router.push({ pathname: '/new-karaoke', params: { groupId: id } })}
         />
         <Button
           compact

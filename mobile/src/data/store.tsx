@@ -21,6 +21,7 @@ import type {
   QuestionKind,
   Song,
   User,
+  KaraokeGame,
 } from './types';
 
 // Estado de la app, respaldado por Supabase. Todo lo que se lee aquí ya viene
@@ -118,6 +119,13 @@ type Store = {
   addChallenge: (groupId: string, title: string, body: string, days?: number) => Promise<void>;
   /** Un plan (contenedor de varias publicaciones), en su fecha y ya cerrado. Devuelve su id. */
   addPlan: (groupId: string, title: string, at: number) => Promise<string>;
+  /** Un reto de karaoke; con «track», la pista se sube antes al almacén del grupo. */
+  addKaraoke: (
+    groupId: string,
+    game: Omit<KaraokeGame, 'type' | 'trackPath'>,
+    days?: number,
+    track?: { uri: string; mime: string; name: string },
+  ) => Promise<string>;
   questions: Question[];
   albums: Album[];
   createAlbum: (groupId: string, title: string, description?: string) => Promise<string>;
@@ -449,7 +457,7 @@ async function load(me: string): Promise<Data> {
       .then(check) as PromiseLike<any[]>,
     supabase
       .from('proposals')
-      .select('id, group_id, kind, title, body, starts_at, ends_at, created_by')
+      .select('id, group_id, kind, title, body, starts_at, ends_at, created_by, game')
       .then(check),
     supabase.from('proposal_states').select('proposal_id, state').eq('user_id', me).then(check),
     supabase
@@ -726,6 +734,7 @@ async function load(me: string): Promise<Data> {
     startsAt: Date.parse(p.starts_at),
     endsAt: p.ends_at ? Date.parse(p.ends_at) : undefined,
     createdBy: p.created_by ?? undefined,
+    game: p.game?.type === 'karaoke' ? p.game : undefined,
   }));
 
   const songs: Song[] = (songRows ?? []).map((s) => ({
@@ -1289,6 +1298,41 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           .select('id')
           .single(),
       );
+      return row!.id as string;
+    },
+    addKaraoke: async (groupId, game, days, track) => {
+      let trackPath: string | undefined;
+      if (track) {
+        const ext = /\.(\w{2,4})$/.exec(track.name)?.[1] ?? 'mp3';
+        trackPath = (
+          await putFile(
+            groupId,
+            me,
+            track.uri,
+            `karaoke-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`,
+            track.mime || 'audio/mpeg',
+          )
+        ).path;
+      }
+      const row = check(
+        await supabase
+          .from('proposals')
+          .insert({
+            group_id: groupId,
+            kind: 'challenge',
+            title: `Karaoke: ${game.song}`.slice(0, 140),
+            body: 'Cada uno canta el tramo entero; Junti junta las voces en un solo vídeo.',
+            ends_at: days ? new Date(Date.now() + days * 86_400_000).toISOString() : null,
+            game: {
+              type: 'karaoke',
+              ...game,
+              ...(trackPath ? { trackPath, previewUrl: undefined } : {}),
+            },
+          })
+          .select('id')
+          .single(),
+      );
+      await refresh();
       return row!.id as string;
     },
     addChallenge: async (groupId, title, body, days) => {

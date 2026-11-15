@@ -112,6 +112,27 @@ export type Proposal = {
   endsAt?: number;
   /** Quién lo propuso (vacío: lo propuso Junti). */
   createdBy?: string;
+  /** Un minijuego dentro del reto (por ahora, el karaoke). */
+  game?: KaraokeGame;
+};
+
+/**
+ * Karaoke: una canción (el fragmento gratuito de Apple o una pista subida) y el
+ * tramo que canta cada uno entero; al verlo, la app va alternando las voces.
+ */
+export type KaraokeGame = {
+  type: 'karaoke';
+  song: string;
+  artist?: string;
+  artwork?: string;
+  /** El fragmento de 30 s de Apple… */
+  previewUrl?: string;
+  /** …o la pista subida al almacén del grupo. */
+  trackPath?: string;
+  /** El tramo que se canta, en segundos dentro del audio. */
+  start: number;
+  end: number;
+  lyrics?: string;
 };
 
 export type Reaction = { emoji: string; userId: string };
