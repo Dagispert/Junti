@@ -1,5 +1,13 @@
 import { router } from 'expo-router';
-import { Plus, Send, X } from 'lucide-react-native';
+import { Check, Plus, Send, X } from 'lucide-react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -10,6 +18,7 @@ import { type FamilyId } from '@/lib/families';
 import { clockIn, relative } from '@/lib/time';
 
 import { CommentLine } from './comment-line';
+import { EASE_OUT_VIEW, RollingNumber, SPRING, usePop } from './motion';
 import { VersionsLine } from './memory-versions';
 import { type Burst, EmojiBursts } from './emoji-burst';
 import { EmojiPicker } from './emoji-picker';
@@ -216,20 +225,13 @@ export function MomentCard({
               const count = moment.reactions.filter((r) => r.emoji === emoji).length;
               const mine = moment.reactions.some((r) => r.emoji === emoji && r.userId === me);
               return (
-                <Pressable
+                <ReactionChip
                   key={emoji}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Reaccionar con ${emoji}`}
+                  emoji={emoji}
+                  count={count}
+                  mine={mine}
                   onPress={() => react(emoji)}
-                  style={[styles.chip, { backgroundColor: mine ? theme.accent : theme.soft }]}>
-                  <Text style={{ fontSize: 15, opacity: count ? 1 : 0.5 }}>{emoji}</Text>
-                  {count > 0 && (
-                    <Text
-                      style={{ fontSize: 13, color: mine ? theme.onAccent : theme.textSecondary }}>
-                      {count}
-                    </Text>
-                  )}
-                </Pressable>
+                />
               );
             })}
             <Pressable
@@ -308,20 +310,11 @@ export function MomentCard({
               style={[styles.input, { color: theme.text, backgroundColor: theme.soft }]}
             />
             {/* Enviar: un botón redondo con un avión de papel. */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={replyTo ? 'Enviar la respuesta' : 'Enviar el comentario'}
-              disabled={!draft.trim()}
-              onPress={send}
-              style={({ pressed }) => [
-                styles.send,
-                {
-                  backgroundColor: theme.accent,
-                  opacity: draft.trim() ? (pressed ? 0.8 : 1) : 0.35,
-                },
-              ]}>
-              <Icon icon={Send} size={18} color={theme.onAccent} />
-            </Pressable>
+            <SendButton
+              label={replyTo ? 'Enviar la respuesta' : 'Enviar el comentario'}
+              enabled={!!draft.trim()}
+              onSend={send}
+            />
           </View>
         </View>
       </View>
@@ -332,6 +325,117 @@ export function MomentCard({
       />
       <EmojiPicker visible={picking} onClose={() => setPicking(false)} onPick={pickOther} />
     </Frame>
+  );
+}
+
+/** Una reacción: salta con muelle al tocarla y su número rueda al cambiar. */
+function ReactionChip({
+  emoji,
+  count,
+  mine,
+  onPress,
+}: {
+  emoji: string;
+  count: number;
+  mine: boolean;
+  onPress: () => void;
+}) {
+  const theme = useTheme();
+  const { style, pop } = usePop();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Reaccionar con ${emoji}`}
+      onPress={() => {
+        pop();
+        onPress();
+      }}>
+      <Animated.View
+        style={[
+          styles.chip,
+          { backgroundColor: mine ? theme.accent : theme.soft },
+          webStyle({ transition: 'background-color 220ms ease' }),
+          style,
+        ]}>
+        <Text style={{ fontSize: 15, opacity: count ? 1 : 0.5 }}>{emoji}</Text>
+        {count > 0 && (
+          <RollingNumber
+            value={count}
+            style={{ fontSize: 13, color: mine ? theme.onAccent : theme.textSecondary }}
+          />
+        )}
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+/**
+ * Enviar: el avión de papel sale volando, el botón se queda con un ✓ un
+ * momento y el avión vuelve a su sitio.
+ */
+function SendButton({
+  label,
+  enabled,
+  onSend,
+}: {
+  label: string;
+  enabled: boolean;
+  onSend: () => void;
+}) {
+  const theme = useTheme();
+  const fly = useSharedValue(0); // 0 en su sitio … 1 se ha ido volando
+  const check = useSharedValue(0);
+  const { style: popStyle, pop } = usePop();
+  // Mientras se celebra el envío (el ✓), el botón sigue encendido aunque el texto ya esté vacío.
+  const [celebrating, setCelebrating] = useState(false);
+  const plane = useAnimatedStyle(() => ({
+    opacity: fly.value < 1 ? 1 - fly.value : 0,
+    transform: [
+      { translateX: fly.value * 22 },
+      { translateY: -fly.value * 22 },
+      { rotate: `${-fly.value * 12}deg` },
+      { scale: 1 - fly.value * 0.3 },
+    ],
+  }));
+  const tick = useAnimatedStyle(() => ({
+    opacity: check.value,
+    transform: [{ scale: 0.5 + 0.5 * check.value }],
+  }));
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      disabled={!enabled}
+      onPress={() => {
+        pop();
+        setCelebrating(true);
+        setTimeout(() => setCelebrating(false), 1100);
+        check.value = withSequence(
+          withTiming(0, { duration: 180 }),
+          withSpring(1, SPRING),
+          withDelay(650, withTiming(0, { duration: 180 })),
+        );
+        fly.value = withSequence(
+          withTiming(1, { duration: 260, easing: EASE_OUT_VIEW }),
+          withDelay(820, withTiming(0, { duration: 0 })),
+        );
+        onSend();
+      }}>
+      <Animated.View
+        style={[
+          styles.send,
+          { backgroundColor: theme.accent, opacity: enabled || celebrating ? 1 : 0.35 },
+          webStyle({ transition: 'opacity 200ms ease' }),
+          popStyle,
+        ]}>
+        <Animated.View style={plane}>
+          <Icon icon={Send} size={18} color={theme.onAccent} />
+        </Animated.View>
+        <Animated.View style={[StyleSheet.absoluteFill, styles.center, tick]}>
+          <Icon icon={Check} size={18} color={theme.onAccent} />
+        </Animated.View>
+      </Animated.View>
+    </Pressable>
   );
 }
 
@@ -457,6 +561,7 @@ const styles = StyleSheet.create({
   replies: { marginLeft: 6, paddingLeft: 12, borderLeftWidth: 2, gap: 6 },
   replying: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
   send: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  center: { alignItems: 'center', justifyContent: 'center' },
   comment: { fontSize: 15, lineHeight: 20 },
   inputRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   input: {

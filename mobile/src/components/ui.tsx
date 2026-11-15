@@ -1,7 +1,8 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -14,11 +15,21 @@ import {
   type TextStyle,
   type ViewStyle,
 } from 'react-native';
+import Animated, {
+  Easing,
+  FadeInLeft,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Fonts, MaxContentWidth, Radius, Spacing, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
 
+import { EASE_IN_VIEW, SPRING } from './motion';
 import { VideoClip, VideoFrame, Waveform } from './media-players';
 import type { Moment } from '@/data/types';
 
@@ -117,8 +128,12 @@ export function AvatarRow({ userIds, size = 28 }: { userIds: string[]; size?: nu
   return (
     <View style={{ flexDirection: 'row' }}>
       {userIds.slice(0, 5).map((id, i) => (
-        <View
+        // Se despliegan uno detrás de otro, deslizándose desde el anterior.
+        <Animated.View
           key={id}
+          entering={FadeInLeft.delay(i * 70)
+            .duration(380)
+            .easing(EASE_IN_VIEW)}
           style={{
             marginLeft: i ? -size / 3 : 0,
             borderRadius: size,
@@ -126,7 +141,7 @@ export function AvatarRow({ userIds, size = 28 }: { userIds: string[]; size?: nu
             borderColor: theme.card,
           }}>
           <Avatar userId={id} size={size} />
-        </View>
+        </Animated.View>
       ))}
     </View>
   );
@@ -287,6 +302,93 @@ export function Button({
         webTransition,
       ]}>
       <Text style={{ color, fontWeight: '500', fontSize: compact ? 14 : 15 }}>{label}</Text>
+    </Pressable>
+  );
+}
+
+/**
+ * Botón que, mientras trabaja, se recoge en un círculo con un anillo que gira
+ * (la misma pieza cambia de ancho y de radio con un muelle; el texto se va con
+ * un desenfoque corto). Al terminar vuelve a su forma.
+ */
+export function ProgressButton({
+  label,
+  busy,
+  disabled,
+  onPress,
+}: {
+  label: string;
+  busy: boolean;
+  disabled?: boolean;
+  onPress: () => void;
+}) {
+  const theme = useTheme();
+  const [natural, setNatural] = useState(0);
+  const k = useSharedValue(0);
+  const spin = useSharedValue(0);
+  useEffect(() => {
+    k.value = withSpring(busy ? 1 : 0, SPRING);
+    spin.value = busy
+      ? withRepeat(withTiming(360, { duration: 800, easing: Easing.linear }), -1)
+      : 0;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busy]);
+  const box = useAnimatedStyle(() =>
+    natural
+      ? {
+          width: natural + (40 - natural) * k.value,
+          borderRadius: Radius.small + (20 - Radius.small) * k.value,
+        }
+      : {},
+  );
+  const text = useAnimatedStyle(() => ({
+    opacity: Math.max(0, 1 - k.value * 1.8),
+    ...(Platform.OS === 'web' ? ({ filter: `blur(${(k.value * 4).toFixed(2)}px)` } as object) : {}),
+  }));
+  const ring = useAnimatedStyle(() => ({
+    opacity: k.value,
+    transform: [{ rotate: `${spin.value}deg` }],
+  }));
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={busy ? `${label}: guardando` : label}
+      accessibilityState={{ busy, disabled: disabled || busy }}
+      disabled={disabled || busy}
+      onPress={onPress}>
+      <Animated.View
+        onLayout={(e) => !busy && !natural && setNatural(e.nativeEvent.layout.width)}
+        style={[
+          styles.button,
+          styles.buttonCompact,
+          {
+            backgroundColor: theme.accent,
+            overflow: 'hidden',
+            opacity: disabled && !busy ? 0.45 : 1,
+          },
+          box,
+        ]}>
+        <Animated.Text
+          numberOfLines={1}
+          style={[{ color: theme.onAccent, fontWeight: '500', fontSize: 14 }, text]}>
+          {label}
+        </Animated.Text>
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            {
+              position: 'absolute',
+              width: 18,
+              height: 18,
+              borderRadius: 9,
+              borderWidth: 2,
+              borderColor: theme.onAccent,
+              borderTopColor: 'transparent',
+            },
+            ring,
+          ]}
+        />
+      </Animated.View>
     </Pressable>
   );
 }

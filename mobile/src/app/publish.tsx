@@ -13,7 +13,7 @@ import { type Clip, InlineVideo, VoiceNote } from '@/components/media-players';
 import { PhotoCropper } from '@/components/photo-cropper';
 import { VideoTrimmer } from '@/components/video-trimmer';
 import { PressScale } from '@/components/motion';
-import { Button, Notice, Screen, Tag, Title } from '@/components/ui';
+import { Button, Notice, ProgressButton, Screen, Tag, Title } from '@/components/ui';
 import { Radius, Spacing, useTheme } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
 import { dateFromFile, dateFromPickerExif } from '@/lib/exif';
@@ -290,17 +290,10 @@ export default function Publish() {
       header={
         <View style={styles.header}>
           <Button compact label="Cancelar" variant="quiet" onPress={() => router.back()} />
-          <Button
-            compact
-            label={
-              busy
-                ? 'Guardando…'
-                : adding
-                  ? 'Añadir mi versión'
-                  : remembering
-                    ? 'Guardar recuerdo'
-                    : 'Publicar'
-            }
+          {/* Al publicar, el botón se recoge en un círculo que carga. */}
+          <ProgressButton
+            label={adding ? 'Añadir mi versión' : remembering ? 'Guardar recuerdo' : 'Publicar'}
+            busy={busy}
             disabled={!canSend}
             onPress={publish}
           />
