@@ -2,9 +2,9 @@ import { useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { AlbumShelf } from '@/components/album-shelf';
-import { StoryRoll } from '@/components/film-roll';
 import { FilmRoll3D, FilmRollGrid } from '@/components/film-roll-3d';
 import { RecapCard } from '@/components/recap-card';
+import { StoryBook } from '@/components/story-book';
 import { GroupHeader } from '@/components/group-header';
 import { PolaroidPile, Scribble } from '@/components/scrapbook';
 import { Soundtrack } from '@/components/soundtrack';
@@ -69,7 +69,8 @@ export default function Memory() {
 
       {featured != null && <RecapCard groupId={group.id} kind="week" from={featured} />}
 
-      <StoryRoll groupId={group.id} origins={group.origins} moments={all} />
+      {/* Vuestra historia, como un diario de recuerdos que se abre y pasa hojas. */}
+      <StoryBook groupId={group.id} origins={group.origins} moments={all} />
 
       <Soundtrack groupId={group.id} />
       <AlbumShelf groupId={group.id} />
