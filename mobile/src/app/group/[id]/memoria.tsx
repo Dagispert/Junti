@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { AlbumShelf } from '@/components/album-shelf';
 import { StoryRoll } from '@/components/film-roll';
-import { FilmRoll3D } from '@/components/film-roll-3d';
+import { FilmRoll3D, FilmRollGrid } from '@/components/film-roll-3d';
 import { RecapCard } from '@/components/recap-card';
 import { GroupHeader } from '@/components/group-header';
 import { PolaroidPile, Scribble } from '@/components/scrapbook';
@@ -74,9 +74,19 @@ export default function Memory() {
       <Soundtrack groupId={group.id} />
       <AlbumShelf groupId={group.id} />
 
-      {months.map((m, i) => (
-        <FilmRoll3D key={m.key} moments={m.items} label={m.label} index={i} groupId={group.id} />
-      ))}
+      {months.length > 0 && (
+        <FilmRollGrid>
+          {months.map((m, i) => (
+            <FilmRoll3D
+              key={m.key}
+              moments={m.items}
+              label={m.label}
+              index={i}
+              groupId={group.id}
+            />
+          ))}
+        </FilmRollGrid>
+      )}
     </Screen>
   );
 }
