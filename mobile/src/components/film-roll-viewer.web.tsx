@@ -8,7 +8,8 @@ import type { Moment } from '@/data/types';
 import { type CanisterPose, makeCanister } from '@/lib/canister3d';
 import { primeNarrator } from '@/lib/narrator';
 import { monthStart } from '@/lib/recap';
-import { offsetPath, serpentine, unrollSchedule } from '@/lib/serpentine';
+import { filmPaths, straightTrack } from '@/lib/filmstrip';
+import { serpentine, unrollSchedule } from '@/lib/serpentine';
 
 import { Icon } from './icon';
 
@@ -23,17 +24,28 @@ const { createPortal } = require('react-dom') as {
 // «Abrir»), el carrete se va a la esquina de arriba a la izquierda mientras la
 // cinta sale disparada y rebota de pared a pared hasta enseñar todas las fotos.
 
-const FILM = '#3B2A20';
-const HOLES = '#EDE3D2';
+const FILM = '#24150D';
+const AMBER = '#7A4322';
 const FRAME_W = 84;
 const FRAME_H = 74;
 const THICK = FRAME_H + 22;
 const ROW_H = THICK + 50;
 const PEEK = 30;
 const REST = 4.6;
-const CORNER_W = 190;
+/** Lo que la cinta se esconde dentro del carrete (bajo la boca). */
+const TUCK = 16;
 
-type Phase = 'enter' | 'closed' | 'drag' | 'opening' | 'unroll' | 'open' | 'rewind' | 'leave';
+type Phase =
+  | 'enter'
+  | 'closed'
+  | 'drag'
+  | 'stow'
+  | 'opening'
+  | 'unroll'
+  | 'open'
+  | 'rewind'
+  | 'return'
+  | 'leave';
 
 const mix = (a: string, b: string, k: number) => {
   const x = parseInt(a.slice(1), 16),
@@ -44,6 +56,14 @@ const mix = (a: string, b: string, k: number) => {
       .padStart(2, '0');
   return `#${c(16)}${c(8)}${c(0)}`;
 };
+/** Pone los trazados de la cinta en su grupo SVG (cuerpo, centro ámbar, perforaciones). */
+function paint(g: SVGGElement | null, f: ReturnType<typeof filmPaths> | null) {
+  if (!g) return;
+  const [body, amber, holes] = g.children;
+  body.setAttribute('d', f?.body ?? '');
+  amber.setAttribute('d', f?.amber ?? '');
+  holes.setAttribute('d', f?.holes ?? '');
+}
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
 export function RollViewer({
@@ -84,13 +104,20 @@ export function RollViewer({
   const B = Math.min(vp.w * 0.72, 330);
   const BH = B * 1.2;
   const center = { x: (vp.w - B) / 2, y: (vp.h - BH) / 2 - 40, s: 1 };
-  const corner = { x: -16, y: 46, s: CORNER_W / B };
-  const restPose: CanisterPose = { dist: REST, yaw: 0, tilt: 0, spin: 0 };
-  const endMouth = useMemo(() => {
-    const m = canister.mouth(B, BH, restPose);
-    return { x: corner.x + m.x * B * corner.s, y: corner.y + m.y * BH * corner.s };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // En la esquina, el carrete se encoge hasta que su ranura mide lo que la cinta.
+  const fit = useMemo(() => {
+    const rest: CanisterPose = { dist: REST, yaw: 0, tilt: 0, spin: 0 };
+    const m = canister.mouth(B, BH, rest);
+    const sl = canister.slot();
+    const len = Math.hypot((sl.top.x - sl.bot.x) * B, (sl.top.y - sl.bot.y) * BH);
+    return { m, len };
   }, [canister, B, BH]);
+  const cs = Math.max(0.4, Math.min(0.85, THICK / fit.len));
+  const corner = { x: -B * cs * 0.12, y: 44, s: cs };
+  const endMouth = {
+    x: corner.x + fit.m.x * B * cs - TUCK,
+    y: corner.y + fit.m.y * BH * cs,
+  };
   const sp = useMemo(
     () =>
       serpentine({
@@ -106,11 +133,6 @@ export function RollViewer({
         pad: 10,
       }),
     [endMouth.x, endMouth.y, vp.w, moments.length],
-  );
-  const mainPath = useMemo(() => offsetPath(sp, 0), [sp]);
-  const sprockets = useMemo(
-    () => [offsetPath(sp, THICK / 2 - 8), offsetPath(sp, -(THICK / 2 - 8))],
-    [sp],
   );
   const L = sp.length;
 
@@ -131,15 +153,15 @@ export function RollViewer({
   });
   const setPhase = (p: Phase) => {
     st.current.phase = p;
-    if (p === 'opening' || p === 'unroll') st.current.t0 = performance.now();
+    if (p === 'opening' || p === 'unroll' || p === 'return') st.current.t0 = performance.now();
     setPhaseState(p);
   };
   const sched = useRef<ReturnType<typeof unrollSchedule> | null>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const canBox = useRef<HTMLDivElement>(null);
   const shadow = useRef<HTMLDivElement>(null);
-  const tongue = useRef<HTMLDivElement>(null);
   const strip = useRef<SVGGElement>(null);
+  const tongue = useRef<SVGGElement>(null);
   const root = useRef<HTMLDivElement>(null);
   const titleBig = useRef<HTMLDivElement>(null);
   const titleTop = useRef<HTMLDivElement>(null);
@@ -168,23 +190,21 @@ export function RollViewer({
       // flotando, se mece un poco
       const idle = s.phase === 'closed' || s.phase === 'drag' || s.phase === 'enter';
       const sway = idle ? Math.sin(life * 1.3) * 0.08 : 0;
-      // la cinta que asoma
-      const peekGoal =
-        s.phase === 'closed'
-          ? PEEK
-          : s.phase === 'drag'
-            ? s.peekTarget
-            : s.phase === 'enter'
-              ? 0
-              : 0;
+      // la cinta que asoma (y que se guarda antes de moverse)
+      const peekGoal = s.phase === 'closed' ? PEEK : s.phase === 'drag' ? s.peekTarget : 0;
       const prevPeek = s.peek;
-      s.peek += (peekGoal - s.peek) * k(s.phase === 'drag' ? 0.5 : 0.18);
-      // a la esquina (y de vuelta)
+      s.peek +=
+        (peekGoal - s.peek) * k(s.phase === 'drag' ? 0.5 : s.phase === 'stow' ? 0.22 : 0.14);
+      if (s.phase === 'stow' && s.peek < 1.5) {
+        s.peek = 0;
+        setPhase('opening');
+      }
+      // a la esquina, y desde ahí la cinta
       if (s.phase === 'opening') {
-        const t = (now - s.t0) / 1000 / 0.8;
+        const t = (now - s.t0) / 1000 / 0.75;
         s.p = Math.min(1, t);
-        if (t >= 0.9 && !sched.current) {
-          sched.current = unrollSchedule(g.sp, 1500);
+        if (t >= 0.94) {
+          sched.current = unrollSchedule(g.sp, 1150);
           setPhase('unroll');
         }
       }
@@ -194,22 +214,21 @@ export function RollViewer({
         const tt = (now - s.t0) / 1000;
         s.shown = sched.current.at(tt);
         const hit = sched.current.hits.filter((h) => h <= tt).pop();
-        const jig = hit != null ? Math.exp(-7 * (tt - hit)) * Math.sin((tt - hit) * 34) * 6 : 0;
-        if (strip.current?.parentElement)
-          (strip.current.parentElement as unknown as HTMLElement).style.transform =
-            `translateX(${jig.toFixed(2)}px)`;
-        if (tt >= sched.current.total + 0.4) setPhase('open');
+        const jig = hit != null ? Math.exp(-7 * (tt - hit)) * Math.sin((tt - hit) * 34) * 5 : 0;
+        if (strip.current)
+          strip.current.setAttribute('transform', `translate(${jig.toFixed(2)} 0)`);
+        if (tt >= sched.current.total + 0.3) setPhase('open');
       } else if (s.phase === 'rewind') {
-        s.shown += (0 - s.shown) * k(0.12);
-        if (s.shown < 4) {
+        // la cinta vuelve a entrar entera, y solo entonces el carrete vuelve al centro
+        s.shown -= Math.max(260, s.shown * 2.2) * dt;
+        if (s.shown <= 0) {
           s.shown = 0;
-          s.p += (0 - s.p) * k(0.1);
-          if (s.p < 0.01) {
-            s.p = 0;
-            sched.current = null;
-            setPhase('closed');
-          }
+          sched.current = null;
+          setPhase('return');
         }
+      } else if (s.phase === 'return') {
+        s.p = Math.max(0, 1 - (now - s.t0) / 1000 / 0.7);
+        if (s.p <= 0) setPhase('closed');
       }
       // el eje gira con la cinta que entra o sale
       s.spin -= (s.shown - prevShown + (s.peek - prevPeek)) * 0.025;
@@ -243,19 +262,24 @@ export function RollViewer({
       if (c) {
         const ctx = c.getContext('2d');
         if (ctx) canister.draw(ctx, g.B, g.BH, pose);
-        // la lengüeta, saliendo de la boca, perpendicular al carrete
-        const m = canister.mouth();
-        if (tongue.current) {
-          tongue.current.style.transform = `translate(${x + m.x * g.B * sc}px, ${y + bob + m.y * g.BH * sc}px) rotate(${-tilt}rad)`;
-          tongue.current.style.width = `${Math.max(0, s.peek)}px`;
-          tongue.current.style.opacity = s.phase === 'opening' || s.p > 0.05 ? '0' : '1';
-        }
+        // la lengüeta, saliendo de la ranura con su mismo alto
+        const sl = canister.slot();
+        const tx = (v: { x: number; y: number }) => ({
+          x: x + v.x * g.B * sc,
+          y: y + bob + v.y * g.BH * sc,
+        });
+        const t1 = tx(sl.top),
+          t2 = tx(sl.bot);
+        const h = Math.hypot(t1.x - t2.x, t1.y - t2.y);
+        const nx = (t1.x - t2.x) / h,
+          ny = (t1.y - t2.y) / h;
+        const track = straightTrack((t1.x + t2.x) / 2, (t1.y + t2.y) / 2, -ny, nx, nx, ny);
+        const f = s.peek > 0.5 ? filmPaths(track, -TUCK, s.peek, h, h * 0.9) : null;
+        paint(tongue.current, f);
       }
       if (strip.current) {
-        const dash = `${s.shown.toFixed(1)} ${g.L + 4000}`;
-        strip.current.querySelectorAll('path[data-dash]').forEach((p) => {
-          p.setAttribute('stroke-dasharray', dash);
-        });
+        const f = s.shown > 0.5 ? filmPaths(g.sp.at, 0, s.shown, THICK, THICK * 0.9) : null;
+        paint(strip.current, f);
       }
       if (titleBig.current) titleBig.current.style.opacity = String(1 - Math.min(1, e * 2));
       if (titleTop.current) {
@@ -287,7 +311,7 @@ export function RollViewer({
     if (st.current.phase !== 'closed' && st.current.phase !== 'drag') return;
     scroller.current?.scrollTo({ top: 0 });
     sched.current = null;
-    setPhase('opening');
+    setPhase('stow');
   };
 
   // ── Tirar de la cinta ──
@@ -323,8 +347,8 @@ export function RollViewer({
     } else setPhase('closed');
   };
 
-  const isOpen = phase === 'unroll' || phase === 'open' || phase === 'rewind';
   const tint = mix(color, '#F7F4EE', 0.13);
+  const isOpen = phase === 'unroll' || phase === 'open' || phase === 'rewind';
   const contentH = Math.max(vp.h, sp.height + 150);
   const top = (m: Moment) => [...new Set(m.reactions.map((r) => r.emoji))].slice(0, 2);
   const go = (fn: () => void) => {
@@ -374,44 +398,20 @@ export function RollViewer({
               style={{ position: 'absolute', inset: 0, overflow: 'visible' }}
               aria-hidden>
               <defs>
-                <mask id={maskId} maskUnits="userSpaceOnUse">
-                  <path
-                    data-dash
-                    d={mainPath}
-                    fill="none"
-                    stroke="#fff"
-                    strokeWidth={THICK + 2}
-                    strokeDasharray={`0 ${L + 4000}`}
-                  />
-                </mask>
                 <filter id={`${maskId}s`} x="-10%" y="-10%" width="120%" height="120%">
-                  <feDropShadow dx="0" dy="6" stdDeviation="6" floodOpacity="0.22" />
+                  <feDropShadow dx="0" dy="5" stdDeviation="5" floodOpacity="0.2" />
                 </filter>
               </defs>
               <g ref={strip}>
-                <path
-                  data-dash
-                  d={mainPath}
-                  fill="none"
-                  stroke={FILM}
-                  strokeWidth={THICK}
-                  strokeDasharray={`0 ${L + 4000}`}
-                  filter={`url(#${maskId}s)`}
-                />
-                <g mask={`url(#${maskId})`}>
-                  {sprockets.map((d, i) => (
-                    <path
-                      key={i}
-                      d={d}
-                      fill="none"
-                      stroke={HOLES}
-                      strokeWidth={6}
-                      strokeDasharray="7 8"
-                      strokeLinecap="round"
-                      opacity={0.92}
-                    />
-                  ))}
-                </g>
+                <path fill={FILM} filter={`url(#${maskId}s)`} />
+                <path fill={AMBER} opacity={0.4} />
+                <path fill={tint} />
+              </g>
+              {/* la lengüeta (con el carrete cerrado), por debajo del carrete */}
+              <g ref={tongue}>
+                <path fill={FILM} filter={`url(#${maskId}s)`} />
+                <path fill={AMBER} opacity={0.4} />
+                <path fill={tint} />
               </g>
             </svg>
             {sp.frames.map((f) => {
@@ -486,25 +486,6 @@ export function RollViewer({
             })}
           </div>
 
-          {/* la lengüeta que asoma (con el carrete cerrado) */}
-          <div
-            ref={tongue}
-            aria-hidden
-            style={{
-              position: 'absolute',
-              left: 0,
-              top: 0,
-              height: THICK,
-              marginTop: -THICK / 2,
-              transformOrigin: `0 ${THICK / 2}px`,
-              zIndex: 1,
-              borderRadius: '0 10px 10px 0',
-              background: `${FILM} radial-gradient(circle, ${HOLES} 2.6px, transparent 3.2px) 4px 4px / 15px ${THICK - 16}px repeat-x`,
-              boxShadow: '0 6px 14px rgba(0,0,0,.18)',
-              pointerEvents: 'none',
-            }}
-          />
-
           {/* la sombra y el carrete */}
           <div
             ref={shadow}
@@ -578,7 +559,7 @@ export function RollViewer({
         ref={titleTop}
         style={{
           position: 'absolute',
-          left: CORNER_W - 10,
+          left: B * cs * 0.82,
           right: 60,
           top: 14,
           fontFamily: HandBold,
@@ -644,7 +625,7 @@ const frameStyle: React.CSSProperties = {
   borderRadius: 5,
   overflow: 'hidden',
   background: '#F3EEE2',
-  boxShadow: '0 0 0 2px rgba(0,0,0,.28) inset',
+  boxShadow: '0 0 0 2px rgba(20,10,4,.55) inset',
   cursor: 'pointer',
   display: 'block',
 };

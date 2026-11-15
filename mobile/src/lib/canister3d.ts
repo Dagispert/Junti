@@ -107,6 +107,8 @@ export type Canister = {
   draw: (ctx: CanvasRenderingContext2D, w: number, h: number, s: CanisterPose) => void;
   /** Dónde está la boca del carrete en el lienzo (0…1), para que salga de ahí la cinta. */
   mouth: (w?: number, h?: number, s?: CanisterPose) => { x: number; y: number };
+  /** Los dos extremos de la ranura (0…1 del lienzo): la cinta sale con ese alto. */
+  slot: () => { top: { x: number; y: number }; bot: { x: number; y: number } };
   dispose: () => void;
 };
 
@@ -226,6 +228,8 @@ export function makeCanister(
     new THREE.MeshPhysicalMaterial({ color: '#4A3326', roughness: 0.4, clearcoat: 0.6 }),
   );
   lip.position.set(R + 0.07, 0, 0.03);
+  // la lengüeta de verdad se dibuja encima (en SVG); esta solo marca dónde sale
+  lip.visible = false;
   can.add(lip);
 
   const world = new THREE.Vector3();
@@ -259,6 +263,16 @@ export function makeCanister(
       lip.getWorldPosition(world);
       world.project(camera);
       return { x: (world.x + 1) / 2, y: (1 - world.y) / 2 };
+    },
+    slot() {
+      const h = (HH * 0.72) / 2;
+      const pt = (y: number) => {
+        world.set(0, y, 0);
+        lip.localToWorld(world);
+        world.project(camera);
+        return { x: (world.x + 1) / 2, y: (1 - world.y) / 2 };
+      };
+      return { top: pt(h), bot: pt(-h) };
     },
     dispose() {
       scene.traverse((o) => {
