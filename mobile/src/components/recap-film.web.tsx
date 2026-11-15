@@ -8,6 +8,7 @@ import { useExport } from '@/components/export-sheet';
 import { type FilmControl, FilmPlayer } from '@/components/film-player';
 import { Icon } from '@/components/icon';
 import { LogoMark } from '@/components/logo';
+import { Resting } from '@/components/narrator-resting';
 import { Hand } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import type { Narration } from '@/data/types';
@@ -26,7 +27,11 @@ import { datosPelicula, fotosEnLinea } from '@/pelicula/datos';
 const INK = '#1D1F22';
 
 export default function RecapFilm() {
-  const { groupId, kind, from } = useLocalSearchParams<{ groupId: string; kind: 'week' | 'month'; from: string }>();
+  const { groupId, kind, from } = useLocalSearchParams<{
+    groupId: string;
+    kind: 'week' | 'month';
+    from: string;
+  }>();
   const { moments, user, proposals, songs, group, events, narrate } = useStore();
   const insets = useSafeAreaInsets();
 
@@ -51,16 +56,19 @@ export default function RecapFilm() {
   const [writing, setWriting] = useState(narrating);
   const [voicing, setVoicing] = useState(false);
   const [note, setNote] = useState('');
+  // La narradora no está (Google saturado o sin conexión): hay versión sencilla.
+  const [resting, setResting] = useState(false);
   const write = async (force = false) => {
     setWriting(true);
     setNote('');
+    setResting(false);
     const args = { groupId, kind: recap.kind, from: recap.from, to: recap.to, label: recap.range };
     try {
       const result = await narrate({ ...args, force });
       let text = result.narration;
       if (text) setNarration(text);
       if (result.reason === 'limit') setNote('Ya no quedan más versiones para este resumen.');
-      if (result.reason === 'resting') setNote('Versión corta: la narradora está descansando.');
+      if (result.reason === 'resting') setResting(true);
       setWriting(false);
       if (text && !text.audioUrl) {
         setVoicing(true);
@@ -70,8 +78,8 @@ export default function RecapFilm() {
           setNarration(text);
         }
       }
-    } catch (error) {
-      setNote(error instanceof Error ? error.message : String(error));
+    } catch {
+      setResting(true);
     }
     setWriting(false);
     setVoicing(false);
@@ -89,9 +97,13 @@ export default function RecapFilm() {
     for (const m of recap.moments) {
       const w = whereOf(m, user(m.authorId));
       if (w.lat == null || w.lng == null) continue;
-      fetchWeatherAt(w.lat, w.lng, m.createdAt).then((x) => alive && x && setWeather((all) => ({ ...all, [m.id]: x })));
+      fetchWeatherAt(w.lat, w.lng, m.createdAt).then(
+        (x) => alive && x && setWeather((all) => ({ ...all, [m.id]: x })),
+      );
     }
-    fotosEnLinea(recap.moments.map((m) => m.imageUri).filter((u): u is string => !!u)).then((p) => alive && setPhotos(p));
+    fotosEnLinea(recap.moments.map((m) => m.imageUri).filter((u): u is string => !!u)).then(
+      (p) => alive && setPhotos(p),
+    );
     prepareRecording().catch(() => {});
     return () => {
       alive = false;
@@ -111,7 +123,13 @@ export default function RecapFilm() {
   const data = useMemo(
     () =>
       started
-        ? datosPelicula(recap, { group: group(groupId)?.name ?? 'Junti', user, narration, weather, photos: photos ?? {} })
+        ? datosPelicula(recap, {
+            group: group(groupId)?.name ?? 'Junti',
+            user,
+            narration,
+            weather,
+            photos: photos ?? {},
+          })
         : null,
     // Se fija al empezar: la película no cambia mientras se ve.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -128,7 +146,8 @@ export default function RecapFilm() {
   }, [player, voice?.audioUrl]);
   useEffect(() => () => stopNarrator(), []);
   const [voiceOn, setVoiceOn] = useState(true);
-  const song = recap.songs.find((s) => s.preview) ?? songs.find((s) => s.groupId === groupId && s.preview);
+  const song =
+    recap.songs.find((s) => s.preview) ?? songs.find((s) => s.groupId === groupId && s.preview);
   const audio = usePreview(song?.preview, true);
   const [paused, setPaused] = useState(false);
   const [time, setTime] = useState({ t: 0, total: 1 });
@@ -171,7 +190,11 @@ export default function RecapFilm() {
     if (rec) {
       recorder.current = null;
       const blob = await rec.stop();
-      exporter.ready(blob, recap.kind === 'week' ? 'junti-semana' : 'junti-mes', `${group(groupId)?.name ?? 'Junti'} · ${recap.range}`);
+      exporter.ready(
+        blob,
+        recap.kind === 'week' ? 'junti-semana' : 'junti-mes',
+        `${group(groupId)?.name ?? 'Junti'} · ${recap.range}`,
+      );
     }
   };
 
@@ -205,16 +228,29 @@ export default function RecapFilm() {
       ) : (
         // La espera: la narradora prepara la historia; luego, un toque para empezar.
         <View style={styles.wait}>
-          <Text style={styles.waitKicker}>{recap.kind === 'week' ? 'VUESTRA SEMANA' : 'VUESTRO MES'}</Text>
+          <Text style={styles.waitKicker}>
+            {recap.kind === 'week' ? 'VUESTRA SEMANA' : 'VUESTRO MES'}
+          </Text>
           <Text style={styles.waitTitle}>{narration?.title || recap.range}</Text>
-          {ready ? (
+          {ready && resting ? (
+            <Resting
+              kind={recap.kind === 'week' ? 'semana' : 'mes'}
+              onWatch={start}
+              onRetry={() => write(true)}
+              onLater={close}
+            />
+          ) : ready ? (
             <Pressable accessibilityRole="button" onPress={start} style={styles.play}>
               <Icon icon={Play} color={INK} />
               <Text style={styles.playText}>Ver la película</Text>
             </Pressable>
           ) : (
             <Text style={styles.waitNote}>
-              {writing ? 'La narradora está escribiendo vuestra historia…' : voicing ? 'Poniéndole voz…' : 'Preparando las fotos…'}
+              {writing
+                ? 'La narradora está escribiendo vuestra historia…'
+                : voicing
+                  ? 'Poniéndole voz…'
+                  : 'Preparando las fotos…'}
             </Text>
           )}
           {!ready && (
@@ -226,10 +262,15 @@ export default function RecapFilm() {
       )}
 
       {/* La barra de progreso y los botones (no salen en el vídeo exportado). */}
-      <View style={[styles.top, { paddingTop: insets.top + 8 }]} pointerEvents="box-none" {...NO_REC}>
+      <View
+        style={[styles.top, { paddingTop: insets.top + 8 }]}
+        pointerEvents="box-none"
+        {...NO_REC}>
         {!!data && (
           <View style={styles.bar}>
-            <View style={[styles.barFill, { width: `${Math.min(100, (time.t / time.total) * 100)}%` }]} />
+            <View
+              style={[styles.barFill, { width: `${Math.min(100, (time.t / time.total) * 100)}%` }]}
+            />
           </View>
         )}
         <View style={styles.row}>
@@ -237,26 +278,46 @@ export default function RecapFilm() {
             {group(groupId)?.name} · {recap.range}
           </Text>
           {!!data && (
-            <Pressable accessibilityRole="button" accessibilityLabel={paused ? 'Seguir' : 'Pausar'} onPress={() => setPaused((p) => !p)} style={styles.round}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={paused ? 'Seguir' : 'Pausar'}
+              onPress={() => setPaused((p) => !p)}
+              style={styles.round}>
               <Icon icon={paused ? Play : Pause} color={INK} />
             </Pressable>
           )}
           {!!voice && (
-            <Pressable accessibilityRole="button" accessibilityLabel={voiceOn ? 'Silenciar a la narradora' : 'Oír a la narradora'} onPress={() => setVoiceOn((v) => !v)} style={styles.round}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={voiceOn ? 'Silenciar a la narradora' : 'Oír a la narradora'}
+              onPress={() => setVoiceOn((v) => !v)}
+              style={styles.round}>
               <Icon icon={voiceOn ? Volume2 : VolumeX} color={INK} />
             </Pressable>
           )}
           {audio.available && (
-            <Pressable accessibilityRole="button" accessibilityLabel={audio.playing ? 'Silenciar música' : 'Poner música'} onPress={() => audio.toggle()} style={[styles.round, !audio.playing && { opacity: 0.6 }]}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={audio.playing ? 'Silenciar música' : 'Poner música'}
+              onPress={() => audio.toggle()}
+              style={[styles.round, !audio.playing && { opacity: 0.6 }]}>
               <Icon icon={Music} color={INK} />
             </Pressable>
           )}
           {!!data && canRecordScreen() && !exporter.live && (
-            <Pressable accessibilityRole="button" accessibilityLabel="Exportar como vídeo" onPress={exportVideo} style={styles.round}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Exportar como vídeo"
+              onPress={exportVideo}
+              style={styles.round}>
               <Icon icon={Share} color={INK} />
             </Pressable>
           )}
-          <Pressable accessibilityRole="button" accessibilityLabel="Cerrar resumen" onPress={close} style={styles.round}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Cerrar resumen"
+            onPress={close}
+            style={styles.round}>
             <Icon icon={X} color={INK} />
           </Pressable>
         </View>
@@ -265,7 +326,10 @@ export default function RecapFilm() {
       {/* Al terminar: volver a verla, otra versión, cerrar. */}
       {ended && !exporter.live && (
         <View style={[styles.end, { bottom: insets.bottom + 28 }]} {...NO_REC}>
-          <Pressable accessibilityRole="button" onPress={() => (control.current?.seek(0), setEnded(false), setPaused(false))} style={styles.endBtn}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => (control.current?.seek(0), setEnded(false), setPaused(false))}
+            style={styles.endBtn}>
             <Text style={styles.endText}>Volver a verla</Text>
           </Pressable>
           {narrating && (
@@ -277,7 +341,9 @@ export default function RecapFilm() {
                 setStarted(false);
               }}
               style={[styles.endBtn, styles.endGhost]}>
-              <Text style={[styles.endText, { color: '#F3F1E7' }]}>{writing ? 'Escribiendo…' : 'Otra versión'}</Text>
+              <Text style={[styles.endText, { color: '#F3F1E7' }]}>
+                {writing ? 'Escribiendo…' : 'Otra versión'}
+              </Text>
             </Pressable>
           )}
           {!!note && <Text style={styles.note}>{note}</Text>}
@@ -302,19 +368,57 @@ const styles = StyleSheet.create({
   waitTitle: { color: '#F3F1E7', fontFamily: Hand, fontSize: 42, textAlign: 'center' },
   waitNote: { color: '#A9A79C', fontFamily: Hand, fontSize: 22, textAlign: 'center' },
   skip: { color: '#E5568E', fontFamily: Hand, fontSize: 20, marginTop: 6 },
-  play: { marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F3F1E7', borderRadius: 26, height: 52, paddingHorizontal: 26 },
+  play: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F3F1E7',
+    borderRadius: 26,
+    height: 52,
+    paddingHorizontal: 26,
+  },
   playText: { color: INK, fontSize: 17, fontWeight: '600' },
   top: { position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: 14, gap: 10 },
-  bar: { height: 3, borderRadius: 2, backgroundColor: 'rgba(160,160,150,0.35)', overflow: 'hidden' },
+  bar: {
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: 'rgba(160,160,150,0.35)',
+    overflow: 'hidden',
+  },
   barFill: { height: 3, backgroundColor: '#E5568E' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   topTitle: { flex: 1, color: '#A9A79C', fontSize: 13, fontWeight: '600' },
-  round: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.86)', alignItems: 'center', justifyContent: 'center' },
+  round: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.86)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   end: { position: 'absolute', left: 0, right: 0, alignItems: 'center', gap: 10 },
-  endBtn: { backgroundColor: '#F3F1E7', borderRadius: 24, height: 48, paddingHorizontal: 28, justifyContent: 'center' },
-  endGhost: { backgroundColor: 'transparent', borderWidth: 1, borderColor: 'rgba(243,241,231,0.4)' },
+  endBtn: {
+    backgroundColor: '#F3F1E7',
+    borderRadius: 24,
+    height: 48,
+    paddingHorizontal: 28,
+    justifyContent: 'center',
+  },
+  endGhost: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: 'rgba(243,241,231,0.4)',
+  },
   endText: { color: INK, fontSize: 16, fontWeight: '600' },
   note: { color: '#A9A79C', fontSize: 13, textAlign: 'center', paddingHorizontal: 30 },
-  signature: { position: 'absolute', right: 16, flexDirection: 'row', alignItems: 'center', gap: 6, opacity: 0.9 },
+  signature: {
+    position: 'absolute',
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    opacity: 0.9,
+  },
   signatureText: { color: '#F3F1E7', fontSize: 16, fontWeight: '700' },
 });

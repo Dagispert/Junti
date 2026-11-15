@@ -8,6 +8,7 @@ import { useExport } from '@/components/export-sheet';
 import { type FilmControl, FilmPlayer } from '@/components/film-player';
 import { Icon } from '@/components/icon';
 import { LogoMark } from '@/components/logo';
+import { Resting } from '@/components/narrator-resting';
 import { Hand } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import type { Narration } from '@/data/types';
@@ -29,21 +30,40 @@ export default function StoryFilm() {
   const group = groupById(groupId);
   const insets = useSafeAreaInsets();
   const story = useMemo(
-    () => buildStory(group?.origins ?? [], moments.filter((m) => m.groupId === groupId)),
+    () =>
+      buildStory(
+        group?.origins ?? [],
+        moments.filter((m) => m.groupId === groupId),
+      ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [groupId],
   );
 
   const narrating = !!group?.narrativeEnabled;
   const [narration, setNarration] = useState<Narration | null>(null);
-  const [state, setState] = useState<'writing' | 'voicing' | 'ready'>(narrating ? 'writing' : 'ready');
+  const [state, setState] = useState<'writing' | 'voicing' | 'ready'>(
+    narrating ? 'writing' : 'ready',
+  );
+  // La narradora no está (Google saturado o sin conexión): hay versión sencilla.
+  const [resting, setResting] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     if (!narrating) return;
     let alive = true;
-    const args = { groupId, kind: 'story' as const, from: 0, to: 0, label: 'Nuestra historia' };
+    const args = {
+      groupId,
+      kind: 'story' as const,
+      from: 0,
+      to: 0,
+      label: 'Nuestra historia',
+      ...(attempt ? { force: true } : {}),
+    };
+    setResting(false);
+    setState('writing');
     (async () => {
       try {
         const result = await narrate(args);
+        if (alive && result.reason === 'resting') setResting(true);
         let text = result.narration;
         if (alive && text) setNarration(text);
         if (text && !text.audioUrl) {
@@ -53,7 +73,8 @@ export default function StoryFilm() {
           if (alive) setNarration(text);
         }
       } catch {
-        // sin narradora: se cuenta con frases sencillas
+        // sin narradora: se cuenta con frases sencillas (y se avisa)
+        if (alive) setResting(true);
       }
       if (alive) setState('ready');
     })();
@@ -61,11 +82,13 @@ export default function StoryFilm() {
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupId, narrating]);
+  }, [groupId, narrating, attempt]);
 
   const [photos, setPhotos] = useState<Record<string, string> | null>(null);
   useEffect(() => {
-    fotosEnLinea(story.memories.map((m) => m.imageUri).filter((u): u is string => !!u)).then(setPhotos);
+    fotosEnLinea(story.memories.map((m) => m.imageUri).filter((u): u is string => !!u)).then(
+      setPhotos,
+    );
     prepareRecording().catch(() => {});
   }, [story]);
   const [waited, setWaited] = useState(false);
@@ -129,7 +152,11 @@ export default function StoryFilm() {
     const rec = recorder.current;
     if (rec) {
       recorder.current = null;
-      exporter.ready(await rec.stop(), 'junti-historia', `${group?.name ?? 'Junti'} · Nuestra historia`);
+      exporter.ready(
+        await rec.stop(),
+        'junti-historia',
+        `${group?.name ?? 'Junti'} · Nuestra historia`,
+      );
     }
   };
 
@@ -138,7 +165,10 @@ export default function StoryFilm() {
   const gap = gapNow ? parseGap(gapNow.id) : null;
   const addMemory = (year?: number) => {
     stopNarrator();
-    router.push({ pathname: '/publish', params: { groupId, memory: '1', ...(year ? { year: String(year) } : {}) } });
+    router.push({
+      pathname: '/publish',
+      params: { groupId, memory: '1', ...(year ? { year: String(year) } : {}) },
+    });
   };
   const close = () => {
     stopNarrator();
@@ -148,7 +178,12 @@ export default function StoryFilm() {
   return (
     <View ref={rootRef as never} style={styles.root}>
       {data ? (
-        <Pressable accessibilityRole="button" accessibilityLabel={paused ? 'Seguir' : 'Pausar'} disabled={exporter.live} onPress={() => (ended ? null : setPaused((p) => !p))} style={StyleSheet.absoluteFill}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={paused ? 'Seguir' : 'Pausar'}
+          disabled={exporter.live}
+          onPress={() => (ended ? null : setPaused((p) => !p))}
+          style={StyleSheet.absoluteFill}>
           <FilmPlayer
             data={data}
             voice={voice ? player : null}
@@ -165,7 +200,17 @@ export default function StoryFilm() {
         <View style={styles.wait}>
           <LogoMark size={44} inverted />
           <Text style={styles.waitTitle}>{narration?.title || 'Nuestra historia'}</Text>
-          {ready ? (
+          {ready && resting ? (
+            <Resting
+              kind="historia"
+              onWatch={() => {
+                primeNarrator();
+                setStarted(true);
+              }}
+              onRetry={() => setAttempt((a) => a + 1)}
+              onLater={close}
+            />
+          ) : ready ? (
             <Pressable
               accessibilityRole="button"
               onPress={() => {
@@ -178,7 +223,11 @@ export default function StoryFilm() {
             </Pressable>
           ) : (
             <>
-              <Text style={styles.waitNote}>{state === 'voicing' ? 'Poniéndole voz…' : 'La narradora está repasando vuestros recuerdos…'}</Text>
+              <Text style={styles.waitNote}>
+                {state === 'voicing'
+                  ? 'Poniéndole voz…'
+                  : 'La narradora está repasando vuestros recuerdos…'}
+              </Text>
               <Pressable accessibilityRole="button" onPress={() => setWaited(true)} hitSlop={10}>
                 <Text style={styles.skip}>Empezar sin esperar</Text>
               </Pressable>
@@ -187,10 +236,15 @@ export default function StoryFilm() {
         </View>
       )}
 
-      <View style={[styles.top, { paddingTop: insets.top + 8 }]} pointerEvents="box-none" {...NO_REC}>
+      <View
+        style={[styles.top, { paddingTop: insets.top + 8 }]}
+        pointerEvents="box-none"
+        {...NO_REC}>
         {!!data && (
           <View style={styles.bar}>
-            <View style={[styles.barFill, { width: `${Math.min(100, (time.t / time.total) * 100)}%` }]} />
+            <View
+              style={[styles.barFill, { width: `${Math.min(100, (time.t / time.total) * 100)}%` }]}
+            />
           </View>
         )}
         <View style={styles.row}>
@@ -198,21 +252,37 @@ export default function StoryFilm() {
             {group?.name} · Nuestra historia
           </Text>
           {!!data && (
-            <Pressable accessibilityRole="button" accessibilityLabel={paused ? 'Seguir' : 'Pausar'} onPress={() => setPaused((p) => !p)} style={styles.round}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={paused ? 'Seguir' : 'Pausar'}
+              onPress={() => setPaused((p) => !p)}
+              style={styles.round}>
               <Icon icon={paused ? Play : Pause} color={INK} />
             </Pressable>
           )}
           {!!voice && (
-            <Pressable accessibilityRole="button" accessibilityLabel={voiceOn ? 'Silenciar a la narradora' : 'Oír a la narradora'} onPress={() => setVoiceOn((v) => !v)} style={styles.round}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={voiceOn ? 'Silenciar a la narradora' : 'Oír a la narradora'}
+              onPress={() => setVoiceOn((v) => !v)}
+              style={styles.round}>
               <Icon icon={voiceOn ? Volume2 : VolumeX} color={INK} />
             </Pressable>
           )}
           {!!data && canRecordScreen() && !exporter.live && (
-            <Pressable accessibilityRole="button" accessibilityLabel="Exportar como vídeo" onPress={exportVideo} style={styles.round}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Exportar como vídeo"
+              onPress={exportVideo}
+              style={styles.round}>
               <Icon icon={Share} color={INK} />
             </Pressable>
           )}
-          <Pressable accessibilityRole="button" accessibilityLabel="Cerrar la historia" onPress={close} style={styles.round}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Cerrar la historia"
+            onPress={close}
+            style={styles.round}>
             <Icon icon={X} color={INK} />
           </Pressable>
         </View>
@@ -220,19 +290,30 @@ export default function StoryFilm() {
 
       {!!gap && !exporter.live && (
         <View style={[styles.end, { bottom: insets.bottom + 110 }]} {...NO_REC}>
-          <Pressable accessibilityRole="button" onPress={() => addMemory(Math.round((gap.from + gap.to) / 2))} style={styles.ask}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => addMemory(Math.round((gap.from + gap.to) / 2))}
+            style={styles.ask}>
             <Icon icon={Plus} size={18} color="#FFFFFF" />
-            <Text style={styles.askText}>Contar qué pasó en {gap.from === gap.to ? gap.from : `${gap.from}–${gap.to}`}</Text>
+            <Text style={styles.askText}>
+              Contar qué pasó en {gap.from === gap.to ? gap.from : `${gap.from}–${gap.to}`}
+            </Text>
           </Pressable>
         </View>
       )}
 
       {ended && !exporter.live && (
         <View style={[styles.end, { bottom: insets.bottom + 28 }]} {...NO_REC}>
-          <Pressable accessibilityRole="button" onPress={() => (control.current?.seek(0), setEnded(false), setPaused(false))} style={styles.endBtn}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => (control.current?.seek(0), setEnded(false), setPaused(false))}
+            style={styles.endBtn}>
             <Text style={styles.endText}>Volver a verla</Text>
           </Pressable>
-          <Pressable accessibilityRole="button" onPress={() => addMemory()} style={[styles.endBtn, styles.endGhost]}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => addMemory()}
+            style={[styles.endBtn, styles.endGhost]}>
             <Text style={[styles.endText, { color: '#F3F1E7' }]}>Añadir un recuerdo</Text>
           </Pressable>
         </View>
@@ -255,20 +336,66 @@ const styles = StyleSheet.create({
   waitTitle: { color: '#F3F1E7', fontFamily: Hand, fontSize: 42, textAlign: 'center' },
   waitNote: { color: '#A9A79C', fontFamily: Hand, fontSize: 22, textAlign: 'center' },
   skip: { color: '#E5568E', fontFamily: Hand, fontSize: 20, marginTop: 6 },
-  play: { marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F3F1E7', borderRadius: 26, height: 52, paddingHorizontal: 26 },
+  play: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F3F1E7',
+    borderRadius: 26,
+    height: 52,
+    paddingHorizontal: 26,
+  },
   playText: { color: INK, fontSize: 17, fontWeight: '600' },
   top: { position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: 14, gap: 10 },
-  bar: { height: 3, borderRadius: 2, backgroundColor: 'rgba(160,160,150,0.35)', overflow: 'hidden' },
+  bar: {
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: 'rgba(160,160,150,0.35)',
+    overflow: 'hidden',
+  },
   barFill: { height: 3, backgroundColor: '#E5568E' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   topTitle: { flex: 1, color: '#A9A79C', fontSize: 13, fontWeight: '600' },
-  round: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.86)', alignItems: 'center', justifyContent: 'center' },
+  round: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.86)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   end: { position: 'absolute', left: 0, right: 0, alignItems: 'center', gap: 10 },
-  endBtn: { backgroundColor: '#F3F1E7', borderRadius: 24, height: 48, paddingHorizontal: 28, justifyContent: 'center' },
-  endGhost: { backgroundColor: 'transparent', borderWidth: 1, borderColor: 'rgba(243,241,231,0.4)' },
+  endBtn: {
+    backgroundColor: '#F3F1E7',
+    borderRadius: 24,
+    height: 48,
+    paddingHorizontal: 28,
+    justifyContent: 'center',
+  },
+  endGhost: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: 'rgba(243,241,231,0.4)',
+  },
   endText: { color: INK, fontSize: 16, fontWeight: '600' },
-  ask: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: INK, borderRadius: 24, height: 48, paddingHorizontal: 22 },
+  ask: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: INK,
+    borderRadius: 24,
+    height: 48,
+    paddingHorizontal: 22,
+  },
   askText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
-  signature: { position: 'absolute', right: 16, flexDirection: 'row', alignItems: 'center', gap: 6, opacity: 0.9 },
+  signature: {
+    position: 'absolute',
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    opacity: 0.9,
+  },
   signatureText: { color: '#F3F1E7', fontSize: 16, fontWeight: '700' },
 });
