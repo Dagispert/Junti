@@ -4,7 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { ConnectionCard } from '@/components/connection-card';
 import { GroupHeader } from '@/components/group-header';
-import type { Moment, Proposal } from '@/data/types';
+import type { Moment, Proposal, Question } from '@/data/types';
 import { ChallengeBlock } from '@/components/challenge-block';
 import { FamilyCard, FamilyTag } from '@/components/family';
 import { MomentCard } from '@/components/moment-card';
@@ -54,27 +54,47 @@ export default function Today() {
       ? latest
       : undefined;
 
+  // Preguntas del grupo que aún no he respondido: arriba, a la vista (las tres más recientes).
+  const groupQuestions = questions.filter((q) => q.groupId === id);
+  const pending = groupQuestions
+    .filter(
+      (q) =>
+        q.createdBy !== me &&
+        (shown.current.has(q.id) || !q.answers.some((a) => a.userId === me)) &&
+        (!q.closesAt || q.closesAt > Date.now()),
+    )
+    .slice(0, 3);
+  pending.forEach((q) => shown.current.add(q.id));
+
+  // Todo lo del grupo en una sola línea de tiempo: los momentos, los retos
+  // (aunque nadie haya participado todavía) y las preguntas, encuestas y quiz.
   // Las respuestas a un mismo reto (o a la misma propuesta del día) van juntas,
-  // en un solo bloque, donde está la más nueva: así se ve a qué responde cada una.
+  // en un solo bloque, donde está su última novedad: así se ve a qué responde cada una.
   type Entry =
-    | { kind: 'moment'; moment: Moment }
-    | { kind: 'challenge'; challenge: Proposal; answers: Moment[] };
+    | { kind: 'moment'; moment: Moment; at: number }
+    | { kind: 'challenge'; challenge: Proposal; answers: Moment[]; at: number }
+    | { kind: 'question'; question: Question; at: number };
   const entries: Entry[] = [];
   const blocks = new Map<string, Entry & { kind: 'challenge' }>();
+  const block = (challenge: Proposal, at: number) => {
+    let b = blocks.get(challenge.id);
+    if (!b) {
+      b = { kind: 'challenge', challenge, answers: [], at };
+      blocks.set(challenge.id, b);
+      entries.push(b);
+    }
+    b.at = Math.max(b.at, at);
+    return b;
+  };
   for (const moment of feed) {
     const challenge = proposals.find((p) => p.id === moment.proposalId);
-    if (!challenge) {
-      entries.push({ kind: 'moment', moment });
-      continue;
-    }
-    const block = blocks.get(challenge.id);
-    if (block) block.answers.push(moment);
-    else {
-      const entry = { kind: 'challenge' as const, challenge, answers: [moment] };
-      blocks.set(challenge.id, entry);
-      entries.push(entry);
-    }
+    if (!challenge) entries.push({ kind: 'moment', moment, at: moment.sharedAt });
+    else block(challenge, moment.sharedAt).answers.push(moment);
   }
+  for (const c of proposals) if (c.groupId === id && c.kind === 'challenge') block(c, c.startsAt);
+  for (const q of groupQuestions)
+    if (!pending.includes(q)) entries.push({ kind: 'question', question: q, at: q.createdAt });
+  entries.sort((a, b) => b.at - a.at);
 
   return (
     <Screen header={<GroupHeader group={group} />}>
@@ -112,20 +132,10 @@ export default function Today() {
           </View>
         </FamilyCard>
       )}
-      {/* Preguntas del grupo que aún no he respondido (las tres más recientes). */}
-      {questions
-        .filter(
-          (q) =>
-            q.groupId === id &&
-            q.createdBy !== me &&
-            (shown.current.has(q.id) || !q.answers.some((a) => a.userId === me)) &&
-            (!q.closesAt || q.closesAt > Date.now()),
-        )
-        .slice(0, 3)
-        .map((q) => {
-          shown.current.add(q.id);
-          return <QuestionCard key={q.id} question={q} />;
-        })}
+      {/* Preguntas del grupo que aún no he respondido. */}
+      {pending.map((q) => (
+        <QuestionCard key={q.id} question={q} />
+      ))}
       <UpcomingCard groupId={group.id} />
       <OnThisDay groupId={group.id} />
       {lastWeekReady != null && (
@@ -136,7 +146,7 @@ export default function Today() {
           hint="Ya está vuestro resumen"
         />
       )}
-      {feed.length === 0 && (
+      {entries.length === 0 && (
         <Lead strong="Aquí aparecerán los momentos del grupo.">
           Comparte el primero con el botón «+» e invita a los demás con «Invitar».
         </Lead>
@@ -145,6 +155,10 @@ export default function Today() {
         entry.kind === 'challenge' ? (
           <Appear key={`reto-${entry.challenge.id}`} index={i + 1}>
             <ChallengeBlock challenge={entry.challenge} answers={entry.answers} />
+          </Appear>
+        ) : entry.kind === 'question' ? (
+          <Appear key={`pregunta-${entry.question.id}`} index={i + 1}>
+            <QuestionCard question={entry.question} />
           </Appear>
         ) : (
           <Appear key={entry.moment.id} index={i + 1}>
