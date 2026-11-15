@@ -1,4 +1,3 @@
-import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { ArrowUpRight, Pause, Play } from 'lucide-react-native';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -12,6 +11,7 @@ import { relative } from '@/lib/time';
 
 import { FamilyCard, FamilyTag } from './family';
 import { Icon } from './icon';
+import { RecordSleeve } from './soundtrack';
 import { Avatar } from './ui';
 
 /** Una canción nueva en la banda sonora, como una publicación más en «Hoy»: se puede escuchar ahí mismo. */
@@ -41,19 +41,11 @@ export function SongCard({ song }: { song: Song }) {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={audio.playing ? `Parar ${song.title}` : `Escuchar ${song.title}`}
-          onPress={() => (audio.available ? audio.toggle() : Linking.openURL(link))}
-          style={styles.cover}>
-          {song.artwork ? (
-            <Image
-              source={{ uri: song.artwork }}
-              style={StyleSheet.absoluteFill}
-              contentFit="cover"
-            />
-          ) : (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: fam.tint }]} />
-          )}
-          <View style={[styles.play, { backgroundColor: 'rgba(0,0,0,.45)' }]}>
-            <Icon icon={audio.playing ? Pause : Play} size={22} color="#FFFFFF" />
+          onPress={() => (audio.available ? audio.toggle() : Linking.openURL(link))}>
+          {/* la carátula, y el disco que sale de ella (gira mientras suena) */}
+          <RecordSleeve song={song} size={96} playing={audio.playing} />
+          <View style={[styles.play, { backgroundColor: color }]}>
+            <Icon icon={audio.playing ? Pause : Play} size={18} color="#FFFFFF" />
           </View>
         </Pressable>
         <View style={{ flex: 1, gap: 2 }}>
@@ -98,18 +90,14 @@ const styles = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   who: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  cover: {
-    width: 84,
-    height: 84,
-    borderRadius: 10,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   play: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    position: 'absolute',
+    left: 6,
+    bottom: 6,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    boxShadow: '0 4px 10px rgba(0,0,0,.25)',
     alignItems: 'center',
     justifyContent: 'center',
   },
