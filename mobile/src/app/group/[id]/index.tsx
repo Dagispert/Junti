@@ -1,6 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useRef } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRef, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ConnectionCard } from '@/components/connection-card';
 import { GroupHeader } from '@/components/group-header';
@@ -36,6 +37,8 @@ export default function Today() {
   const group = groupById(id);
   // Lo que respondo aquí se queda a la vista (para ver el resultado) hasta salir.
   const shown = useRef(new Set<string>());
+  // Lo de antes de hoy se asoma difuminado; con un toque, se ve entero.
+  const [earlierOpen, setEarlierOpen] = useState(false);
   if (!group) return <Missing />;
 
   const feed = moments.filter((m) => m.groupId === id);
@@ -102,6 +105,38 @@ export default function Today() {
     if (song.groupId === id) entries.push({ kind: 'song', song, at: song.createdAt });
   entries.sort((a, b) => b.at - a.at);
 
+  // Hoy, primero; lo de antes, después (y, hasta que se pide, solo asomando).
+  const midnight = new Date().setHours(0, 0, 0, 0);
+  const today = entries.filter((e) => e.at >= midnight);
+  const earlier = entries.filter((e) => e.at < midnight);
+  const card = (entry: Entry, i: number, animate = true) => {
+    const inner =
+      entry.kind === 'challenge' ? (
+        <ChallengeBlock challenge={entry.challenge} answers={entry.answers} />
+      ) : entry.kind === 'song' ? (
+        <SongCard song={entry.song} />
+      ) : entry.kind === 'question' ? (
+        <QuestionCard question={entry.question} />
+      ) : (
+        <MomentCard moment={entry.moment} />
+      );
+    const key =
+      entry.kind === 'challenge'
+        ? `reto-${entry.challenge.id}`
+        : entry.kind === 'song'
+          ? `cancion-${entry.song.id}`
+          : entry.kind === 'question'
+            ? `pregunta-${entry.question.id}`
+            : entry.moment.id;
+    return animate ? (
+      <Appear key={key} index={i + 1}>
+        {inner}
+      </Appear>
+    ) : (
+      <View key={key}>{inner}</View>
+    );
+  };
+
   return (
     <Screen header={<GroupHeader group={group} />}>
       <ConnectionCard group={group} />
@@ -157,25 +192,44 @@ export default function Today() {
           Comparte el primero con el botón «+» e invita a los demás con «Invitar».
         </Lead>
       )}
-      {entries.map((entry, i) =>
-        entry.kind === 'challenge' ? (
-          <Appear key={`reto-${entry.challenge.id}`} index={i + 1}>
-            <ChallengeBlock challenge={entry.challenge} answers={entry.answers} />
-          </Appear>
-        ) : entry.kind === 'song' ? (
-          <Appear key={`cancion-${entry.song.id}`} index={i + 1}>
-            <SongCard song={entry.song} />
-          </Appear>
-        ) : entry.kind === 'question' ? (
-          <Appear key={`pregunta-${entry.question.id}`} index={i + 1}>
-            <QuestionCard question={entry.question} />
-          </Appear>
+      {today.map((entry, i) => card(entry, i))}
+      {earlier.length > 0 &&
+        (earlierOpen ? (
+          <>
+            <Divider label="Antes de hoy" />
+            {earlier.map((entry, i) => card(entry, i))}
+          </>
         ) : (
-          <Appear key={entry.moment.id} index={i + 1}>
-            <MomentCard moment={entry.moment} />
-          </Appear>
-        ),
-      )}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Seguir viendo lo anterior: ${earlier.length}`}
+            onPress={() => setEarlierOpen(true)}>
+            {/* lo siguiente asoma, cada vez más difuminado */}
+            <View style={styles.peek} pointerEvents="none">
+              {/* anclado arriba: se ve el principio de lo siguiente */}
+              <View style={[styles.peekInner, { gap: Spacing.three }]}>
+                {earlier.slice(0, 2).map((entry, i) => card(entry, i, false))}
+              </View>
+              <LinearGradient
+                colors={[`${theme.background}00`, `${theme.background}D9`, theme.background]}
+                locations={[0, 0.55, 1]}
+                start={{ x: 0.5, y: 0 }}
+                end={{ x: 0.5, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+            </View>
+            <View style={styles.more}>
+              <Text style={[styles.moreTitle, { color: theme.text }]}>
+                {today.length ? 'Hasta aquí lo de hoy' : 'Hoy todavía no ha pasado nada'}
+              </Text>
+              <View style={[styles.moreButton, { backgroundColor: theme.text }]}>
+                <Text style={{ color: theme.background, fontSize: 15, fontWeight: '600' }}>
+                  Seguir viendo lo anterior
+                </Text>
+              </View>
+            </View>
+          </Pressable>
+        ))}
     </Screen>
   );
 }
@@ -192,7 +246,26 @@ export function Missing() {
   );
 }
 
+/** Una raya con su texto en medio («Antes de hoy»). */
+function Divider({ label }: { label: string }) {
+  const theme = useTheme();
+  return (
+    <View style={styles.divider}>
+      <View style={[styles.line, { backgroundColor: theme.soft }]} />
+      <Text style={{ color: theme.textSecondary, fontSize: 13, fontWeight: '500' }}>{label}</Text>
+      <View style={[styles.line, { backgroundColor: theme.soft }]} />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  peek: { height: 230, overflow: 'hidden' },
+  peekInner: { position: 'absolute', top: 0, left: 0, right: 0 },
+  more: { alignItems: 'center', gap: 12, marginTop: -40, paddingBottom: 8 },
+  moreTitle: { fontSize: 17, fontWeight: '600', letterSpacing: -0.2 },
+  moreButton: { height: 44, paddingHorizontal: 20, borderRadius: 22, justifyContent: 'center' },
+  divider: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 4 },
+  line: { flex: 1, height: 1 },
   proposal: { padding: 24, gap: 16 },
   question: { fontSize: 28, lineHeight: 32, fontWeight: '500', letterSpacing: -0.6 },
   actions: { flexDirection: 'row', alignItems: 'center', marginTop: 4, marginLeft: -2 },
