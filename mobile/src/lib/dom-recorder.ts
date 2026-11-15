@@ -42,21 +42,58 @@ export async function preloadImages(root: HTMLElement, more: (string | undefined
   );
 }
 
-const svgs = new Map<string, HTMLImageElement>();
-/** Un SVG convertido en imagen (se rehace solo si cambia). */
-function svgImage(el: SVGElement): HTMLImageElement | null {
-  const xml = new XMLSerializer().serializeToString(el);
-  let img = svgs.get(xml);
-  if (!img) {
-    if (svgs.size > 60) svgs.clear();
-    img = new Image();
-    const sized = xml.includes('xmlns=')
-      ? xml
-      : xml.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
-    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(sized)}`;
-    svgs.set(xml, img);
+/**
+ * Un SVG convertido en imagen. Para no agotar la memoria del móvil (una
+ * película entera, con sus fotos, en cada fotograma), cada SVG tiene como
+ * mucho una imagen lista y otra preparándose: se rehace unas 15 veces por
+ * segundo y solo cuando la anterior ya está lista; mientras, se dibuja la
+ * última. Se pasa por un Blob (sin copiar el texto en una dirección data:).
+ */
+type SvgState = { ready: HTMLCanvasElement | null; busy: boolean; at: number; xml: string };
+/** A qué escala se graba (para pasar cada SVG a mapa de bits una sola vez). */
+let recScale = 2;
+const svgs = new WeakMap<SVGElement, SvgState>();
+function svgImage(el: SVGElement): HTMLCanvasElement | null {
+  let st = svgs.get(el);
+  if (!st) {
+    st = { ready: null, busy: false, at: 0, xml: '' };
+    svgs.set(el, st);
   }
-  return img.complete && img.naturalWidth ? img : null;
+  const now = performance.now();
+  if (!st.busy && now - st.at > 66) {
+    st.at = now;
+    const raw = new XMLSerializer().serializeToString(el);
+    if (raw !== st.xml) {
+      st.xml = raw;
+      const xml = raw.includes('xmlns=')
+        ? raw
+        : raw.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+      const url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml' }));
+      const img = new Image();
+      st.busy = true;
+      const s = st;
+      const r = el.getBoundingClientRect();
+      img.onload = () => {
+        // Se pinta una sola vez en un mapa de bits: dibujar un SVG complejo
+        // en cada fotograma obligaría a rehacer todos sus trazos cada vez.
+        const c = s.ready ?? document.createElement('canvas');
+        c.width = Math.max(1, Math.round(r.width * recScale));
+        c.height = Math.max(1, Math.round(r.height * recScale));
+        const x = c.getContext('2d')!;
+        x.clearRect(0, 0, c.width, c.height);
+        x.drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        s.ready = c;
+        s.busy = false;
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        s.busy = false;
+      };
+      img.src = url;
+    }
+  }
+  return st.ready;
 }
 
 const px = (v: string) => parseFloat(v) || 0;
@@ -470,6 +507,7 @@ export function recordScreen(
   const scale = width / rect.width;
   const W = Math.round(rect.width * scale);
   const H = Math.round((rect.height * scale) / 2) * 2;
+  recScale = scale;
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
@@ -479,7 +517,8 @@ export function recordScreen(
   const type = tested ?? VIDEO_TYPES.find((t) => MediaRecorder.isTypeSupported(t)) ?? '';
   const recorder = new MediaRecorder(stream, {
     ...(type ? { mimeType: type } : {}),
-    videoBitsPerSecond: 8_000_000,
+    // (más bitrate llena la memoria del móvil en vídeos largos)
+    videoBitsPerSecond: 5_000_000,
   });
   const chunks: Blob[] = [];
   recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);

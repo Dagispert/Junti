@@ -65,7 +65,7 @@ export function FilmPlayer({
     let playing: Plan['voces'][number] | null = null;
     const dayAt = plan.calendario[0] + FLASH + 0.2;
     const loop = (now: number) => {
-      const dt = Math.min(0.1, (now - last) / 1000);
+      const dt = Math.min(0.25, (now - last) / 1000);
       last = now;
       if (!stop.current && !ended.current) t.current += dt;
       const time = Math.min(t.current, plan.total);

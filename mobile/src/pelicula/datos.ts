@@ -208,7 +208,7 @@ export function datosPelicula(
 }
 
 /** Copia las fotos en la página (en pequeño), para que el vídeo exportado las lleve dentro. */
-export async function fotosEnLinea(uris: string[], size = 720): Promise<Record<string, string>> {
+export async function fotosEnLinea(uris: string[], size = 560): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
   await Promise.all(
     uris.map(
@@ -223,7 +223,7 @@ export async function fotosEnLinea(uris: string[], size = 720): Promise<Record<s
               c.width = Math.round(img.naturalWidth * s);
               c.height = Math.round(img.naturalHeight * s);
               c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
-              out[uri] = c.toDataURL('image/jpeg', 0.82);
+              out[uri] = c.toDataURL('image/jpeg', 0.78);
             } catch {
               // sin permiso para leerla: se queda la dirección original
             }
