@@ -17,12 +17,14 @@ import { type ChatImport, type ChatPhoto, readChat } from '@/lib/whatsapp';
 export default function Importar() {
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
   const theme = useTheme();
-  const { group, addMoment } = useStore();
+  const { group, addMoment, user, me } = useStore();
   const g = group(groupId);
   const [stage, setStage] = useState<'pick' | 'reading' | 'choose' | 'saving' | 'done'>('pick');
   const [chat, setChat] = useState<ChatImport | null>(null);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [names, setNames] = useState(true);
+  // quién es quién: el nombre en WhatsApp → la persona del grupo ('' = nadie de Junti)
+  const [who, setWho] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState('');
   const [progress, setProgress] = useState({ done: 0, total: 0, failed: 0 });
   const input = useRef<HTMLInputElement | null>(null);
@@ -57,6 +59,33 @@ export default function Importar() {
         return;
       }
       setChat({ ...c, photos: c.photos.slice(0, 800) });
+      // emparejar por nombre (o apodo), sin tildes ni mayúsculas
+      const norm = (x: string) =>
+        x
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase()
+          .trim();
+      const members = (g?.memberIds ?? []).map((id) => {
+        const u = user(id);
+        return {
+          id,
+          keys: [u.name, u.name.split(' ')[0], g?.nicknames[id], u.about?.nickname]
+            .filter(Boolean)
+            .map((k) => norm(k as string)),
+        };
+      });
+      const guess: Record<string, string> = {};
+      for (const sname of c.senders) {
+        const n = norm(sname);
+        const first = n.split(' ')[0];
+        const hit =
+          members.find((m) => m.keys.includes(n)) ??
+          members.find((m) => m.keys.includes(first)) ??
+          (/^(tu|tú|you|yo)$/.test(n) ? members.find((m) => m.id === me) : undefined);
+        guess[sname] = hit?.id ?? '';
+      }
+      setWho(guess);
       setStage('choose');
     } catch {
       setNotice(
@@ -94,8 +123,10 @@ export default function Importar() {
       try {
         const blob = await p.load();
         const uri = URL.createObjectURL(blob);
+        // a nombre de quien la mandó (si está en el grupo); si no, su nombre en el texto
+        const credited = p.sender ? who[p.sender] || undefined : undefined;
         const text =
-          names && p.sender
+          !credited && names && p.sender
             ? p.caption
               ? `${p.caption} — ${p.sender}`
               : `De ${p.sender}`
@@ -105,6 +136,7 @@ export default function Importar() {
           media: { uri, kind: 'photo', mime: blob.type || 'image/jpeg' },
           text: text?.slice(0, 1000),
           rememberedAt: p.at,
+          creditedTo: credited,
         });
         URL.revokeObjectURL(uri);
       } catch (e) {
@@ -190,23 +222,76 @@ export default function Importar() {
             {chat.photos.length} fotos, de {years[0]?.[0]} a {years[years.length - 1]?.[0]}. Toca
             las que quieras guardar.
           </Text>
-          <Pressable
-            accessibilityRole="switch"
-            aria-checked={names}
-            onPress={() => setNames((v) => !v)}
-            style={[styles.toggle, { backgroundColor: theme.soft }]}>
+          {/* quién es quién: cada recuerdo sale a nombre de quien lo mandó */}
+          {chat.senders.length > 0 && (
             <View
               style={[
-                styles.check,
-                { backgroundColor: names ? theme.text : 'transparent', borderColor: theme.text },
+                styles.box,
+                { backgroundColor: theme.card, boxShadow: theme.shadow, gap: 12 },
               ]}>
-              {names && <Icon icon={Check} size={14} color={theme.background} />}
+              <Text style={[styles.h, { color: theme.text }]}>¿Quién es quién?</Text>
+              <Text style={{ color: theme.textSecondary, fontSize: 14, lineHeight: 19 }}>
+                Cada recuerdo saldrá a nombre de quien lo mandó (con «lo importaste tú»).
+              </Text>
+              {chat.senders.map((sname) => (
+                <View key={sname} style={{ gap: 6 }}>
+                  <Text style={{ color: theme.text, fontSize: 15, fontWeight: '600' }}>
+                    «{sname}» en WhatsApp es…
+                  </Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                    {[...(g?.memberIds ?? []), ''].map((id) => {
+                      const on = (who[sname] ?? '') === id;
+                      return (
+                        <Pressable
+                          key={id || 'nadie'}
+                          accessibilityRole="radio"
+                          aria-checked={on}
+                          onPress={() => setWho((w) => ({ ...w, [sname]: id }))}
+                          style={[
+                            styles.person,
+                            { backgroundColor: on ? theme.accent : theme.soft },
+                          ]}>
+                          <Text
+                            style={{
+                              color: on ? theme.onAccent : theme.text,
+                              fontSize: 14,
+                              fontWeight: '500',
+                            }}>
+                            {id
+                              ? id === me
+                                ? 'Yo'
+                                : user(id).name.split(' ')[0]
+                              : 'No está en Junti'}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              ))}
+              {chat.senders.some((sname) => !who[sname]) && (
+                <Pressable
+                  accessibilityRole="switch"
+                  aria-checked={names}
+                  onPress={() => setNames((v) => !v)}
+                  style={[styles.toggle, { backgroundColor: theme.soft }]}>
+                  <View
+                    style={[
+                      styles.check,
+                      {
+                        backgroundColor: names ? theme.text : 'transparent',
+                        borderColor: theme.text,
+                      },
+                    ]}>
+                    {names && <Icon icon={Check} size={14} color={theme.background} />}
+                  </View>
+                  <Text style={{ color: theme.text, fontSize: 14, flex: 1 }}>
+                    A quien no está en Junti, poner su nombre en el texto («De …»)
+                  </Text>
+                </Pressable>
+              )}
             </View>
-            <Text style={{ color: theme.text, fontSize: 15, flex: 1 }}>
-              Poner quién la mandó ({chat.senders.slice(0, 3).join(', ')}
-              {chat.senders.length > 3 ? '…' : ''})
-            </Text>
-          </Pressable>
+          )}
           {years.map(([year, list]) => {
             const all = list.every((p) => picked.has(p.name));
             return (
@@ -365,6 +450,7 @@ const styles = StyleSheet.create({
   h: { fontSize: 18, fontWeight: '600' },
   p: { fontSize: 15, lineHeight: 21 },
   b: { fontWeight: '700' },
+  person: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
   toggle: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 14 },
   check: {
     width: 22,

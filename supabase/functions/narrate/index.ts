@@ -407,7 +407,7 @@ Deno.serve(async (req) => {
 
     const { data: rows, error } = await supabase
       .from('moments')
-      .select('id, author_id, text, created_at, proposal_id, place_name, author_tz')
+      .select('id, author_id, credited_to, text, created_at, proposal_id, place_name, author_tz')
       .eq('group_id', groupId)
       .is('deleted_at', null)
       .gte('created_at', new Date(from).toISOString())
@@ -415,7 +415,10 @@ Deno.serve(async (req) => {
       .order('created_at')
       .limit(200);
     if (error) throw error;
-    const moments = (rows ?? []).filter((m) => !optedOut.has(m.author_id));
+    // un recuerdo importado cuenta como de quien lo mandó
+    const moments = (rows ?? [])
+      .map((m) => ({ ...m, author_id: (m.credited_to as string | null) ?? m.author_id }))
+      .filter((m) => !optedOut.has(m.author_id));
 
     const { data: existing } = await supabase
       .from('narrations')
@@ -591,7 +594,7 @@ async function tellStory(
   const [{ data: rows, error }, { data: originRows }, { data: firstLive }] = await Promise.all([
     supabase
       .from('moments')
-      .select('id, author_id, text, created_at, place_name, author_tz')
+      .select('id, author_id, credited_to, text, created_at, place_name, author_tz')
       .eq('group_id', groupId)
       .eq('memory', true)
       .is('deleted_at', null)
@@ -612,7 +615,9 @@ async function tellStory(
       .limit(1),
   ]);
   if (error) throw error;
-  const memories = ((rows ?? []) as StoryMemory[]).filter((m) => !optedOut.has(m.author_id));
+  const memories = ((rows ?? []) as (StoryMemory & { credited_to?: string | null })[])
+    .map((m) => ({ ...m, author_id: m.credited_to ?? m.author_id }))
+    .filter((m) => !optedOut.has(m.author_id));
   const origins = (originRows ?? []) as StoryOrigin[];
   if (!memories.length && !origins.length) return { narration: null, reason: 'empty' };
 

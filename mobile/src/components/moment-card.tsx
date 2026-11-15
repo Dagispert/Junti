@@ -79,7 +79,14 @@ export function MomentCard({
   const when = moment.memory
     ? `${new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }).format(moment.createdAt)}`
     : clockIn(moment.authorTz, moment.createdAt);
-  const where = `${when}${placeName ? ` · ${placeName}` : !moment.memory && author.city ? ` en ${author.city}` : ''}`;
+  const where =
+    `${when}${placeName ? ` · ${placeName}` : !moment.memory && author.city ? ` en ${author.city}` : ''}` +
+    // importado de WhatsApp por otra persona
+    (moment.uploaderId && moment.uploaderId !== moment.authorId
+      ? moment.uploaderId === me
+        ? ' · lo importaste tú'
+        : ` · lo importó ${user(moment.uploaderId).name.split(' ')[0]}`
+      : '');
 
   /** Reaccionar: al ponerla, el emoji sale volando por encima de la publicación. */
   const react = (emoji: string) => {

@@ -150,7 +150,10 @@ export type MemoryAddition = {
 export type Moment = {
   id: string;
   groupId: string;
+  /** a nombre de quién sale (en un recuerdo importado, quien lo mandó) */
   authorId: string;
+  /** quién lo subió, si no es el autor (recuerdo importado de WhatsApp) */
+  uploaderId?: string;
   text?: string;
   /** URL firmada y temporal de la foto, si la hay. */
   imageUri?: string;

@@ -77,6 +77,8 @@ type Store = {
     place?: Place;
     /** Si es un recuerdo: cuándo pasó. */
     rememberedAt?: number;
+    /** En un recuerdo importado: a nombre de quién va (alguien del grupo). */
+    creditedTo?: string;
     /** Más fotos, además de la principal. */
     morePhotos?: string[];
     /** Más fotos o vídeos, además de la principal (en este orden). */
@@ -434,7 +436,7 @@ async function load(me: string): Promise<Data> {
     supabase
       .from('moments')
       .select(
-        'id, group_id, author_id, text, created_at, shared_at, memory, edited_at, author_tz, proposal_id, place_name, lat, lng, ' +
+        'id, group_id, author_id, credited_to, text, created_at, shared_at, memory, edited_at, author_tz, proposal_id, place_name, lat, lng, ' +
           'reactions(emoji, user_id), comments(id, user_id, text, created_at, deleted_at, edited_at, reply_to), ' +
           'memory_additions(id, author_id, text, created_at, edited_at), ' +
           'moment_media(position, addition_id, media_assets(id, storage_path, kind, thumb_path, duration_s, waveform, clip_start, clip_end))',
@@ -644,7 +646,9 @@ async function load(me: string): Promise<Data> {
     return {
       id: row.id,
       groupId: row.group_id,
-      authorId: row.author_id,
+      // un recuerdo importado sale a nombre de quien lo mandó; quien lo subió sigue siendo el dueño
+      authorId: row.credited_to ?? row.author_id,
+      uploaderId: row.credited_to ? row.author_id : undefined,
       text: row.text ?? undefined,
       // En los vídeos, «imageUri» es su portada: así sirven igual en carretes, polaroids y mapa.
       imageUri:
@@ -1010,6 +1014,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       rememberedAt,
       morePhotos,
       more,
+      creditedTo,
     }) => {
       const visual = media ?? (imageUri ? { uri: imageUri, kind: 'photo' as const } : undefined);
       const stamp = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -1060,6 +1065,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             ...(rememberedAt && {
               memory: true,
               created_at: new Date(rememberedAt).toISOString(),
+              ...(creditedTo && { credited_to: creditedTo }),
             }),
             place_name: place ? [place.name, place.country].filter(Boolean).join(', ') : null,
             lat: place?.lat ?? null,

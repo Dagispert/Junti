@@ -69,6 +69,11 @@ export default function MomentView() {
                     ? ` en ${author.city}`
                     : ''}{' '}
                 · {date}
+                {moment.uploaderId && moment.uploaderId !== moment.authorId
+                  ? moment.uploaderId === me
+                    ? ' · lo importaste tú'
+                    : ` · lo importó ${user(moment.uploaderId).name.split(' ')[0]}`
+                  : ''}
               </Text>
             </View>
           </View>
@@ -123,7 +128,7 @@ export default function MomentView() {
                 <Icon icon={Share} size={18} color={theme.text} />
               </Pressable>
             )}
-            {moment.authorId !== me && (
+            {moment.authorId !== me && moment.uploaderId !== me && (
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={
@@ -163,7 +168,7 @@ export default function MomentView() {
                 )}
               </Pressable>
             )}
-            {moment.authorId === me && (
+            {(moment.uploaderId ?? moment.authorId) === me && (
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Editar o eliminar"
