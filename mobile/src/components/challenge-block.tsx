@@ -12,6 +12,7 @@ import { daysLeft } from '@/lib/time';
 import { FamilyCard, FamilyTag } from './family';
 import { Icon } from './icon';
 import { MomentCard } from './moment-card';
+import { SPRINGY_CSS, useSmoothHeight } from './motion';
 import { NudgeBell } from './nudge-bell';
 import { Avatar, AvatarRow, Photo } from './ui';
 
@@ -60,6 +61,8 @@ export function ChallengeBlock({ challenge, answers }: { challenge: Proposal; an
   const grow = useRef<DOMRect | null>(null);
   const shrink = useRef<{ id: string; rect: DOMRect } | null>(null);
   const opened = ordered.find((m) => m.id === openId);
+  // La tarjeta crece al abrir una respuesta y encoge al cerrarla, sin saltos.
+  const cardRef = useSmoothHeight([openId, ordered.length]);
   const rest = ordered.filter((m) => m.id !== openId);
 
   const openAnswer = (id: string | null) => {
@@ -86,31 +89,60 @@ export function ChallengeBlock({ challenge, answers }: { challenge: Proposal; an
     const box = panel.current;
     const pic = photo.current;
     if (!openId || !from || !box || typeof box.animate !== 'function') return;
+    void box;
     const ease = 'cubic-bezier(.2,.85,.25,1)';
-    const height = box.getBoundingClientRect().height;
-    box.animate(
-      [
-        { height: `${from.height}px`, overflow: 'hidden' },
-        { height: `${height}px`, overflow: 'hidden' },
-      ],
-      {
-        duration: 560,
-        easing: ease,
-      },
-    );
+    // (el alto de la tarjeta lo anima useSmoothHeight: crece y encoge sin saltos)
     if (pic) {
       const to = pic.getBoundingClientRect();
-      pic.style.transformOrigin = 'top left';
-      pic.animate(
-        [
-          {
-            transform: `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${from.width / to.width}, ${from.height / to.height})`,
-            borderRadius: '18px',
-          },
-          { transform: 'none' },
-        ],
-        { duration: 560, easing: ease },
-      );
+      const image = opened?.imageUri;
+      if (image) {
+        // Vuela una copia de la miniatura (su imagen ya está cargada); la foto
+        // grande se enseña al aterrizar: así no se ve en blanco ni salta.
+        pic.style.visibility = 'hidden';
+        const ghost = document.createElement('div');
+        Object.assign(ghost.style, {
+          position: 'fixed',
+          left: `${from.left}px`,
+          top: `${from.top}px`,
+          width: `${from.width}px`,
+          height: `${from.height}px`,
+          background: `#2B2E33 url("${image}") center / cover no-repeat`,
+          borderRadius: '18px',
+          zIndex: '999',
+          pointerEvents: 'none',
+          transformOrigin: 'top left',
+          boxShadow: '0 18px 40px rgba(20,22,26,0.25)',
+        });
+        document.body.appendChild(ghost);
+        const fly = ghost.animate(
+          [
+            { transform: 'none', borderRadius: '18px' },
+            {
+              transform: `translate(${to.left - from.left}px, ${to.top - from.top}px) scale(${to.width / from.width}, ${to.height / from.height})`,
+              borderRadius: '12px',
+            },
+          ],
+          { duration: 560, easing: SPRINGY_CSS, fill: 'forwards' },
+        );
+        const land = () => {
+          pic.style.visibility = '';
+          ghost.remove();
+        };
+        fly.onfinish = land;
+        fly.oncancel = land;
+      } else {
+        pic.style.transformOrigin = 'top left';
+        pic.animate(
+          [
+            {
+              transform: `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${from.width / to.width}, ${from.height / to.height})`,
+              borderRadius: '18px',
+            },
+            { transform: 'none' },
+          ],
+          { duration: 560, easing: ease },
+        );
+      }
       // Lo demás (autor, reacciones, comentarios) aparece detrás, en cascada.
       [...(pic.parentElement?.children ?? [])]
         .filter((el) => el !== pic)
@@ -141,7 +173,7 @@ export function ChallengeBlock({ challenge, answers }: { challenge: Proposal; an
       : `${list[0].toUpperCase()}${list.slice(1)} ${people.length === 1 ? 'ha' : 'han'} participado`;
 
   return (
-    <FamilyCard family={family} style={{ padding: 16, gap: 12 }}>
+    <FamilyCard family={family} boxRef={cardRef} style={{ padding: 16, gap: 12 }}>
       <View style={styles.head}>
         <FamilyTag
           family={family}

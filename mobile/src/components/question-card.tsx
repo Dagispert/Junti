@@ -9,6 +9,7 @@ import { daysLeft, relative } from '@/lib/time';
 
 import { type Burst, EmojiBursts } from './emoji-burst';
 import { FamilyCard, FamilyTag } from './family';
+import { useSmoothHeight } from './motion';
 import { NudgeBell } from './nudge-bell';
 import { Icon } from './icon';
 import { OwnerActions } from './owner-actions';
@@ -99,10 +100,13 @@ export function QuestionCard({ question }: { question: Question }) {
   };
 
   const total = question.answers.length;
+  // Al responder salen los resultados: la tarjeta crece sin saltos.
+  const cardRef = useSmoothHeight([reveal, total, mine?.choice, mine?.text]);
 
   return (
     <FamilyCard
       family={question.kind}
+      boxRef={cardRef}
       style={[
         styles.card,
         web({

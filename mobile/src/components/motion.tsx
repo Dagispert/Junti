@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   Platform,
   Pressable,
@@ -155,4 +155,56 @@ export function usePop() {
     s.value = withSequence(withTiming(0.86, { duration: 90, easing: EASE }), withSpring(1, SPRING));
   };
   return { style, pop };
+}
+
+/** La curva de los cambios de tamaño: rápida y posándose con un rebote mínimo. */
+export const SPRINGY_CSS = 'cubic-bezier(.22,1.06,.36,1)';
+
+/**
+ * Que una tarjeta cambie de alto sin saltos (solo en la web): cuando cambian
+ * las «deps», pasa de su alto de antes al nuevo con suavidad (al crecer y al
+ * encoger). Devuelve la función para su «ref».
+ */
+export function useSmoothHeight(deps: unknown[]) {
+  const node = useRef<HTMLElement | null>(null);
+  const last = useRef(0);
+  const busy = useRef(false);
+  const ref = useCallback((n: unknown) => {
+    node.current = Platform.OS === 'web' ? (n as HTMLElement | null) : null;
+    if (node.current) last.current = node.current.getBoundingClientRect().height;
+  }, []);
+  // El alto «de antes», al día (imágenes que cargan, textos que cambian…).
+  useEffect(() => {
+    const el = node.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => {
+      if (!busy.current) last.current = el.getBoundingClientRect().height;
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  useLayoutEffect(() => {
+    const el = node.current;
+    if (!el || typeof el.animate !== 'function') return;
+    const to = el.getBoundingClientRect().height;
+    const from = last.current;
+    last.current = to;
+    if (!from || Math.abs(to - from) < 2) return;
+    busy.current = true;
+    const overflow = el.style.overflow;
+    el.style.overflow = 'hidden';
+    const a = el.animate([{ height: `${from}px` }, { height: `${to}px` }], {
+      duration: 560,
+      easing: SPRINGY_CSS,
+    });
+    const done = () => {
+      el.style.overflow = overflow;
+      busy.current = false;
+      last.current = el.getBoundingClientRect().height;
+    };
+    a.onfinish = done;
+    a.oncancel = done;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+  return ref;
 }

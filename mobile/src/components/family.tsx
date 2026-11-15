@@ -52,15 +52,17 @@ export function FamilyCard({
   family,
   children,
   style,
+  boxRef,
 }: {
   family: FamilyId;
   children: ReactNode;
   style?: StyleProp<ViewStyle>;
+  boxRef?: (node: unknown) => void;
 }) {
   const f = useFamily(family);
   const mode = useFamilyColorMode();
   return (
-    <Card style={[mode === 'tinted' && { backgroundColor: f.tint }, style]}>
+    <Card boxRef={boxRef} style={[mode === 'tinted' && { backgroundColor: f.tint }, style]}>
       {mode === 'accent' && family !== 'moment' && (
         <View pointerEvents="none" style={[styles.tab, { backgroundColor: f.color }]} />
       )}

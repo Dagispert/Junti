@@ -400,10 +400,21 @@ const webTransition = {
 } as object;
 
 /** Tarjeta blanca con marco grueso: dentro va una foto con esquinas propias. */
-export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
+export function Card({
+  children,
+  style,
+  boxRef,
+}: {
+  children: ReactNode;
+  style?: StyleProp<ViewStyle>;
+  /** para medirla o animar su alto */
+  boxRef?: (node: unknown) => void;
+}) {
   const theme = useTheme();
   return (
-    <View style={[styles.card, { backgroundColor: theme.card, boxShadow: theme.shadow }, style]}>
+    <View
+      ref={boxRef as never}
+      style={[styles.card, { backgroundColor: theme.card, boxShadow: theme.shadow }, style]}>
       {children}
     </View>
   );
