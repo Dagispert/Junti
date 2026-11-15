@@ -15,6 +15,7 @@ import type {
   GalleryItem,
   Moment,
   Narration,
+  NarratorPersona,
   Proposal,
   Question,
   QuestionKind,
@@ -158,6 +159,8 @@ type Store = {
   setMuted: (groupId: string, until: number | null) => Promise<void>;
   /** Solo administradores: activa o apaga la narradora y elige su estilo. */
   setNarrative: (groupId: string, enabled: boolean, style: string) => Promise<void>;
+  /** Guarda cómo es la narradora (lo ya contado se vuelve a contar con ella). */
+  setNarrator: (groupId: string, persona: NarratorPersona | null) => Promise<void>;
   /** Que mis momentos no se usen (o sí) en la narración de este grupo. */
   setNarrativeOptOut: (groupId: string, optOut: boolean) => Promise<void>;
   /** Pide (o recupera) la crónica de un periodo. */
@@ -247,6 +250,24 @@ async function saveVisuals(
     ids.push(data.id as string);
   }
   return ids;
+}
+
+/**
+ * Una frase de muestra de la narradora con una personalidad (aunque no esté
+ * guardada todavía): devuelve el texto y su audio, o el motivo si descansa.
+ */
+export async function sampleNarrator(
+  groupId: string,
+  persona: NarratorPersona,
+): Promise<{ text?: string; audio?: string; error?: string }> {
+  const { data, error } = await supabase.functions.invoke('narrate', {
+    body: { action: 'sample', groupId, persona },
+  });
+  if (error) {
+    const detail = await (error as { context?: Response }).context?.json?.().catch(() => null);
+    return { error: detail?.error ?? 'No se ha podido escuchar ahora. Prueba en un rato.' };
+  }
+  return data ?? {};
 }
 
 /** Pide la crónica de un periodo a la función «narrate» del servidor. */
@@ -398,7 +419,7 @@ async function load(me: string): Promise<Data> {
     supabase
       .from('groups')
       .select(
-        'id, name, description, color, cover_path, sticker, cadence_days, narrative_enabled, narrative_style, roots',
+        'id, name, description, color, cover_path, sticker, cadence_days, narrative_enabled, narrative_style, narrator, roots',
       )
       .order('created_at')
       .then(check),
@@ -528,6 +549,7 @@ async function load(me: string): Promise<Data> {
         cadenceDays: g.cadence_days ?? [],
         narrativeEnabled: !!g.narrative_enabled,
         narrativeStyle: g.narrative_style ?? 'emotivo',
+        narrator: (g.narrator as NarratorPersona | null) ?? undefined,
         myNarrativeOptOut: !!members.find((m) => m.user_id === me)?.narrative_opt_out,
         votes: Object.fromEntries(
           members.filter((m) => m.frequency_vote).map((m) => [m.user_id, m.frequency_vote]),
@@ -1479,6 +1501,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           .update({ narrative_enabled: enabled, narrative_style: style })
           .eq('id', groupId),
       );
+      await refresh();
+    },
+    setNarrator: async (groupId, persona) => {
+      check(await supabase.from('groups').update({ narrator: persona }).eq('id', groupId));
       await refresh();
     },
     setNarrativeOptOut: async (groupId, optOut) => {

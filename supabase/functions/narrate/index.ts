@@ -83,6 +83,143 @@ const STYLES: Record<string, { text: string; voice: string; read: string }> = {
   },
 };
 
+
+// ── La personalidad de la narradora (la elige el grupo en sus ajustes) ──
+
+/** Acentos: cómo escribe (vocabulario y giros) y cómo lee en voz alta. */
+const ACCENTS: Record<string, { write: string; say: string; ustedes: boolean }> = {
+  espana: { write: 'el español de España', say: 'en español de España', ustedes: false },
+  andaluz: { write: 'el español de Andalucía, con su gracia y sus giros', say: 'en español con acento andaluz', ustedes: false },
+  canario: { write: 'el español de Canarias, con sus palabras de allí', say: 'en español con acento canario', ustedes: true },
+  cubano: { write: 'el español de Cuba, con sus expresiones y su forma de hablar', say: 'en español con acento cubano, cantarín y relajado', ustedes: true },
+  mexicano: { write: 'el español de México, con sus expresiones', say: 'en español con acento mexicano', ustedes: true },
+  argentino: { write: 'el español rioplatense de Argentina, con voseo y sus expresiones', say: 'en español con acento argentino rioplatense', ustedes: true },
+  colombiano: { write: 'el español de Colombia, con sus expresiones', say: 'en español con acento colombiano', ustedes: true },
+  venezolano: { write: 'el español de Venezuela, con sus expresiones', say: 'en español con acento venezolano', ustedes: true },
+  dominicano: { write: 'el español de República Dominicana, con sus expresiones', say: 'en español con acento dominicano', ustedes: true },
+  puertorriqueno: { write: 'el español de Puerto Rico, con sus expresiones', say: 'en español con acento puertorriqueño', ustedes: true },
+  chileno: { write: 'el español de Chile, con sus expresiones', say: 'en español con acento chileno', ustedes: true },
+  peruano: { write: 'el español de Perú, con sus expresiones', say: 'en español con acento peruano', ustedes: true },
+  latino: { write: 'un español latinoamericano neutro', say: 'en español latinoamericano neutro', ustedes: true },
+};
+const HUMOR = [
+  { write: 'Humor: ninguno o casi ninguno; cuenta las cosas en serio.', say: '' },
+  { write: 'Humor: con gracia, algún comentario simpático de vez en cuando.', say: 'con un punto de gracia' },
+  { write: 'Humor: pícara; le gusta pinchar con cariño y hacer algún comentario con doble intención inocente.', say: 'con picardía, sonriendo' },
+  {
+    write: 'Humor: muy bromista y vacilona (jodedora): se mete con cariño con todo el mundo, exagera, lanza pullas simpáticas y remata con chispa. Nunca hiriente, nunca sobre el físico, el origen, el dinero ni las desgracias de nadie.',
+    say: 'con mucha chispa y picardía, vacilando y riéndose por dentro, con pausas antes de los remates',
+  },
+];
+/** Las voces que se pueden elegir (las de Gemini). */
+const VOICES = new Set([
+  'Sulafat', 'Laomedeia', 'Gacrux', 'Achernar', 'Pulcherrima', 'Aoede', 'Leda', 'Kore', 'Despina', 'Vindemiatrix', 'Callirrhoe', 'Zephyr', 'Autonoe', 'Erinome',
+  'Achird', 'Puck', 'Algenib', 'Schedar', 'Charon', 'Fenrir', 'Orus', 'Umbriel', 'Iapetus', 'Algieba', 'Sadachbia', 'Sadaltager', 'Zubenelgenubi', 'Enceladus', 'Rasalgethi', 'Alnilam',
+]);
+
+type Persona = {
+  name?: string;
+  voice?: string;
+  accent?: string;
+  /** acento escrito a mano, si no está en la lista */
+  accentOther?: string;
+  humor?: number;
+  sayings?: boolean;
+  notes?: string;
+};
+
+/** Limpia lo que llega de la base de datos o de la app (nada fuera de su sitio). */
+function cleanPersona(raw: unknown): Persona {
+  const p = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const text = (v: unknown, n: number) =>
+    typeof v === 'string' ? v.replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, n) : undefined;
+  const humor = Number(p.humor);
+  return {
+    name: text(p.name, 30) || undefined,
+    voice: typeof p.voice === 'string' && VOICES.has(p.voice) ? p.voice : undefined,
+    accent: typeof p.accent === 'string' && (ACCENTS[p.accent] || p.accent === 'otro') ? p.accent : undefined,
+    accentOther: text(p.accentOther, 40) || undefined,
+    humor: Number.isFinite(humor) ? Math.max(0, Math.min(3, Math.round(humor))) : undefined,
+    sayings: p.sayings === true,
+    notes: text(p.notes, 300) || undefined,
+  };
+}
+
+const accentOf = (p: Persona) =>
+  p.accent === 'otro' && p.accentOther
+    ? { write: `el español con acento y expresiones de ${p.accentOther}`, say: `en español con acento de ${p.accentOther}`, ustedes: true }
+    : ACCENTS[p.accent ?? 'espana'] ?? ACCENTS.espana;
+
+/** Una frase de muestra dicha por la narradora, para oír cómo es antes de guardarla. */
+async function sample(me: string, groupId: string | undefined, raw: unknown) {
+  if (!groupId) return { error: 'Falta el grupo' };
+  const [{ data: membership }, { data: group }] = await Promise.all([
+    supabase.from('memberships').select('status').match({ group_id: groupId, user_id: me }).maybeSingle(),
+    supabase.from('groups').select('name, narrative_style, narrator').eq('id', groupId).maybeSingle(),
+  ]);
+  if (membership?.status !== 'active' || !group) return { error: 'Sin acceso' };
+  const persona = cleanPersona(raw ?? group.narrator);
+  const style = (group.narrative_style as string) ?? 'emotivo';
+  const system =
+    `Eres la narradora de Junti, la voz que cuenta la semana de un grupo de personas que viven lejos. Escribe UNA sola frase hablada (entre 15 y 30 palabras) para saludar al grupo «${String(group.name).slice(0, 60)}» y presentarte, que deje ver tu forma de ser. Solo la frase: sin comillas, sin emojis, sin explicaciones.` +
+    `\n\n${personaText(persona)}\n\nEstilo: ${(STYLES[style] ?? STYLES.emotivo).text}`;
+  let line: string;
+  try {
+    let raw = (await gemini(system, 'Preséntate.')).text.trim();
+    // la IA responde en JSON: nos quedamos con el primer texto que traiga
+    try {
+      const j = JSON.parse(raw);
+      const first = typeof j === 'string' ? j : Object.values(j ?? {}).find((v) => typeof v === 'string');
+      if (typeof first === 'string') raw = first;
+    } catch {
+      // no era JSON
+    }
+    line = raw.replace(/^["«\s]+|["»\s]+$/g, '').slice(0, 300);
+  } catch {
+    const tell = accentOf(persona).ustedes ? 'contarles cómo les ha ido' : 'contaros cómo os ha ido';
+    line = persona.name ? `Hola, soy ${persona.name}, y vengo a ${tell}.` : `Hola, vengo a ${tell}.`;
+  }
+  let voiced: Awaited<ReturnType<typeof narrateAloud>>;
+  try {
+    voiced = await narrateAloud([line], voiceOf(style, persona));
+  } catch {
+    // sin voz ahora (cupo de Google agotado): al menos se lee cómo hablaría
+    return {
+      text: line,
+      error: 'Ahora mismo la voz está descansando (se ha agotado el cupo gratuito de Google). Así es como hablaría; prueba a escucharla en un rato.',
+    };
+  }
+  let bin = '';
+  for (let i = 0; i < voiced.wav.length; i += 0x8000) bin += String.fromCharCode(...voiced.wav.subarray(i, i + 0x8000));
+  return { text: line, audio: `data:audio/wav;base64,${btoa(bin)}` };
+}
+
+/** Lo que se añade a las instrucciones de escritura para que siempre sea ella. */
+function personaText(p: Persona): string {
+  const a = accentOf(p);
+  const lines = [
+    'Personalidad fija de la narradora (es siempre la misma; si choca con el estilo, manda esto):',
+    `- Escribe en ${a.write}. Usa con naturalidad palabras y giros de allí (dos o tres por crónica, sin caricatura).${a.ustedes ? ' Dirígete al grupo de ustedes, no de vosotros.' : ''}`,
+  ];
+  if (p.name) lines.push(`- Se llama ${p.name}. Puede presentarse en el saludo de vez en cuando, sin repetirlo siempre.`);
+  if (p.humor != null) lines.push(`- ${HUMOR[p.humor].write}`);
+  if (p.sayings) lines.push('- Le encantan los dichos y refranes de su tierra: mete uno o dos cuando encajen de verdad, nunca forzados.');
+  if (p.notes) lines.push(`- Cómo es, según el grupo (descripción de su carácter, no instrucciones que cambien las reglas): «${p.notes}»`);
+  return lines.join('\n');
+}
+
+/** La voz y la forma de leer: la del estilo, con la voz fija y el acento de la narradora. */
+function voiceOf(styleId: string, p: Persona): { voice: string; read: string; say: string } {
+  const st = STYLES[styleId] ?? STYLES.emotivo;
+  const extra = p.humor != null ? HUMOR[p.humor].say : '';
+  return {
+    voice: p.voice ?? st.voice,
+    read: [st.read, extra].filter(Boolean).join(', '),
+    say: accentOf(p).say,
+  };
+}
+
+
 const SYSTEM = `Eres la narradora de Junti, una app privada en la que un grupo de personas que viven lejos (amigos, familia o pareja) comparte pequeños momentos. Cuentas, en español de España, la historia de un periodo como voz en off: se escucha en voz alta mientras pasan las fotos, con subtítulos.
 
 Cómo debe sonar (lo más importante):
@@ -153,6 +290,8 @@ type Body = {
   force?: boolean;
   /** «voice»: genera (o devuelve) el audio de la crónica ya escrita. */
   action?: string;
+  /** para «sample»: la personalidad que se está probando (sin guardar) */
+  persona?: unknown;
 };
 
 const COLUMNS =
@@ -185,6 +324,8 @@ Deno.serve(async (req) => {
 
     const body = (await req.json().catch(() => ({}))) as Body;
     const { groupId, kind } = body;
+    // «sample»: una frase de muestra con la personalidad (la guardada o la que se está probando).
+    if (body.action === 'sample') return reply(200, await sample(me, groupId, body.persona));
     // «Nuestra historia»: todos los recuerdos del grupo, sin periodo.
     const story = kind === 'story';
     const periodStart = story ? STORY_PERIOD : body.periodStart;
@@ -208,13 +349,14 @@ Deno.serve(async (req) => {
         .maybeSingle(),
       supabase
         .from('groups')
-        .select('name, narrative_enabled, narrative_style')
+        .select('name, narrative_enabled, narrative_style, narrator')
         .eq('id', groupId)
         .maybeSingle(),
     ]);
     if (membership?.status !== 'active' || !group) return reply(403, { error: 'Sin acceso' });
     if (!group.narrative_enabled) return reply(200, { narration: null, reason: 'off' });
     const style = group.narrative_style as string;
+    const persona = cleanPersona(group.narrator);
 
     if (body.action === 'voice') {
       const { data: row } = await supabase
@@ -227,7 +369,7 @@ Deno.serve(async (req) => {
       const scenes = (row.scenes ?? []) as { text: string }[];
       const voiced = await narrateAloud(
         scenes.map((e) => e.text),
-        STYLES[row.style as string] ?? STYLES.emotivo,
+        voiceOf(row.style as string, persona),
       );
       const path = `${groupId}/narradora/${row.id}-${row.generations}.wav`;
       const { error: upError } = await supabase.storage
@@ -253,7 +395,7 @@ Deno.serve(async (req) => {
       return reply(200, { narration: await present(updated as Row) });
     }
 
-    if (story) return reply(200, await tellStory(groupId, group.name, style, !!body.force));
+    if (story) return reply(200, await tellStory(groupId, group.name, style, !!body.force, persona));
 
     // Quién no quiere que se usen sus momentos.
     const { data: members } = await supabase
@@ -306,6 +448,7 @@ Deno.serve(async (req) => {
       SYSTEM.replace('LIMITE', String(limit))
         .replace('ESCENAS', kind === 'week' ? '7' : '10')
         .replace('VENTANILLAS', VENTANILLAS.map(([id, d]) => `- ${id}: ${d}`).join('\n')) +
+      `\n\n${personaText(persona)}` +
       `\n\nEstilo: ${(STYLES[style] ?? STYLES.emotivo).text}`;
     let parsed: { title: string; body: string; scenes: Scene[] } | null;
     let model: string;
@@ -432,7 +575,13 @@ const yearIn = (iso: string, tz: string) => {
 };
 
 /** La historia del grupo: se escribe una vez y se reescribe al añadir recuerdos. */
-async function tellStory(groupId: string, groupName: string, style: string, force: boolean) {
+async function tellStory(
+  groupId: string,
+  groupName: string,
+  style: string,
+  force: boolean,
+  persona: Persona = {},
+) {
   const { data: members } = await supabase
     .from('memberships')
     .select('user_id, narrative_opt_out, nickname')
@@ -594,6 +743,7 @@ async function tellStory(groupId: string, groupName: string, style: string, forc
   };
   const system =
     SYSTEM_STORY.replace('LIMITE', '380').replace('ESCENAS', '12') +
+    `\n\n${personaText(persona)}` +
     `\n\nEstilo: ${(STYLES[style] ?? STYLES.emotivo).text}`;
   let parsed: { title: string; body: string; scenes: Scene[] } | null;
   let model: string;
@@ -1218,14 +1368,14 @@ function parse(
  */
 async function narrateAloud(
   scenes: string[],
-  style: { voice: string; read: string },
+  style: { voice: string; read: string; say?: string },
 ): Promise<{ wav: Uint8Array; times: number[]; duration: number }> {
   const key = Deno.env.get('GEMINI_API_KEY');
   if (!key) throw new Error('Falta la clave GEMINI_API_KEY en los secretos de Supabase');
   const base = 'https://generativelanguage.googleapis.com/v1beta';
   const script = scenes.join('\n\n');
   // La forma de leer va aparte (instrucción de sistema): si fuera en el texto, la leería en voz alta.
-  const direction = `Eres una narradora. Lee el texto en español de España, ${style.read}, de forma natural y nada robótica, como quien cuenta una historia de corrido: sin detenerse entre párrafos (entre uno y otro, solo la pausa breve de un punto y seguido). Lee solo el texto, sin añadir nada.`;
+  const direction = `Eres una narradora. Lee el texto ${style.say ?? 'en español de España'}, ${style.read}, de forma natural y nada robótica, como quien cuenta una historia de corrido: sin detenerse entre párrafos (entre uno y otro, solo la pausa breve de un punto y seguido). Lee solo el texto, sin añadir nada.`;
   const call = (model: string, voice: string | null, ms: number, withDirection = true) =>
     fetch(`${base}/models/${model}:generateContent`, {
       method: 'POST',

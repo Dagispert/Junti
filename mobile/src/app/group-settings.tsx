@@ -7,6 +7,7 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { Icon } from '@/components/icon';
+import { NarratorPersonaEditor, personaSummary } from '@/components/narrator-persona';
 import { OriginsEditor } from '@/components/origins-editor';
 import { Avatar, AvatarRow, Button, Field, Notice, Screen } from '@/components/ui';
 import { Radius, Spacing, useTheme } from '@/constants/theme';
@@ -363,7 +364,11 @@ export default function GroupSettings() {
         {row(
           'narradora',
           'La narradora',
-          group.narrativeEnabled ? `Activada · ${styleOf(group.narrativeStyle).label}` : 'Apagada',
+          group.narrativeEnabled
+            ? [`Activada · ${styleOf(group.narrativeStyle).label}`, personaSummary(group.narrator)]
+                .filter(Boolean)
+                .join(' · ')
+            : 'Apagada',
           <View style={styles.body}>
             <Small>
               Cuenta en voz alta la historia de cada semana y cada mes con lo que compartís.
@@ -432,6 +437,7 @@ export default function GroupSettings() {
                     );
                   })}
                 </View>
+                <NarratorPersonaEditor group={group} />
                 <View style={[styles.option, { paddingHorizontal: 0 }]}>
                   <Text style={{ flex: 1, color: theme.text, fontSize: 15 }}>
                     {group.myNarrativeOptOut

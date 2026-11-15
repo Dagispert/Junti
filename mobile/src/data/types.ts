@@ -60,6 +60,8 @@ export type Group = {
   /** La narradora (IA) está activada en el grupo, y con qué estilo. */
   narrativeEnabled: boolean;
   narrativeStyle: string;
+  /** La personalidad de la narradora (voz fija, acento, humor…), si el grupo la ha definido. */
+  narrator?: NarratorPersona;
   /** Si he pedido que mis momentos no se usen en la narración. */
   myNarrativeOptOut: boolean;
   /** De dónde sois, si compartís origen («Todos somos de Valladolid»). */
@@ -244,4 +246,18 @@ export type Question = {
   answers: { userId: string; choice?: number; text?: string; createdAt: number }[];
   /** La respuesta correcta de un quiz, cuando ya se puede ver. */
   correct?: number;
+};
+
+/** Cómo es la narradora de un grupo: siempre la misma voz y forma de ser. */
+export type NarratorPersona = {
+  name?: string;
+  /** voz de Gemini (p. ej. «Sulafat»); sin ella, la del tono elegido */
+  voice?: string;
+  /** acento de la lista («cubano», «mexicano»…) u «otro» */
+  accent?: string;
+  accentOther?: string;
+  /** 0 seria · 1 con gracia · 2 pícara · 3 muy jodedora */
+  humor?: number;
+  sayings?: boolean;
+  notes?: string;
 };
