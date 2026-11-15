@@ -37,7 +37,9 @@ export function ChallengeBlock({ challenge, answers }: { challenge: Proposal; an
   const theme = useTheme();
   // Retos y propuestas del día se agrupan igual; cambia solo su familia y sus palabras.
   const isChallenge = challenge.kind === 'challenge';
-  const family = isChallenge ? 'challenge' : 'prompt';
+  // un plan: varias publicaciones (de varias personas) de un mismo día, importadas
+  const isPlan = challenge.kind === 'plan';
+  const family = isChallenge ? 'challenge' : isPlan ? 'memory' : 'prompt';
   const fam = useFamily(family);
   const theme0 = useTheme();
   // Sin color: el botón de participar, neutro.
@@ -168,9 +170,11 @@ export function ChallengeBlock({ challenge, answers }: { challenge: Proposal; an
 
   const participated = !list
     ? ''
-    : people.length === 1 && mine
-      ? 'Has participado'
-      : `${list[0].toUpperCase()}${list.slice(1)} ${people.length === 1 ? 'ha' : 'han'} participado`;
+    : isPlan
+      ? `Fotos de ${list}`
+      : people.length === 1 && mine
+        ? 'Has participado'
+        : `${list[0].toUpperCase()}${list.slice(1)} ${people.length === 1 ? 'ha' : 'han'} participado`;
 
   return (
     <FamilyCard family={family} boxRef={cardRef} style={{ padding: 16, gap: 12 }}>
@@ -178,20 +182,33 @@ export function ChallengeBlock({ challenge, answers }: { challenge: Proposal; an
         <FamilyTag
           family={family}
           detail={
-            !isChallenge
-              ? dayLabel(challenge.startsAt)
-              : !open
-                ? 'terminado'
-                : left
-                  ? left === 1
-                    ? 'queda 1 día'
-                    : `quedan ${left} días`
-                  : 'sin fecha'
+            isPlan
+              ? new Intl.DateTimeFormat('es-ES', {
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+                }).format(challenge.startsAt)
+              : !isChallenge
+                ? dayLabel(challenge.startsAt)
+                : !open
+                  ? 'terminado'
+                  : left
+                    ? left === 1
+                      ? 'queda 1 día'
+                      : `quedan ${left} días`
+                    : 'sin fecha'
           }
         />
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
-            {ordered.length} {ordered.length === 1 ? 'respuesta' : 'respuestas'}
+            {ordered.length}{' '}
+            {isPlan
+              ? ordered.length === 1
+                ? 'publicación'
+                : 'publicaciones'
+              : ordered.length === 1
+                ? 'respuesta'
+                : 'respuestas'}
           </Text>
           {open && (
             <NudgeBell

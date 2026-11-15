@@ -116,6 +116,8 @@ type Store = {
   dismissProposal: (proposalId: string, state: 'snoozed' | 'skipped') => Promise<void>;
   /** Un reto para el grupo; «days» = cuántos días dura (sin fecha si se omite). */
   addChallenge: (groupId: string, title: string, body: string, days?: number) => Promise<void>;
+  /** Un plan (contenedor de varias publicaciones), en su fecha y ya cerrado. Devuelve su id. */
+  addPlan: (groupId: string, title: string, at: number) => Promise<string>;
   questions: Question[];
   albums: Album[];
   createAlbum: (groupId: string, title: string, description?: string) => Promise<string>;
@@ -1272,6 +1274,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     dismissProposal: async (proposalId, state) => {
       setData((d) => ({ ...d, dismissed: [...d.dismissed, proposalId] }));
       check(await supabase.from('proposal_states').upsert({ proposal_id: proposalId, state }));
+    },
+    addPlan: async (groupId, title, at) => {
+      const row = check(
+        await supabase
+          .from('proposals')
+          .insert({
+            group_id: groupId,
+            kind: 'plan',
+            title: title.slice(0, 140),
+            starts_at: new Date(at).toISOString(),
+            ends_at: new Date(at + 60_000).toISOString(),
+          })
+          .select('id')
+          .single(),
+      );
+      return row!.id as string;
     },
     addChallenge: async (groupId, title, body, days) => {
       check(

@@ -104,7 +104,8 @@ export type Narration = {
 export type Proposal = {
   id: string;
   groupId: string;
-  kind: 'prompt' | 'challenge';
+  /** «plan»: varias publicaciones juntas (importadas de WhatsApp), ya cerrado */
+  kind: 'prompt' | 'challenge' | 'plan';
   title: string;
   body?: string;
   startsAt: number;

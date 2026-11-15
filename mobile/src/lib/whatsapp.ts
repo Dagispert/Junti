@@ -15,6 +15,8 @@ export type ChatPhoto = {
   at: number;
   sender?: string;
   caption?: string;
+  /** «racha»: cambia cada vez que escribe otra persona (fotos con la misma racha, sin nadie en medio) */
+  run: number;
   /** cómo sacarlo del .zip (se descomprime solo cuando se ve) */
   load: () => Promise<Blob>;
 };
@@ -78,7 +80,13 @@ export async function readChat(file: File): Promise<ChatImport> {
   // 2) cada foto mencionada en el chat, con su mensaje
   const photos: ChatPhoto[] = [];
   const seen = new Set<string>();
+  let run = 0;
+  let lastSender = '';
   for (const m of msgs) {
+    if (m.sender !== lastSender) {
+      run++;
+      lastSender = m.sender;
+    }
     const a = ATTACH.exec(m.text);
     if (!a || !PHOTO.test(a[1])) continue;
     const entry = byName.get(a[1]);
@@ -96,6 +104,7 @@ export async function readChat(file: File): Promise<ChatImport> {
       at: dateOf(m),
       sender: m.sender,
       caption: caption && caption.length < 300 ? caption : undefined,
+      run,
       load: () => entry.async('blob').then((b) => new Blob([b], { type: mime(a[1]) })),
     });
   }
@@ -107,6 +116,7 @@ export async function readChat(file: File): Promise<ChatImport> {
     photos.push({
       name,
       at,
+      run: -photos.length - 1,
       load: () => entry.async('blob').then((b) => new Blob([b], { type: mime(name) })),
     });
   }

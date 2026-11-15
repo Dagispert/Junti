@@ -1066,7 +1066,11 @@ async function describePeriod(
     if (m.text) parts.push(`texto: «${m.text.slice(0, 400)}»`);
     if (m.place_name) parts.push(`desde: ${m.place_name}`);
     const p = m.proposal_id ? proposalTitle.get(m.proposal_id) : undefined;
-    if (p) parts.push(`${p.kind === 'challenge' ? 'reto' : 'respondiendo a la propuesta'} «${p.title}»`);
+    if (p) parts.push(
+        p.kind === 'plan'
+          ? `dentro del plan «${p.title}»`
+          : `${p.kind === 'challenge' ? 'reto' : 'respondiendo a la propuesta'} «${p.title}»`,
+      );
     const r = (reactions.data ?? []).filter((x) => x.moment_id === m.id);
     if (r.length) {
       const count = new Map<string, number>();
