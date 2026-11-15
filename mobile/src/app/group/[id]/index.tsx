@@ -54,14 +54,15 @@ export default function Today() {
       ? latest
       : undefined;
 
-  // Las respuestas a un mismo reto van juntas, en un solo bloque (donde está la más nueva).
+  // Las respuestas a un mismo reto (o a la misma propuesta del día) van juntas,
+  // en un solo bloque, donde está la más nueva: así se ve a qué responde cada una.
   type Entry =
     | { kind: 'moment'; moment: Moment }
     | { kind: 'challenge'; challenge: Proposal; answers: Moment[] };
   const entries: Entry[] = [];
   const blocks = new Map<string, Entry & { kind: 'challenge' }>();
   for (const moment of feed) {
-    const challenge = proposals.find((p) => p.id === moment.proposalId && p.kind === 'challenge');
+    const challenge = proposals.find((p) => p.id === moment.proposalId);
     if (!challenge) {
       entries.push({ kind: 'moment', moment });
       continue;

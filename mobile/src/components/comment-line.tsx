@@ -7,9 +7,18 @@ import type { Comment } from '@/data/types';
 
 /**
  * Un comentario. Quien lo escribió puede tocarlo para corregirlo o
- * eliminarlo; los demás solo lo leen.
+ * eliminarlo; todos pueden responderle.
  */
-export function CommentLine({ comment, size = 15 }: { comment: Comment; size?: number }) {
+export function CommentLine({
+  comment,
+  size = 15,
+  onReply,
+}: {
+  comment: Comment;
+  size?: number;
+  /** Responder a este comentario (si se puede desde aquí). */
+  onReply?: () => void;
+}) {
   const theme = useTheme();
   const { me, user, editComment, deleteComment } = useStore();
   const mine = comment.userId === me;
@@ -42,7 +51,25 @@ export function CommentLine({ comment, size = 15 }: { comment: Comment; size?: n
     </Text>
   );
 
-  if (!mine) return line;
+  const reply = onReply ? (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Responder a ${user(comment.userId).name.split(' ')[0]}`}
+      onPress={onReply}
+      hitSlop={6}>
+      <Text style={{ color: theme.textSecondary, fontSize: 13, fontWeight: '500' }}>Responder</Text>
+    </Pressable>
+  ) : null;
+
+  if (!mine)
+    return reply ? (
+      <View style={{ gap: 2 }}>
+        {line}
+        {reply}
+      </View>
+    ) : (
+      line
+    );
 
   if (draft !== null) {
     return (
@@ -91,6 +118,7 @@ export function CommentLine({ comment, size = 15 }: { comment: Comment; size?: n
         }}>
         {line}
       </Pressable>
+      {!open && reply}
       {open && (
         <View style={styles.actions}>
           <Pressable accessibilityRole="button" onPress={() => setDraft(comment.text)} hitSlop={6}>

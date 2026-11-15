@@ -16,7 +16,7 @@ import { Photo, Screen } from '@/components/ui';
 import { Hand, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import { clockIn } from '@/lib/time';
-import { ArrowLeft, Check, Pencil, Plus, Share } from 'lucide-react-native';
+import { ArrowLeft, Check, Flag, Pencil, Plus, Share } from 'lucide-react-native';
 import { useExport } from '@/components/export-sheet';
 import { canExport, renderMomentImage } from '@/lib/export-media';
 
@@ -24,7 +24,9 @@ import { canExport, renderMomentImage } from '@/lib/export-media';
 export default function MomentView() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
-  const { moments, user, proposals, albums, setAlbumMoments, me } = useStore();
+  const { moments, user, proposals, albums, setAlbumMoments, me, reportMoment } = useStore();
+  // Denunciar (solo en publicaciones de otros): un toque pregunta, el segundo envía.
+  const [reported, setReported] = useState<'' | 'ask' | 'sent'>('');
   const moment = moments.find((m) => m.id === id);
   const [editing, setEditing] = useState(false);
   const exporter = useExport();
@@ -121,6 +123,46 @@ export default function MomentView() {
                 <Icon icon={Share} size={18} color={theme.text} />
               </Pressable>
             )}
+            {moment.authorId !== me && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={
+                  reported === 'sent'
+                    ? 'Denunciado'
+                    : reported === 'ask'
+                      ? 'Confirmar la denuncia'
+                      : 'Denunciar esta publicación'
+                }
+                disabled={reported === 'sent'}
+                onPress={() =>
+                  reported === 'ask'
+                    ? reportMoment(moment.id)
+                        .then(() => setReported('sent'))
+                        .catch(() => setReported(''))
+                    : setReported('ask')
+                }
+                style={[
+                  styles.round,
+                  {
+                    backgroundColor: theme.card,
+                    width: reported ? undefined : 44,
+                    paddingHorizontal: reported ? 14 : 0,
+                    flexDirection: 'row',
+                    gap: 6,
+                  },
+                ]}>
+                <Icon icon={Flag} size={16} color={reported === 'ask' ? '#C2385A' : theme.text} />
+                {!!reported && (
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      color: reported === 'ask' ? '#C2385A' : theme.textSecondary,
+                    }}>
+                    {reported === 'ask' ? '¿Denunciar?' : 'Denunciado'}
+                  </Text>
+                )}
+              </Pressable>
+            )}
             {moment.authorId === me && (
               <Pressable
                 accessibilityRole="button"
@@ -197,9 +239,29 @@ export default function MomentView() {
           <MemoryVersions moment={moment} />
         </View>
       )}
-      {[...moment.comments].reverse().map((c) => (
-        <CommentLine key={c.id} comment={c} size={17} />
-      ))}
+      {/* Los comentarios (lo último arriba) y, debajo de cada uno, sus respuestas. */}
+      {[...moment.comments]
+        .reverse()
+        .filter((c) => !c.replyTo || !moment.comments.some((x) => x.id === c.replyTo))
+        .map((c) => (
+          <View key={c.id} style={{ gap: 6 }}>
+            <CommentLine comment={c} size={17} />
+            {moment.comments
+              .filter((r) => r.replyTo === c.id)
+              .map((r) => (
+                <View
+                  key={r.id}
+                  style={{
+                    marginLeft: 8,
+                    paddingLeft: 12,
+                    borderLeftWidth: 2,
+                    borderLeftColor: theme.border,
+                  }}>
+                  <CommentLine comment={r} size={16} />
+                </View>
+              ))}
+          </View>
+        ))}
 
       {/* Guardarlo en un álbum del grupo. */}
       <View style={{ gap: 8, marginTop: 16 }}>

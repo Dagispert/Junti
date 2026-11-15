@@ -17,14 +17,26 @@ import { Avatar, AvatarRow, Photo } from './ui';
 const TILE_W = 150;
 const TILE_H = 196;
 
+/** «de hoy», «de ayer» o «15 nov» (el día de una propuesta). */
+function dayLabel(at: number) {
+  const day = (t: number) => new Date(t).setHours(0, 0, 0, 0);
+  const diff = Math.round((day(Date.now()) - day(at)) / 86_400_000);
+  if (diff === 0) return 'de hoy';
+  if (diff === 1) return 'de ayer';
+  return new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'short' }).format(at);
+}
+
 /**
- * Un reto en «Hoy»: todas sus respuestas juntas, en una tira que se desliza,
+ * Un reto (o la propuesta del día) en «Hoy»: todas sus respuestas juntas, en una tira que se desliza,
  * con el nombre del reto bien a la vista. Así, con varios retos a la vez, se
  * sabe a cuál pertenece cada foto y el «Hoy» no se convierte en un caos.
  */
 export function ChallengeBlock({ challenge, answers }: { challenge: Proposal; answers: Moment[] }) {
   const theme = useTheme();
-  const fam = useFamily('challenge');
+  // Retos y propuestas del día se agrupan igual; cambia solo su familia y sus palabras.
+  const isChallenge = challenge.kind === 'challenge';
+  const family = isChallenge ? 'challenge' : 'prompt';
+  const fam = useFamily(family);
   const theme0 = useTheme();
   // Sin color: el botón de participar, neutro.
   const plain = useFamilyColorMode() === 'plain';
@@ -128,18 +140,20 @@ export function ChallengeBlock({ challenge, answers }: { challenge: Proposal; an
       : `${list[0].toUpperCase()}${list.slice(1)} ${people.length === 1 ? 'ha' : 'han'} participado`;
 
   return (
-    <FamilyCard family="challenge" style={{ padding: 16, gap: 12 }}>
+    <FamilyCard family={family} style={{ padding: 16, gap: 12 }}>
       <View style={styles.head}>
         <FamilyTag
-          family="challenge"
+          family={family}
           detail={
-            !open
-              ? 'terminado'
-              : left
-                ? left === 1
-                  ? 'queda 1 día'
-                  : `quedan ${left} días`
-                : 'sin fecha'
+            !isChallenge
+              ? dayLabel(challenge.startsAt)
+              : !open
+                ? 'terminado'
+                : left
+                  ? left === 1
+                    ? 'queda 1 día'
+                    : `quedan ${left} días`
+                  : 'sin fecha'
           }
         />
         <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
@@ -148,6 +162,7 @@ export function ChallengeBlock({ challenge, answers }: { challenge: Proposal; an
       </View>
       <Pressable
         accessibilityRole="button"
+        disabled={!isChallenge}
         onPress={() =>
           router.push({ pathname: '/group/[id]/retos', params: { id: challenge.groupId } })
         }>
@@ -230,7 +245,15 @@ export function ChallengeBlock({ challenge, answers }: { challenge: Proposal; an
         {open && (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={mine ? 'Añadir otra respuesta al reto' : 'Participar en el reto'}
+            accessibilityLabel={
+              isChallenge
+                ? mine
+                  ? 'Añadir otra respuesta al reto'
+                  : 'Participar en el reto'
+                : mine
+                  ? 'Añadir otra respuesta a la propuesta'
+                  : 'Responder a la propuesta'
+            }
             onPress={() =>
               router.push({
                 pathname: '/publish',
@@ -240,7 +263,7 @@ export function ChallengeBlock({ challenge, answers }: { challenge: Proposal; an
             style={[styles.tile, styles.join, { borderColor: f.color }]}>
             <Icon icon={Plus} size={26} color={f.color} />
             <Text style={[styles.joinText, { color: f.color }]}>
-              {mine ? 'Añadir otra' : 'Participar'}
+              {mine ? 'Añadir otra' : isChallenge ? 'Participar' : 'Responder'}
             </Text>
           </Pressable>
         )}

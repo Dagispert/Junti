@@ -119,6 +119,8 @@ export type Comment = {
   createdAt: number;
   /** Si su autor lo corrigió. */
   edited?: boolean;
+  /** Si responde a otro comentario: el comentario al que contesta. */
+  replyTo?: string;
 };
 
 /** Una foto o un vídeo dentro de un momento con varios. */

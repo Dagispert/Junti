@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Plus } from 'lucide-react-native';
+import { Plus, Send, X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -11,7 +11,6 @@ import { clockIn, relative } from '@/lib/time';
 
 import { CommentLine } from './comment-line';
 import { VersionsLine } from './memory-versions';
-import { MomentEditor } from './moment-editor';
 import { type Burst, EmojiBursts } from './emoji-burst';
 import { EmojiPicker } from './emoji-picker';
 import { FamilyCard, FamilyTag } from './family';
@@ -38,11 +37,12 @@ export function MomentCard({
   photoRef?: (node: unknown) => void;
 }) {
   const theme = useTheme();
-  const { me, user, proposals, toggleReaction, addComment, reportMoment } = useStore();
+  const { me, user, proposals, toggleReaction, addComment } = useStore();
   const [draft, setDraft] = useState('');
   const [expanded, setExpanded] = useState(false);
-  const [reported, setReported] = useState<'' | 'ask' | 'sent'>('');
-  const [editing, setEditing] = useState<string | null>(null);
+  // A quién se responde (el comentario raíz del hilo y el nombre de quien se contesta).
+  const [replyTo, setReplyTo] = useState<{ id: string; name: string } | null>(null);
+  const input = useRef<React.ComponentRef<typeof TextInput>>(null);
   const [picking, setPicking] = useState(false);
   const [bursts, setBursts] = useState<Burst[]>([]);
   const [cardHeight, setCardHeight] = useState(0);
@@ -54,9 +54,16 @@ export function MomentCard({
 
   // Reacciones agrupadas por emoji; las rápidas siempre están disponibles.
   const emojis = [...new Set([...QUICK_REACTIONS, ...moment.reactions.map((r) => r.emoji)])];
-  const newestFirst = [...moment.comments].reverse();
-  const comments = expanded ? newestFirst : newestFirst.slice(0, VISIBLE_COMMENTS);
-  const hidden = moment.comments.length - comments.length;
+  // Los comentarios raíz (lo último arriba) y, debajo de cada uno, sus respuestas en orden.
+  const ids = new Set(moment.comments.map((c) => c.id));
+  const roots = [...moment.comments].reverse().filter((c) => !c.replyTo || !ids.has(c.replyTo));
+  const comments = expanded ? roots : roots.slice(0, VISIBLE_COMMENTS);
+  const hidden = roots.length - comments.length;
+  const repliesOf = (id: string) => moment.comments.filter((c) => c.replyTo === id);
+  const startReply = (rootId: string, userId: string) => {
+    setReplyTo({ id: rootId, name: userId === me ? 'ti' : user(userId).name.split(' ')[0] });
+    input.current?.focus();
+  };
   // La hora local del autor forma parte del recuerdo.
   const placeName = moment.place?.name.split(',')[0];
   // Un recuerdo lleva su fecha; un momento, la hora local de quien lo compartió.
@@ -79,8 +86,13 @@ export function MomentCard({
   const send = () => {
     const text = draft.trim();
     if (!text) return;
+    const target = replyTo;
     setDraft('');
-    addComment(moment.id, text).catch(() => setDraft(text));
+    setReplyTo(null);
+    addComment(moment.id, text, target?.id).catch(() => {
+      setDraft(text);
+      setReplyTo(target);
+    });
   };
 
   // La familia: un recuerdo, la respuesta a un reto o a la propuesta, o un momento.
@@ -230,18 +242,32 @@ export function MomentCard({
           </View>
         </View>
 
-        {editing !== null && (
-          <View style={{ paddingHorizontal: 8, paddingTop: 12 }}>
-            <MomentEditor moment={moment} onClose={() => setEditing(null)} />
-          </View>
-        )}
-
         <VersionsLine moment={moment} />
 
         <View style={styles.thread}>
-          {comments.map((comment) => (
-            <CommentLine key={comment.id} comment={comment} />
-          ))}
+          {comments.map((comment) => {
+            const replies = repliesOf(comment.id);
+            return (
+              <View key={comment.id} style={{ gap: 6 }}>
+                <CommentLine
+                  comment={comment}
+                  onReply={() => startReply(comment.id, comment.userId)}
+                />
+                {replies.length > 0 && (
+                  <View style={[styles.replies, { borderLeftColor: theme.border }]}>
+                    {replies.map((r) => (
+                      <CommentLine
+                        key={r.id}
+                        comment={r}
+                        size={14}
+                        onReply={() => startReply(comment.id, r.userId)}
+                      />
+                    ))}
+                  </View>
+                )}
+              </View>
+            );
+          })}
           {hidden > 0 && (
             <Pressable accessibilityRole="button" onPress={() => setExpanded(true)} hitSlop={6}>
               <Text style={{ color: theme.textSecondary, fontSize: 14 }}>
@@ -249,50 +275,53 @@ export function MomentCard({
               </Text>
             </Pressable>
           )}
-          {expanded && moment.comments.length > VISIBLE_COMMENTS && (
+          {expanded && roots.length > VISIBLE_COMMENTS && (
             <Pressable accessibilityRole="button" onPress={() => setExpanded(false)} hitSlop={6}>
               <Text style={{ color: theme.textSecondary, fontSize: 14 }}>Ver menos</Text>
             </Pressable>
           )}
+          {!!replyTo && (
+            <View style={styles.replying}>
+              <Text
+                style={{ color: theme.textSecondary, fontSize: 13, flexShrink: 1 }}
+                numberOfLines={1}>
+                Respondiendo a {replyTo.name}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="No responder"
+                onPress={() => setReplyTo(null)}
+                hitSlop={8}>
+                <Icon icon={X} size={14} color={theme.textSecondary} />
+              </Pressable>
+            </View>
+          )}
           <View style={styles.inputRow}>
             <TextInput
+              ref={input}
               value={draft}
               onChangeText={setDraft}
               onSubmitEditing={send}
-              placeholder="Añadir un comentario…"
+              placeholder={replyTo ? `Responder a ${replyTo.name}…` : 'Añadir un comentario…'}
               placeholderTextColor={theme.textSecondary}
               returnKeyType="send"
               style={[styles.input, { color: theme.text, backgroundColor: theme.soft }]}
             />
-            {moment.authorId !== me && (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Denunciar este momento"
-                disabled={reported === 'sent'}
-                onPress={() =>
-                  reported === 'ask'
-                    ? reportMoment(moment.id)
-                        .then(() => setReported('sent'))
-                        .catch(() => setReported(''))
-                    : setReported('ask')
-                }>
-                <Text style={{ fontSize: 13, color: reported ? theme.text : theme.textSecondary }}>
-                  {reported === 'sent'
-                    ? 'Denunciado'
-                    : reported === 'ask'
-                      ? '¿Denunciar?'
-                      : 'Denunciar'}
-                </Text>
-              </Pressable>
-            )}
-            {moment.authorId === me && editing === null && (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Editar o eliminar este momento"
-                onPress={() => setEditing(moment.text ?? '')}>
-                <Text style={{ fontSize: 13, color: theme.textSecondary }}>Editar</Text>
-              </Pressable>
-            )}
+            {/* Enviar: un botón redondo con un avión de papel. */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={replyTo ? 'Enviar la respuesta' : 'Enviar el comentario'}
+              disabled={!draft.trim()}
+              onPress={send}
+              style={({ pressed }) => [
+                styles.send,
+                {
+                  backgroundColor: theme.accent,
+                  opacity: draft.trim() ? (pressed ? 0.8 : 1) : 0.35,
+                },
+              ]}>
+              <Icon icon={Send} size={18} color={theme.onAccent} />
+            </Pressable>
           </View>
         </View>
       </View>
@@ -425,8 +454,11 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
   },
   thread: { paddingHorizontal: 8, paddingTop: 12, paddingBottom: 8, gap: 8 },
+  replies: { marginLeft: 6, paddingLeft: 12, borderLeftWidth: 2, gap: 6 },
+  replying: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
+  send: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   comment: { fontSize: 15, lineHeight: 20 },
-  inputRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  inputRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   input: {
     flex: 1,
     minWidth: 0,

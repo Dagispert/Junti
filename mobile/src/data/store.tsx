@@ -106,7 +106,7 @@ type Store = {
   /** Cambiar el texto de un momento propio. */
   editMoment: (momentId: string, text: string) => Promise<void>;
   toggleReaction: (momentId: string, emoji: string) => Promise<void>;
-  addComment: (momentId: string, text: string) => Promise<void>;
+  addComment: (momentId: string, text: string, replyTo?: string) => Promise<void>;
   /** Solo quien lo escribió: corregir o retirar un comentario. */
   editComment: (commentId: string, text: string) => Promise<void>;
   deleteComment: (commentId: string) => Promise<void>;
@@ -412,7 +412,7 @@ async function load(me: string): Promise<Data> {
       .from('moments')
       .select(
         'id, group_id, author_id, text, created_at, shared_at, memory, edited_at, author_tz, proposal_id, place_name, lat, lng, ' +
-          'reactions(emoji, user_id), comments(id, user_id, text, created_at, deleted_at, edited_at), ' +
+          'reactions(emoji, user_id), comments(id, user_id, text, created_at, deleted_at, edited_at, reply_to), ' +
           'memory_additions(id, author_id, text, created_at, edited_at), ' +
           'moment_media(position, addition_id, media_assets(id, storage_path, kind, thumb_path, duration_s, waveform, clip_start, clip_end))',
       )
@@ -681,6 +681,7 @@ async function load(me: string): Promise<Data> {
           text: c.text,
           createdAt: Date.parse(c.created_at),
           edited: !!c.edited_at,
+          replyTo: c.reply_to ?? undefined,
         }))
         .sort((a: any, b: any) => a.createdAt - b.createdAt),
     };
@@ -1209,8 +1210,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       );
       await refresh();
     },
-    addComment: async (momentId, text) => {
-      check(await supabase.from('comments').insert({ moment_id: momentId, text }));
+    addComment: async (momentId, text, replyTo) => {
+      check(
+        await supabase
+          .from('comments')
+          .insert({ moment_id: momentId, text, ...(replyTo ? { reply_to: replyTo } : {}) }),
+      );
       await refresh();
     },
     editComment: async (commentId, text) => {
