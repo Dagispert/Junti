@@ -420,6 +420,11 @@ export default function Settings() {
             router.push({ pathname: '/group/[id]', params: { id: first.id } });
           }}
         />
+        <Button
+          label="Guardar desde WhatsApp"
+          variant="light"
+          onPress={() => router.push('/compartir-ajustes')}
+        />
       </View>
 
       <View style={{ gap: Spacing.two }}>

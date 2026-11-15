@@ -42,6 +42,10 @@ export function setupInstallable(): void {
   add('meta', { name: 'apple-mobile-web-app-capable', content: 'yes' });
   add('meta', { name: 'apple-mobile-web-app-title', content: 'Junti' });
   add('meta', { name: 'theme-color', content: '#F6F6F7' });
+  // El service worker, siempre: además de los avisos, recibe lo que se comparte
+  // desde otras apps (Android) con la web instalada.
+  if ('serviceWorker' in navigator)
+    navigator.serviceWorker.register(`${BASE}/sw.js`, { scope: `${BASE}/` }).catch(() => {});
 }
 
 async function registration(): Promise<ServiceWorkerRegistration> {

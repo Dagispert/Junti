@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { SendCinematic } from '@/components/cinematics';
@@ -21,6 +21,7 @@ import type { Place } from '@/lib/geo';
 import { secondsOf, videoLength, videoPoster } from '@/lib/media';
 import { mmss } from '@/lib/music';
 import { useVoiceRecorder } from '@/lib/recorder';
+import { dateFromWhatsAppName, takeHandOff } from '@/lib/shared';
 import { Camera, Crop, ImageIcon, MapPin, Mic, Play, Plus, Video, X } from 'lucide-react-native';
 
 /** Lo que se enseña de un vídeo, como mucho (se elige el tramo). */
@@ -96,6 +97,38 @@ export default function Publish() {
   const [dateFromPhoto, setDateFromPhoto] = useState(false);
   // La foto que se está recortando (su posición en la lista).
   const [cropping, setCropping] = useState<number | null>(null);
+  // Lo que llega compartido desde otra app (WhatsApp…), ya puesto.
+  useEffect(() => {
+    const s = takeHandOff();
+    if (!s) return;
+    if (s.text) setText(s.text.slice(0, 2000));
+    if (!s.items.length) return;
+    // un recuerdo: la fecha que trae el nombre del archivo de WhatsApp
+    if (remembering) {
+      const taken = s.items.map((it) => dateFromWhatsAppName(it.name)).find((d) => d);
+      if (taken) {
+        setWhen(new Date(taken));
+        setDateFromPhoto(true);
+      }
+    }
+    (async () => {
+      const list: Media[] = [];
+      for (const it of s.items) {
+        if (it.kind === 'photo') list.push({ uri: it.uri, kind: 'photo', mime: it.mime });
+        else
+          list.push({
+            uri: it.uri,
+            kind: 'video',
+            mime: it.mime,
+            duration: await videoLength(it.uri),
+            poster: await videoPoster(it.uri),
+          });
+      }
+      setItems(list);
+      setSel(0);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const group = groupById(groupId);
   const proposal = proposals.find((p) => p.id === proposalId);

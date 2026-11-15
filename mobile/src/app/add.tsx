@@ -14,6 +14,7 @@ import {
   CircleHelp,
   Flag,
   History,
+  Import,
   MessageCircle,
   type LucideIcon,
 } from 'lucide-react-native';
@@ -35,8 +36,10 @@ export default function AddScreen() {
   if (!group) return null;
 
   // Se sustituye esta pantalla para que «Cancelar» vuelva directo al grupo.
-  const open = (pathname: '/publish' | '/new-challenge' | '/ask', params: Record<string, string>) =>
-    router.replace({ pathname, params: { groupId, ...params } } as never);
+  const open = (
+    pathname: '/publish' | '/new-challenge' | '/ask' | '/importar',
+    params: Record<string, string>,
+  ) => router.replace({ pathname, params: { groupId, ...params } } as never);
 
   const main: Option = {
     family: 'moment',
@@ -52,6 +55,13 @@ export default function AddScreen() {
       title: 'Un recuerdo',
       hint: 'Una foto de antes, en su fecha',
       go: () => open('/publish', { memory: '1' }),
+    },
+    {
+      family: 'memory',
+      icon: Import,
+      title: 'Desde WhatsApp',
+      hint: 'Las fotos de un chat, a vuestra historia',
+      go: () => open('/importar', {}),
     },
     {
       family: 'challenge',
