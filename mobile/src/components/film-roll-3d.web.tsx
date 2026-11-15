@@ -5,7 +5,7 @@ import { Hand, HandBold } from '@/constants/theme';
 import type { Moment } from '@/data/types';
 import { makeCanister, MONTH_COLORS } from '@/lib/canister3d';
 
-import { RollViewer } from './film-roll-viewer.web';
+import { LIST_DIST, RollViewer } from './film-roll-viewer.web';
 
 // Los carretes del mes: en la memoria solo se ve el carrete, flotando. Al
 // tocarlo se abre a pantalla completa (ver film-roll-viewer).
@@ -60,7 +60,7 @@ export function FilmRoll3D({
   const color = MONTH_COLORS[first.getMonth()];
   const month = MESES[first.getMonth()];
   const year = String(first.getFullYear());
-  const [viewing, setViewing] = useState(false);
+  const [viewing, setViewing] = useState<null | { x: number; y: number; w: number }>(null);
   const host = useRef<HTMLButtonElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
 
@@ -75,7 +75,7 @@ export function FilmRoll3D({
         done = true;
         const can = makeCanister(color, month, year, ordered.length);
         const ctx = canvas.current.getContext('2d');
-        if (ctx) can.draw(ctx, W, H, { dist: 4.9, yaw: 0, tilt: -0.42, spin: 0 });
+        if (ctx) can.draw(ctx, W, H, { dist: LIST_DIST, yaw: 0, tilt: -0.42, spin: 0 });
         can.dispose();
       },
       { rootMargin: '200px' },
@@ -91,7 +91,11 @@ export function FilmRoll3D({
         ref={host}
         type="button"
         aria-label={`Abrir el carrete de ${label}: ${ordered.length} fotos`}
-        onClick={() => setViewing(true)}
+        onClick={() => {
+          // el carrete grande sale desde aquí mismo
+          const r = canvas.current?.getBoundingClientRect();
+          setViewing(r ? { x: r.left, y: r.top, w: r.width } : { x: 0, y: 0, w: 0 });
+        }}
         style={{
           width: '48%',
           border: 0,
@@ -101,8 +105,8 @@ export function FilmRoll3D({
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
+          // se esconde al instante: el grande está justo encima, en su sitio
           opacity: viewing ? 0 : 1,
-          transition: 'opacity 200ms',
         }}>
         <div
           style={{
@@ -143,7 +147,8 @@ export function FilmRoll3D({
           year={year}
           color={color}
           groupId={groupId}
-          onClose={() => setViewing(false)}
+          origin={viewing.w ? viewing : undefined}
+          onClose={() => setViewing(null)}
         />
       )}
     </>

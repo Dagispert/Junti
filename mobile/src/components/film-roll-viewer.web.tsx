@@ -38,6 +38,8 @@ const PEEK = 30;
 const REST = 4.6;
 /** Lo que la cinta se esconde dentro del carrete (bajo la boca). */
 const TUCK = 16;
+/** La distancia de cámara con que se pinta el carrete en la lista. */
+export const LIST_DIST = 4.9;
 const TAB = THICK * 0.9;
 /** Cinta libre al final: la lengüeta y su curva, sin fotos. */
 const TAIL = TAB + THICK * 0.55 + 14;
@@ -84,6 +86,7 @@ export function RollViewer({
   year,
   color,
   groupId,
+  origin,
   onClose,
 }: {
   moments: Moment[];
@@ -92,6 +95,8 @@ export function RollViewer({
   year: string;
   color: string;
   groupId?: string;
+  /** dónde estaba el carrete en la lista: crece desde ahí (y vuelve ahí al cerrar) */
+  origin?: { x: number; y: number; w: number };
   onClose: () => void;
 }) {
   const { user } = useStore();
@@ -159,8 +164,9 @@ export function RollViewer({
   // Todo lo que se mueve va por referencias (sin repintar React a cada fotograma).
   const st = useRef({
     phase: 'enter' as Phase,
-    dist: 15,
-    yaw: -7.5,
+    dist: origin ? LIST_DIST : 15,
+    yaw: origin ? -Math.PI * 2 : -7.5,
+    k: origin ? 0 : 1, // 0 = en su sitio de la lista, 1 = a pantalla completa
     tilt: -0.9,
     spin: 0,
     p: 0, // 0 = centro, 1 = esquina
@@ -191,6 +197,8 @@ export function RollViewer({
   const titleBig = useRef<HTMLDivElement>(null);
   const titleTop = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
+  const ui = useRef<HTMLDivElement>(null);
+  const originRef = useRef(origin);
   const geo = useRef({ B, BH, center, corner, sp, L, photoWins, fillWins, string });
   geo.current = { B, BH, center, corner, sp, L, photoWins, fillWins, string };
 
@@ -253,14 +261,31 @@ export function RollViewer({
       const k = (r: number) => 1 - Math.pow(1 - r, dt * 60);
       const life = (now - born) / 1000;
 
-      // la entrada: de lejos y girando, como el planeta
-      if (s.phase !== 'leave') {
+      // La entrada. Desde la lista: el mismo carrete crece desde su sitio hasta
+      // el centro dando una vuelta (sin corte). Sin sitio de origen: llega de
+      // lejos y girando, como el planeta.
+      const from = originRef.current;
+      const flyBack = s.phase === 'leave' && !!from && s.p < 0.05;
+      if (from && s.phase === 'enter') {
+        s.k = Math.min(1, s.k + dt / 0.85);
+        const ek = 1 - Math.pow(1 - s.k, 3);
+        s.dist = LIST_DIST + (REST - LIST_DIST) * ek;
+        s.yaw = -Math.PI * 2 * (1 - ek);
+        if (s.k >= 1) setPhase('closed');
+      } else if (flyBack) {
+        // al cerrar, vuelve encogiendo a su sitio en la lista
+        s.k = Math.max(0, s.k - dt / 0.55);
+        const ek = ease(s.k);
+        s.dist = LIST_DIST + (REST - LIST_DIST) * ek;
+        s.yaw = Math.PI * 2 * (1 - ek);
+      } else if (s.phase !== 'leave') {
         s.dist += (REST - s.dist) * k(0.06);
         s.yaw += (0 - s.yaw) * k(0.055);
+        if (s.phase === 'enter' && s.dist < REST + 0.25) setPhase('closed');
       }
-      if (s.phase === 'enter' && s.dist < REST + 0.25) setPhase('closed');
+      const grown = from ? ease(s.k) : 1;
       const idle = s.phase === 'closed' || s.phase === 'drag' || s.phase === 'enter';
-      const sway = idle ? Math.sin(life * 1.3) * 0.08 : 0;
+      const sway = idle ? Math.sin(life * 1.3) * 0.08 * grown : 0;
 
       // la lengüeta que asoma (y que se guarda antes de moverse)
       const peekGoal = s.phase === 'closed' ? PEEK : s.phase === 'drag' ? s.peekTarget : 0;
@@ -315,12 +340,25 @@ export function RollViewer({
       s.spin -= (s.shown - prevShown + (s.peek - prevPeek)) * 0.025;
 
       const e = ease(s.p);
-      const x = g.center.x + (g.corner.x - g.center.x) * e;
-      const y = g.center.y + (g.corner.y - g.center.y) * e;
-      const sc = g.center.s + (g.corner.s - g.center.s) * e;
+      let x = g.center.x + (g.corner.x - g.center.x) * e;
+      let y = g.center.y + (g.corner.y - g.center.y) * e;
+      let sc = g.center.s + (g.corner.s - g.center.s) * e;
+      if (from && grown < 1) {
+        const s0 = from.w / g.B;
+        x = from.x + (x - from.x) * grown;
+        y = from.y + (y - from.y) * grown;
+        sc = s0 + (sc - s0) * grown;
+      }
       const tilt = -0.42 * (1 - e) + sway * 0.4;
-      const bob = idle ? Math.sin(life * 1.6) * 8 : 0;
-      if (s.phase === 'leave') {
+      const bob = idle ? Math.sin(life * 1.6) * 8 * grown : 0;
+      if (ui.current) ui.current.style.opacity = String(grown);
+      if (flyBack) {
+        if (root.current) root.current.dataset.leaving = '1';
+        if (s.k <= 0) {
+          onCloseRef.current();
+          return;
+        }
+      } else if (s.phase === 'leave') {
         s.fade = Math.min(1, s.fade + dt / 0.42);
         s.dist += (16 - s.dist) * k(0.09);
         s.yaw += (7 - s.yaw) * k(0.05);
@@ -336,7 +374,7 @@ export function RollViewer({
       if (shadow.current) {
         const near = Math.max(0, Math.min(1, (8 - s.dist) / (8 - REST)));
         shadow.current.style.transform = `translate(${x + g.B * sc * 0.2}px, ${y + g.BH * sc * 0.93}px) scale(${sc * (1 - bob / 80)})`;
-        shadow.current.style.opacity = String(near * (1 - e) * 0.9);
+        shadow.current.style.opacity = String(near * (1 - e) * 0.9 * grown);
       }
       // con la cinta abierta y quieta, se deja de redibujar
       const settled = s.phase === 'open' && g.string.energy() < 0.03;
@@ -361,7 +399,8 @@ export function RollViewer({
         paint(tongue.current, s.peek > 0.5 ? filmPaths(track, -TUCK, s.peek, h, h * 0.9) : null);
         paintFilm(g, s.shown);
       }
-      if (titleBig.current) titleBig.current.style.opacity = String(1 - Math.min(1, e * 2));
+      if (titleBig.current)
+        titleBig.current.style.opacity = String((1 - Math.min(1, e * 2)) * grown);
       if (titleTop.current) {
         titleTop.current.style.opacity = String(Math.max(0, e * 2 - 1));
         titleTop.current.style.transform = `translateY(${(1 - e) * 10}px)`;
@@ -465,6 +504,7 @@ export function RollViewer({
       ref={root}
       role="dialog"
       aria-label={`Carrete de ${label}`}
+      className="jrv"
       style={{
         position: 'fixed',
         inset: 0,
@@ -497,6 +537,7 @@ export function RollViewer({
             cursor: phase === 'closed' ? 'grab' : phase === 'drag' ? 'grabbing' : 'default',
           }}>
           <svg
+            className="jrv-hide"
             width={vp.w}
             height={contentH}
             style={{ position: 'absolute', inset: 0, overflow: 'visible', zIndex: 1 }}
@@ -553,7 +594,7 @@ export function RollViewer({
                 ref={(el) => {
                   frameEls.current[i] = el;
                 }}
-                className="jrv-frame"
+                className="jrv-frame jrv-hide"
                 style={{
                   position: 'absolute',
                   left: 0,
@@ -662,6 +703,7 @@ export function RollViewer({
           {/* con el carrete cerrado: el mes en grande y la pista */}
           <div
             ref={titleBig}
+            className="jrv-hide"
             style={{
               position: 'absolute',
               left: 24,
@@ -692,6 +734,7 @@ export function RollViewer({
       {/* el título, arriba, con el carrete abierto */}
       <div
         ref={titleTop}
+        className="jrv-hide"
         style={{
           position: 'absolute',
           left: B * cs * 0.82,
@@ -714,7 +757,7 @@ export function RollViewer({
       </button>
 
       {/* abajo: abrir / rebobinar y ver la historia del mes */}
-      <div style={barStyle(tint)}>
+      <div ref={ui} style={barStyle(tint)}>
         {isOpen ? (
           <button
             type="button"
@@ -847,13 +890,17 @@ if (typeof document !== 'undefined' && !document.getElementById('jrv-css')) {
   const s = document.createElement('style');
   s.id = 'jrv-css';
   s.textContent =
-    '@keyframes jrv-in{from{opacity:0}to{opacity:1}}' +
+    '@keyframes jrv-in{from{background-color:transparent}}' +
     '@keyframes jrv-hint{0%,100%{transform:translateX(0)}50%{transform:translateX(8px)}}' +
     // la foto sale como un negativo y se revela
     '.jrv-frame .jrv-img{filter:sepia(1) brightness(.35) contrast(1.3);transition:filter 1.2s ease-out}' +
     '.jrv-frame[data-dev="1"] .jrv-img{filter:none}' +
     // los comentarios, solo con la cinta quieta
     '.jrv-note{opacity:0;transition:opacity .4s}' +
-    '[data-open="1"] .jrv-note{opacity:1}';
+    '[data-open="1"] .jrv-note{opacity:1}' +
+    // al volver a la lista: el fondo y lo demás se van; solo queda el carrete
+    '.jrv{transition:background-color .35s ease}' +
+    '.jrv[data-leaving="1"]{background-color:transparent!important}' +
+    '.jrv[data-leaving="1"] button,.jrv[data-leaving="1"] .jrv-hide{opacity:0!important;transition:opacity .2s}';
   document.head.appendChild(s);
 }
