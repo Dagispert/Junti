@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useGlobePeople } from '@/components/connection-card';
 import { useExport } from '@/components/export-sheet';
+import { Doodle } from '@/components/doodle';
 import { GlobeMap } from '@/components/globe-map';
 import type { GlobeMemory } from '@/components/globe-map.types';
 import { Icon } from '@/components/icon';
@@ -26,6 +27,7 @@ import {
   recordScreen,
 } from '@/lib/dom-recorder';
 import { narratorAudio, narratorStream, stopNarrator } from '@/lib/narrator';
+import { gapDoodle, yearDoodle } from '@/lib/doodles';
 import { buildStory, type Gap, gapLabel, parseGap, templateScenes } from '@/lib/story';
 
 type Scene = (
@@ -305,6 +307,25 @@ export default function StoryScreen() {
           ? gapLabel(scene.gap)
           : undefined;
 
+  // El año como contador de paletas: pasa del año de la escena anterior a
+  // este (los años corren); en un hueco, los dos años y una interrogación.
+  const yearOf = (sc: Scene | undefined) =>
+    sc?.type === 'memory'
+      ? new Date(sc.moment.createdAt).getFullYear()
+      : sc?.type === 'origin'
+        ? sc.origin?.year
+        : undefined;
+  const doodle = useMemo(() => {
+    if (!scene) return null;
+    if (scene.type === 'gap') return gapDoodle(scene.gap.from, scene.gap.to);
+    const y = yearOf(scene);
+    if (y == null) return null;
+    let before: number | undefined;
+    for (let i = index - 1; i >= 0 && before == null; i--) before = yearOf(scenes[i]);
+    return yearDoodle(before, y);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scene, index]);
+
   // El subtítulo: la parte ya dicha, y el resto reservando su sitio.
   const at = Math.floor(text.length * said);
   // Una frase cada vez: la que se está diciendo.
@@ -413,13 +434,29 @@ export default function StoryScreen() {
         </Animated.View>
       ) : (
         <>
-          {year != null && (
-            <Animated.Text
+          {doodle && doodle.kind !== 'hueco' ? (
+            <View
               key={`y-${index}`}
-              entering={FadeIn.duration(600)}
-              style={[styles.year, { top: insets.top + 64 }]}>
-              {year}
-            </Animated.Text>
+              pointerEvents="none"
+              style={[styles.yearDoodle, { top: insets.top + 50 }]}>
+              <Doodle
+                spec={doodle}
+                size={128}
+                colors={{ ink: INK, accent: '#C2477A', paper: '#FFFFFF' }}
+                paused={paused}
+                style={{ filter: 'drop-shadow(0 6px 14px rgba(31,33,36,0.14))' }}
+              />
+            </View>
+          ) : (
+            year != null &&
+            scene?.type !== 'gap' && (
+              <Animated.Text
+                key={`y-${index}`}
+                entering={FadeIn.duration(600)}
+                style={[styles.year, { top: insets.top + 64 }]}>
+                {year}
+              </Animated.Text>
+            )
           )}
           {/* El capítulo en el que estamos, discreto bajo la cabecera. */}
           {!!chapterAt[index] && (
@@ -473,6 +510,17 @@ export default function StoryScreen() {
                   {scene.origin ? ` · ${scene.origin.place.split(',')[0]}` : ''}
                 </Text>
               </Animated.View>
+            )}
+            {/* En un hueco: los dos años con una interrogación, encima del botón. */}
+            {scene?.type === 'gap' && doodle?.kind === 'hueco' && (
+              <View pointerEvents="none" style={{ marginBottom: 14 }}>
+                <Doodle
+                  spec={doodle}
+                  size={210}
+                  colors={{ ink: INK, accent: '#C2477A', paper: '#FFFFFF' }}
+                  paused={paused}
+                />
+              </View>
             )}
             {(scene?.type === 'gap' || scene?.type === 'end') && (
               <Animated.View key={`c-${index}`} entering={popIn()}>
@@ -580,6 +628,7 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(255,255,255,0.95)',
     textShadowRadius: 12,
   },
+  yearDoodle: { position: 'absolute', alignSelf: 'center', zIndex: 2 },
   signature: {
     position: 'absolute',
     right: 18,

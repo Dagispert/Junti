@@ -14,7 +14,10 @@ import Animated, {
 
 import { Hand, HandBold } from '@/constants/theme';
 import type { GalleryItem, Moment } from '@/data/types';
+import type { DoodleSpec } from '@/lib/doodles';
 import type { SceneLook } from '@/lib/film';
+
+import { Doodle, type DoodleColors } from './doodle';
 
 import { InlineVideo, normalizeWave } from './media-players';
 import { Sticker, StickyNote, Tape } from './scrapbook';
@@ -238,6 +241,15 @@ function Slug({
   );
 }
 
+/** Los colores de un dibujo puesto encima de una foto: papel claro, tinta oscura. */
+const STICKER: DoodleColors = { ink: '#23201D', accent: '#C2477A', paper: '#FFFDF6' };
+/** Los colores de un dibujo directamente sobre el cielo. */
+export const skyDoodle = (dark: boolean): DoodleColors => ({
+  ink: dark ? '#F8F4EA' : '#23201D',
+  accent: dark ? '#FFD27D' : '#C2477A',
+  paper: dark ? '#141A3A' : '#FFFDF6',
+});
+
 /** Lo visual de un momento: sus fotos (o las portadas de sus vídeos). */
 const pictures = (moment: Moment): GalleryItem[] =>
   moment.gallery ??
@@ -280,10 +292,15 @@ export const MomentShot = memo(function MomentShot({
   duration,
   layout,
   nth,
+  doodle,
+  paused,
 }: {
   moment: Moment;
   look: SceneLook;
   name: string;
+  /** El dibujo a mano que acompaña al momento (la hora, el tiempo, la ruta…). */
+  doodle?: DoodleSpec | null;
+  paused?: boolean;
   /** En vez de «martes · 09:10» (p. ej. «Lo que más os llegó»). */
   kicker?: string;
   leaving: boolean;
@@ -491,6 +508,28 @@ export const MomentShot = memo(function MomentShot({
           </Move>
         )}
       </View>
+      {/* El dibujo a mano, como una pegatina en la esquina de abajo a la izquierda. */}
+      {!!doodle && (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: Math.max(6, (layout.width - w) / 2 - 12),
+            top: layout.photoTop + h - 92,
+            transform: [{ rotate: `${side * 3}deg` }],
+            zIndex: 5,
+          }}>
+          <Doodle
+            spec={doodle}
+            size={doodle.kind === 'ruta' ? 128 : 112}
+            colors={STICKER}
+            delay={doodle.kind === 'ruta' ? 250 : delay + 520}
+            paused={paused}
+            leaving={leaving}
+            style={{ filter: 'drop-shadow(0 6px 14px rgba(0,0,0,0.22))' }}
+          />
+        </View>
+      )}
     </View>
   );
 });
@@ -640,10 +679,15 @@ export const TitleShot = memo(function TitleShot({
   layout,
   gather,
   children,
+  doodle,
+  paused,
 }: {
   look: SceneLook;
   picks: Moment[];
   title: string;
+  /** Un dibujo de fecha (calendario que se arranca, el mes con sus días). */
+  doodle?: DoodleSpec | null;
+  paused?: boolean;
   kicker?: string;
   /** Líneas debajo del título (el rango de fechas, la canción, un aviso…). */
   lines?: { text: string; hand?: boolean; accent?: boolean }[];
@@ -659,7 +703,25 @@ export const TitleShot = memo(function TitleShot({
   return (
     <View style={[StyleSheet.absoluteFill, styles.titleShot]} pointerEvents="box-none">
       <View pointerEvents="none" style={{ alignItems: 'center', gap: 14 }}>
-        {has && <Fan moments={picks} size={size} delay={120} leaving={leaving} gather={gather} />}
+        {!!doodle && (
+          <Doodle
+            spec={doodle}
+            size={doodle.kind === 'mes' ? 150 : has ? 112 : 150}
+            colors={skyDoodle(look.dark)}
+            delay={60}
+            paused={paused}
+            leaving={leaving}
+          />
+        )}
+        {has && (
+          <Fan
+            moments={picks}
+            size={doodle ? size * 0.82 : size}
+            delay={120}
+            leaving={leaving}
+            gather={gather}
+          />
+        )}
         {!!kicker && (
           <Move from={{ y: 12 }} delay={has ? 420 : 0} leaving={leaving}>
             <Text style={[styles.kicker, { color: t.soft }, shadow]}>{kicker.toUpperCase()}</Text>
@@ -753,9 +815,14 @@ export const NumbersShot = memo(function NumbersShot({
   leaving,
   layout,
   children,
+  chart,
+  paused,
 }: {
   look: SceneLook;
   kicker: string;
+  /** El gráfico del periodo, dibujado a mano. */
+  chart?: DoodleSpec | null;
+  paused?: boolean;
   stats: { n: number; label: string }[];
   authors: string[];
   first: (id: string) => string;
@@ -793,6 +860,16 @@ export const NumbersShot = memo(function NumbersShot({
           </Move>
         ))}
       </View>
+      {!!chart && (
+        <Doodle
+          spec={chart}
+          size={Math.min(layout.width - 48, 340)}
+          colors={skyDoodle(look.dark)}
+          delay={700}
+          paused={paused}
+          leaving={leaving}
+        />
+      )}
       <View style={styles.people}>
         {authors.slice(0, 8).map((id, i) => (
           <Move

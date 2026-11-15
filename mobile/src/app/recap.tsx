@@ -40,6 +40,7 @@ import { usePreview } from '@/lib/music';
 import { narratorAudio, narratorStream, primeNarrator, stopNarrator } from '@/lib/narrator';
 import { styleOf } from '@/lib/narrative';
 import { buildRecap } from '@/lib/recap';
+import { coverDoodle, type DoodleSpec, momentDoodle, statsChart } from '@/lib/doodles';
 import { clockIn } from '@/lib/time';
 import { fetchWeatherAt, type PastWeather } from '@/lib/weather';
 import { Music, Share, Volume2, VolumeX, X } from 'lucide-react-native';
@@ -433,6 +434,22 @@ export default function RecapScreen() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slides, weather]);
+  // El dibujo a mano de cada escena: lo elige el «director de dibujos» según
+  // lo que cuenta (la fecha, la hora, el tiempo que hacía, el viaje, el ánimo).
+  const doodles = useMemo(() => {
+    let nth = 0;
+    let previous: DoodleSpec['kind'] | null = null;
+    return slides.map((sl, i) => {
+      if (sl.type === 'moment' || sl.type === 'loved') {
+        const spec = momentDoodle(sl.moment, looks[i], nth++, weather[sl.moment.id], previous);
+        previous = spec.kind;
+        return spec;
+      }
+      if (sl.type === 'cover') return coverDoodle(recap.kind, recap.from, recap.to, recap.moments);
+      if (sl.type === 'stats') return statsChart(recap.kind, recap.from, recap.moments);
+      return null;
+    });
+  }, [slides, looks, weather, recap]);
   const look = looks[index] ?? looks[0];
   const ink = tone(look.dark);
 
@@ -469,6 +486,8 @@ export default function RecapScreen() {
           duration={duration}
           layout={layout}
           nth={nthOf(i)}
+          doodle={doodles[i]}
+          paused={paused}
         />
       );
     if (sl.type === 'cover')
@@ -478,6 +497,8 @@ export default function RecapScreen() {
           look={lk}
           picks={picks}
           kicker={recap.kind === 'week' ? 'Vuestra semana' : 'Vuestro mes'}
+          doodle={doodles[i]}
+          paused={paused}
           title={story?.title || recap.range}
           lines={[
             ...(story?.title
@@ -533,10 +554,12 @@ export default function RecapScreen() {
           first={first}
           cities={recap.stats.cities}
           leaving={leaving}
-          layout={layout}>
+          layout={layout}
+          chart={doodles[i]}
+          paused={paused}>
           {placed.length > 0 && (
             <WorldMap
-              height={150}
+              height={doodles[i] ? 110 : 150}
               bare
               people={placed.map((u) => ({
                 id: u.id,
@@ -557,7 +580,13 @@ export default function RecapScreen() {
         look={lk}
         picks={picks}
         gather
-        title={recap.ongoing ? 'Y la semana sigue…' : 'Hasta la próxima'}
+        title={
+          recap.ongoing
+            ? recap.kind === 'week'
+              ? 'Y la semana sigue…'
+              : 'Y el mes sigue…'
+            : 'Hasta la próxima'
+        }
         lines={[
           {
             text:
