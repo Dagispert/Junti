@@ -271,10 +271,11 @@ function CoverFlow({
         decelerationRate="fast"
         scrollEventThrottle={16}
         onScroll={(e) => setX(e.nativeEvent.contentOffset.x)}
-        style={{ marginHorizontal: -20 }}
+        // con aire de sobra arriba y abajo: el desplazamiento recorta lo que se sale, y la sombra no puede cortarse
+        style={{ marginHorizontal: -20, marginTop: -16, marginBottom: -26 }}
         contentContainerStyle={{
           paddingHorizontal: pad + 20,
-          height: FLOW + 24,
+          height: FLOW + 76,
           alignItems: 'center',
         }}>
         {list.map((s, i) => {
