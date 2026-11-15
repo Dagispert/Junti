@@ -3,7 +3,6 @@ import { Pressable, type PressableProps, type StyleProp, type ViewStyle } from '
 import Animated, {
   Easing,
   FadeInDown,
-  Keyframe,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -23,16 +22,14 @@ export const EASE_OUT_VIEW = Easing.bezier(0.3, 0, 1, 1);
 export const DURATION = { quick: 160, normal: 320, slow: 520 } as const;
 
 /**
- * Aparecer «posándose»: sube un poco y crece desde el 92 % (nunca desde cero,
- * que en piezas grandes queda brusco). Para tarjetas, hojas y fotos.
+ * Aparecer «posándose»: sube un poco mientras aparece, con la curva de entrada.
+ * (Antes era un Keyframe con escala, pero en la web sacaba la pieza del flujo de
+ * la página y le quitaba su giro: el resto de la pantalla se le montaba encima.)
+ * Si la pieza tiene su propio giro o transformación, pon la animación en un
+ * envoltorio y el giro dentro.
  */
 export function popIn(delay = 0, duration: number = DURATION.slow) {
-  return new Keyframe({
-    0: { opacity: 0, transform: [{ translateY: 14 }, { scale: 0.92 }] },
-    100: { opacity: 1, transform: [{ translateY: 0 }, { scale: 1 }], easing: EASE_IN_VIEW },
-  })
-    .delay(delay)
-    .duration(duration);
+  return FadeInDown.duration(duration).delay(delay).easing(EASE_IN_VIEW);
 }
 
 /** Entrada suave desde abajo, escalonada según su posición en la lista. */

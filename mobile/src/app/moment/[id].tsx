@@ -133,45 +133,47 @@ export default function MomentView() {
           </View>
         </View>
       }>
-      <Animated.View entering={popIn(0, 420)} style={styles.frame}>
-        {moment.gallery ? (
-          <View style={[styles.photo, { overflow: 'hidden' }]}>
-            <PhotoCarousel items={moment.gallery} />
-          </View>
-        ) : moment.videoUri ? (
-          <View style={[styles.photo, { overflow: 'hidden' }]}>
-            <VideoMoment moment={moment} style={StyleSheet.absoluteFill} />
-          </View>
-        ) : moment.voice && !moment.imageUri && !moment.text ? (
-          <View
-            style={[
-              styles.photo,
-              { backgroundColor: '#FFF4EC', alignItems: 'center', justifyContent: 'center' },
-            ]}>
-            <Waveform wave={moment.voice.waveform} height={160} />
-          </View>
-        ) : moment.photos ? (
-          <View style={[styles.photo, { overflow: 'hidden' }]}>
-            <PhotoCarousel photos={moment.photos} />
-          </View>
-        ) : (
-          <Photo moment={moment} style={styles.photo} />
-        )}
-        {(moment.text || proposal) && moment.imageUri ? (
-          <StickyNote rotate={5} width={150} delay={350} fixed style={styles.note}>
-            {moment.text ?? proposal?.title}
-          </StickyNote>
-        ) : null}
-        {emojis.slice(0, 3).map((e, i) => (
-          <Sticker
-            key={e}
-            emoji={e}
-            size={52}
-            rotate={-10 + i * 12}
-            delay={550 + i * 140}
-            style={{ position: 'absolute', bottom: -18, right: 8 + i * 46 }}
-          />
-        ))}
+      <Animated.View entering={popIn(0, 420)}>
+        <View style={styles.frame}>
+          {moment.gallery ? (
+            <View style={[styles.photo, { overflow: 'hidden' }]}>
+              <PhotoCarousel items={moment.gallery} />
+            </View>
+          ) : moment.videoUri ? (
+            <View style={[styles.photo, { overflow: 'hidden' }]}>
+              <VideoMoment moment={moment} style={StyleSheet.absoluteFill} />
+            </View>
+          ) : moment.voice && !moment.imageUri && !moment.text ? (
+            <View
+              style={[
+                styles.photo,
+                { backgroundColor: '#FFF4EC', alignItems: 'center', justifyContent: 'center' },
+              ]}>
+              <Waveform wave={moment.voice.waveform} height={160} />
+            </View>
+          ) : moment.photos ? (
+            <View style={[styles.photo, { overflow: 'hidden' }]}>
+              <PhotoCarousel photos={moment.photos} />
+            </View>
+          ) : (
+            <Photo moment={moment} style={styles.photo} />
+          )}
+          {(moment.text || proposal) && moment.imageUri ? (
+            <StickyNote rotate={5} width={150} delay={350} fixed style={styles.note}>
+              {moment.text ?? proposal?.title}
+            </StickyNote>
+          ) : null}
+          {emojis.slice(0, 3).map((e, i) => (
+            <Sticker
+              key={e}
+              emoji={e}
+              size={52}
+              rotate={-10 + i * 12}
+              delay={550 + i * 140}
+              style={{ position: 'absolute', bottom: -18, right: 8 + i * 46 }}
+            />
+          ))}
+        </View>
       </Animated.View>
 
       {editing && (
