@@ -1,12 +1,13 @@
 import { router } from 'expo-router';
-import { Check, Copy, RefreshCw } from 'lucide-react-native';
+import { Check, Copy, Download, RefreshCw } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icon } from '@/components/icon';
 import { Button, Screen, Title } from '@/components/ui';
 import { useTheme } from '@/constants/theme';
 import { INBOX_URL, newShareToken, shareToken } from '@/lib/shared';
+import { supabase } from '@/lib/supabase';
 
 const web = Platform.OS === 'web' && typeof navigator !== 'undefined';
 const ua = web ? navigator.userAgent : '';
@@ -25,10 +26,19 @@ export default function CompartirAjustes() {
   const [copied, setCopied] = useState('');
   const [tab, setTab] = useState<'iphone' | 'android'>(isAndroid ? 'android' : 'iphone');
 
+  // El Atajo ya hecho (enlace de iCloud), si está listo: se instala en dos toques.
+  const [atajo, setAtajo] = useState<string | null>(null);
+  const [manual, setManual] = useState(false);
   useEffect(() => {
     shareToken()
       .then(setToken)
       .catch(() => {});
+    supabase
+      .from('app_config')
+      .select('value')
+      .eq('key', 'atajo_iphone')
+      .maybeSingle()
+      .then(({ data }) => setAtajo((data?.value as string) || null));
   }, []);
 
   const copy = (what: string, value: string) => {
@@ -115,52 +125,102 @@ export default function CompartirAjustes() {
         </View>
       ) : (
         <View style={{ gap: 16 }}>
-          <Text style={{ color: theme.textSecondary, fontSize: 15, lineHeight: 21 }}>
-            En iPhone se hace con un Atajo que se crea una sola vez (unos dos minutos). Si alguien
-            ya lo tiene, os lo podéis pasar, pero cada uno pone su propio código.
-          </Text>
-          <Step n={1}>
-            <P>
-              Abre la app <B>Atajos</B> y toca <B>+</B>. Ponle de nombre <B>Guardar en Junti</B>.
-            </P>
-          </Step>
-          <Step n={2}>
-            <P>
-              Toca <B>ⓘ</B> (abajo) y activa <B>Mostrar en la hoja para compartir</B>. En «Recibir»,
-              deja Imágenes, Archivos multimedia, Texto y URL.
-            </P>
-          </Step>
-          <Step n={3}>
-            <P>
-              Añade la acción <B>Obtener contenido de URL</B> y en la URL pega esta:
-            </P>
-            <Copyable id="url" label="Dirección" value={INBOX_URL} />
-            <P>
-              Toca <B>Mostrar más</B>: método <B>POST</B>. En <B>Cabeceras</B>, añade una con la
-              clave <B>Authorization</B> y este valor:
-            </P>
-            <Copyable
-              id="token"
-              label="Tu código (personal)"
-              value={token ? `Bearer ${token}` : ''}
-            />
-            <P>
-              En <B>Cuerpo de la solicitud</B> elige <B>Formulario</B> y añade un campo de tipo{' '}
-              <B>Archivo</B>, de nombre <B>media</B>, con el valor <B>Entrada del atajo</B>.
-            </P>
-          </Step>
-          <Step n={4}>
-            <P>
-              Añade la acción <B>Abrir URL</B> con esta dirección:
-            </P>
-            <Copyable id="app" label="Junti" value={appUrl()} />
-          </Step>
-          <Step n={5}>
-            <P>
-              Ya está. En WhatsApp: mantén pulsada una foto o un mensaje → <B>Compartir</B> →{' '}
-              <B>Guardar en Junti</B>.
-            </P>
-          </Step>
+          {/* El Atajo ya hecho: copiar el código e instalarlo (el iPhone pide pegarlo) */}
+          {atajo && (
+            <View style={[styles.quick, { backgroundColor: theme.card, boxShadow: theme.shadow }]}>
+              <Text style={{ color: theme.text, fontSize: 18, fontWeight: '600' }}>
+                En dos toques
+              </Text>
+              <Step n={1}>
+                <P>Copia tu código:</P>
+                <Copyable id="tok1" label="Tu código (personal)" value={token} />
+              </Step>
+              <Step n={2}>
+                <P>
+                  Instala el atajo. Al añadirlo, el iPhone te pedirá el código: <B>pégalo</B> y toca{' '}
+                  <B>Añadir atajo</B>.
+                </P>
+                <Pressable
+                  accessibilityRole="link"
+                  onPress={() => {
+                    if (token) navigator.clipboard?.writeText(token).catch(() => {});
+                    Linking.openURL(atajo);
+                  }}
+                  style={[styles.install, { backgroundColor: theme.text }]}>
+                  <Icon icon={Download} size={18} color={theme.background} />
+                  <Text style={{ color: theme.background, fontSize: 16, fontWeight: '600' }}>
+                    Instalar «Guardar en Junti»
+                  </Text>
+                </Pressable>
+              </Step>
+              <P>
+                Listo: en WhatsApp, mantén pulsada una foto → <B>Compartir</B> →{' '}
+                <B>Guardar en Junti</B>.
+              </P>
+            </View>
+          )}
+          {atajo && !manual ? (
+            <Pressable onPress={() => setManual(true)}>
+              <Text
+                style={{
+                  color: theme.textSecondary,
+                  fontSize: 14,
+                  textDecorationLine: 'underline',
+                }}>
+                Prefiero configurarlo a mano
+              </Text>
+            </Pressable>
+          ) : (
+            <>
+              <Text style={{ color: theme.textSecondary, fontSize: 15, lineHeight: 21 }}>
+                En iPhone se hace con un Atajo que se crea una sola vez (unos dos minutos). Si
+                alguien ya lo tiene, os lo podéis pasar, pero cada uno pone su propio código.
+              </Text>
+              <Step n={1}>
+                <P>
+                  Abre la app <B>Atajos</B> y toca <B>+</B>. Ponle de nombre <B>Guardar en Junti</B>
+                  .
+                </P>
+              </Step>
+              <Step n={2}>
+                <P>
+                  Toca <B>ⓘ</B> (abajo) y activa <B>Mostrar en la hoja para compartir</B>. En
+                  «Recibir», deja Imágenes, Archivos multimedia, Texto y URL.
+                </P>
+              </Step>
+              <Step n={3}>
+                <P>
+                  Añade la acción <B>Obtener contenido de URL</B> y en la URL pega esta:
+                </P>
+                <Copyable id="url" label="Dirección" value={INBOX_URL} />
+                <P>
+                  Toca <B>Mostrar más</B>: método <B>POST</B>. En <B>Cabeceras</B>, añade una con la
+                  clave <B>Authorization</B> y este valor:
+                </P>
+                <Copyable
+                  id="token"
+                  label="Tu código (personal)"
+                  value={token ? `Bearer ${token}` : ''}
+                />
+                <P>
+                  En <B>Cuerpo de la solicitud</B> elige <B>Formulario</B> y añade un campo de tipo{' '}
+                  <B>Archivo</B>, de nombre <B>media</B>, con el valor <B>Entrada del atajo</B>.
+                </P>
+              </Step>
+              <Step n={4}>
+                <P>
+                  Añade la acción <B>Abrir URL</B> con esta dirección:
+                </P>
+                <Copyable id="app" label="Junti" value={appUrl()} />
+              </Step>
+              <Step n={5}>
+                <P>
+                  Ya está. En WhatsApp: mantén pulsada una foto o un mensaje → <B>Compartir</B> →{' '}
+                  <B>Guardar en Junti</B>.
+                </P>
+              </Step>
+            </>
+          )}
           <Pressable
             accessibilityRole="button"
             onPress={() =>
@@ -194,5 +254,14 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   copy: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 12 },
+  quick: { borderRadius: 20, padding: 16, gap: 14 },
+  install: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    height: 50,
+    borderRadius: 25,
+  },
   reset: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', paddingVertical: 8 },
 });
