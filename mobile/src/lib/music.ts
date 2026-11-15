@@ -56,8 +56,8 @@ export function usePreview(url?: string, loop = false) {
   const [duration, setDuration] = useState(30);
   const available = Platform.OS === 'web' && typeof Audio !== 'undefined' && !!url;
 
-  // En iPhone el volumen de un <audio> no se puede cambiar: allí la música pasa
-  // por el mezclador del navegador (Web Audio) para poder bajarla.
+  // En iPhone el volumen de un <audio> no se puede cambiar: la música pasa por
+  // el mezclador del navegador (Web Audio) para poder bajarla.
   const gain = useRef<GainNode | null>(null);
   const context = useRef<AudioContext | null>(null);
   const level = useRef(1);
@@ -78,17 +78,15 @@ export function usePreview(url?: string, loop = false) {
     a.addEventListener('ended', end);
     a.addEventListener('pause', end);
     a.addEventListener('play', () => setPlaying(true));
-    // ¿Este navegador respeta el volumen?
-    a.volume = 0.5;
-    const fixedVolume = a.volume !== 0.5;
-    a.volume = 1;
     const Ctx =
       typeof window !== 'undefined'
         ? window.AudioContext ||
           (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
         : undefined;
     let unlock: (() => void) | undefined;
-    if (fixedVolume && Ctx) {
+    // Siempre por el mezclador cuando existe: en iPhone el volumen del <audio>
+    // se puede «poner» y leer, pero no suena más bajo (no basta con comprobarlo).
+    if (Ctx) {
       try {
         const ctx = new Ctx();
         const node = ctx.createGain();
