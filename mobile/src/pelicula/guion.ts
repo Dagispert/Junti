@@ -6,32 +6,107 @@ import { moodOf } from '@/lib/film';
 
 /** Las 20 vistas posibles de la ventanilla (la narradora elige una). */
 export const ESCENARIOS = [
-  { id: 'campo', vehiculo: 'tren', desc: 'campo tranquilo pasando por la ventana del tren (una semana tranquila, rutina)' },
-  { id: 'nubes', vehiculo: 'avion', desc: 'mar de nubes desde la ventanilla del avión (viajes, distancia, alguien vuela)' },
-  { id: 'lluvia', vehiculo: 'tren', desc: 'gotas de lluvia en el cristal (días grises, nostalgia, lluvia)' },
+  {
+    id: 'campo',
+    vehiculo: 'tren',
+    desc: 'campo tranquilo pasando por la ventana del tren (una semana tranquila, rutina)',
+  },
+  {
+    id: 'nubes',
+    vehiculo: 'avion',
+    desc: 'mar de nubes desde la ventanilla del avión (viajes, distancia, alguien vuela)',
+  },
+  {
+    id: 'lluvia',
+    vehiculo: 'tren',
+    desc: 'gotas de lluvia en el cristal (días grises, nostalgia, lluvia)',
+  },
   { id: 'nieve', vehiculo: 'tren', desc: 'paisaje nevado con pinos (frío, invierno, nieve)' },
   { id: 'playa', vehiculo: 'tren', desc: 'playa con sol y olas (vacaciones, verano, mar)' },
-  { id: 'montana', vehiculo: 'tren', desc: 'montañas con cumbres nevadas (excursiones, naturaleza, retos)' },
-  { id: 'ciudad_noche', vehiculo: 'tren', desc: 'ciudad de noche con ventanas encendidas (noches, desvelos, salir)' },
-  { id: 'ciudad', vehiculo: 'tren', desc: 'ciudad de día con edificios (trabajo, prisas, vida diaria)' },
-  { id: 'fiesta', vehiculo: 'tren', desc: 'globos y banderines (cumpleaños, celebraciones, buenas noticias)' },
-  { id: 'cena', vehiculo: 'tren', desc: 'una mesa con velas y dos copas (cenas, comidas juntos, brindis)' },
+  {
+    id: 'montana',
+    vehiculo: 'tren',
+    desc: 'montañas con cumbres nevadas (excursiones, naturaleza, retos)',
+  },
+  {
+    id: 'ciudad_noche',
+    vehiculo: 'tren',
+    desc: 'ciudad de noche con ventanas encendidas (noches, desvelos, salir)',
+  },
+  {
+    id: 'ciudad',
+    vehiculo: 'tren',
+    desc: 'ciudad de día con edificios (trabajo, prisas, vida diaria)',
+  },
+  {
+    id: 'fiesta',
+    vehiculo: 'tren',
+    desc: 'globos y banderines (cumpleaños, celebraciones, buenas noticias)',
+  },
+  {
+    id: 'cena',
+    vehiculo: 'tren',
+    desc: 'una mesa con velas y dos copas (cenas, comidas juntos, brindis)',
+  },
   { id: 'cafe', vehiculo: 'tren', desc: 'café humeante al amanecer (mañanas, desayunos, calma)' },
-  { id: 'musica', vehiculo: 'tren', desc: 'notas musicales flotando (canciones, conciertos, bailar)' },
-  { id: 'deporte', vehiculo: 'tren', desc: 'un balón botando en un campo (deporte, partidos, moverse)' },
-  { id: 'otono', vehiculo: 'tren', desc: 'árboles soltando hojas (otoño, cambios, despedidas suaves)' },
-  { id: 'primavera', vehiculo: 'tren', desc: 'flores que se abren y una mariposa (primavera, comienzos, alegría)' },
-  { id: 'estrellas', vehiculo: 'tren', desc: 'cielo estrellado con luna y estrella fugaz (deseos, noches tranquilas, echar de menos)' },
-  { id: 'tormenta', vehiculo: 'tren', desc: 'tormenta con rayos (semana difícil, líos, días intensos)' },
-  { id: 'mar', vehiculo: 'barco', desc: 'el mar desde el ojo de buey de un barco (lejanía entre países, travesías)' },
-  { id: 'anden', vehiculo: 'tren', desc: 'un andén donde dos personas se abrazan (reencuentros, visitas, os visteis)' },
-  { id: 'casa', vehiculo: 'casa', desc: 'la ventana de casa con una planta y un gato dormido (hogar, quedarse en casa, cuidarse)' },
+  {
+    id: 'musica',
+    vehiculo: 'tren',
+    desc: 'notas musicales flotando (canciones, conciertos, bailar)',
+  },
+  {
+    id: 'deporte',
+    vehiculo: 'tren',
+    desc: 'un balón botando en un campo (deporte, partidos, moverse)',
+  },
+  {
+    id: 'otono',
+    vehiculo: 'tren',
+    desc: 'árboles soltando hojas (otoño, cambios, despedidas suaves)',
+  },
+  {
+    id: 'primavera',
+    vehiculo: 'tren',
+    desc: 'flores que se abren y una mariposa (primavera, comienzos, alegría)',
+  },
+  {
+    id: 'estrellas',
+    vehiculo: 'tren',
+    desc: 'cielo estrellado con luna y estrella fugaz (deseos, noches tranquilas, echar de menos)',
+  },
+  {
+    id: 'tormenta',
+    vehiculo: 'tren',
+    desc: 'tormenta con rayos (semana difícil, líos, días intensos)',
+  },
+  {
+    id: 'mar',
+    vehiculo: 'barco',
+    desc: 'el mar desde el ojo de buey de un barco (lejanía entre países, travesías)',
+  },
+  {
+    id: 'anden',
+    vehiculo: 'tren',
+    desc: 'un andén donde dos personas se abrazan (reencuentros, visitas, os visteis)',
+  },
+  {
+    id: 'casa',
+    vehiculo: 'casa',
+    desc: 'la ventana de casa con una planta y un gato dormido (hogar, quedarse en casa, cuidarse)',
+  },
 ] as const;
 export type Escenario = (typeof ESCENARIOS)[number]['id'];
 export const esEscenario = (s: string | undefined | null): s is Escenario =>
   !!s && ESCENARIOS.some((e) => e.id === s);
 
-export type Persona = { id: string; name: string; city?: string; lat?: number; lng?: number; tz?: string };
+export type Persona = {
+  id: string;
+  name: string;
+  city?: string;
+  lat?: number;
+  lng?: number;
+  tz?: string;
+};
 
 export type Pieza = {
   id: string;
@@ -69,9 +144,20 @@ export type DatosPelicula = {
   scenario: Escenario;
   people: Persona[];
   /** La página de la libreta: puntos que la pluma une (casas o lugares). */
-  mapa: { points: { title: string; subtitle?: string; lat?: number; lng?: number }[]; chronological?: boolean };
+  mapa: {
+    points: { title: string; subtitle?: string; lat?: number; lng?: number }[];
+    chronological?: boolean;
+  };
   pieces: Pieza[];
-  voices: { intro?: Voz; pieces: Record<string, Voz>; stats?: Voz; end?: Voz };
+  /** greeting: el saludo sobre el reloj; route: la frase de la ruta sobre la libreta. */
+  voices: {
+    greeting?: Voz;
+    intro?: Voz;
+    route?: Voz;
+    pieces: Record<string, Voz>;
+    stats?: Voz;
+    end?: Voz;
+  };
   stats: {
     /** Cuatro cifras: arriba (2) y a los lados (corazón, bocadillo). */
     numbers: { n: number; label: string }[];
@@ -108,33 +194,62 @@ export function planificar(d: DatosPelicula): Plan {
   const say = (a: number, v?: Voz) => {
     if (v) voces.push({ a, b: a + durVoz(v), voz: v });
   };
-  // La voz manda: los tramos se ajustan a lo que dura y entre una frase y la
-  // siguiente apenas hay silencio. La apertura sigue sonando sobre la libreta.
-  const reloj: Tramo = [0, 2.8];
-  const persiana: Tramo = [2.5, 4.7];
-  const v0 = 4.3;
-  const introStart = v0 + 0.8;
-  const introEnd = introStart + durVoz(d.voices.intro);
-  say(introStart, d.voices.intro);
-  const ventanilla: Tramo = [v0, Math.max(v0 + 5.5, introStart + durVoz(d.voices.intro) * 0.6)];
-  const libreta: Tramo = [ventanilla[1] - 0.6, ventanilla[1] - 0.6 + 6.2];
+  // La voz manda y no se para: cada frase empieza justo donde acaba la
+  // anterior, y las escenas se estiran para caber en lo que dura cada una.
+  const V = d.voices;
+  // 1. El saludo, mientras corren las fechas en el reloj.
+  // (termina justo cuando sube la persiana, para que la apertura le siga sin pausa)
+  const v0 = Math.max(4.3, 0.4 + durVoz(V.greeting));
+  say(v0 - durVoz(V.greeting), V.greeting);
+  const reloj: Tramo = [0, v0 - 1.5];
+  const persiana: Tramo = [v0 - 1.8, v0 + 0.4];
+  // 2. La apertura, mirando por la ventanilla.
+  const introStart = V.greeting ? v0 : v0 + 0.8;
+  const introEnd = introStart + durVoz(V.intro);
+  say(introStart, V.intro);
+  const ventanilla: Tramo = [
+    v0,
+    Math.max(v0 + 4.5, V.route ? introEnd : introStart + durVoz(V.intro) * 0.6),
+  ];
+  // 3. La ruta en la libreta (con su frase, si la hay).
+  const routeStart = Math.max(introEnd, ventanilla[1] - 0.6);
+  say(routeStart, V.route);
+  const libreta: Tramo = [
+    ventanilla[1] - 0.6,
+    Math.max(ventanilla[1] - 0.6 + 4.6, routeStart + durVoz(V.route)),
+  ];
   const c0 = libreta[1] - 0.4;
-  // Primero el calendario y el flash de la cámara; luego, un momento tras otro.
-  let t = Math.max(c0 + 2.2, introEnd - 0.4);
-  const piezas = d.pieces.map((p) => {
+  // 4. El calendario y la cámara; la primera frase empieza ya durante el flash.
+  let tv = V.route ? routeStart + durVoz(V.route) : introEnd; // donde acaba la última frase
+  let t = c0 + 2.0;
+  const piezas = d.pieces.map((p, i) => {
     const v = d.voices.pieces[p.id];
     const a = t;
-    say(a + 0.5, v);
-    const b = a + Math.max(3.8, 0.5 + durVoz(v) + 0.5 + Math.min(2, p.comments.length) * 0.3);
+    const vs = i === 0 ? Math.min(a, Math.max(tv, c0)) : Math.max(a, tv);
+    say(vs, v);
+    tv = vs + durVoz(v);
+    const b = Math.max(a + 3.0, tv);
     t = b;
     return { id: p.id, a, b };
   });
   const calendario: Tramo = [c0, t];
-  const recuerdos: Tramo = [t, t + Math.max(6.5, durVoz(d.voices.stats) + 1.4)];
-  say(t + 0.7, d.voices.stats);
-  const final: Tramo = [recuerdos[1], recuerdos[1] + Math.max(4.5, durVoz(d.voices.end) + 1.2)];
-  say(final[0] + 0.4, d.voices.end);
-  return { reloj, persiana, ventanilla, libreta, calendario, piezas, recuerdos, final, total: final[1] + 0.3, voces };
+  // 5. Las cifras y la despedida.
+  const recuerdos: Tramo = [t, t + Math.max(5.5, durVoz(V.stats))];
+  say(t, V.stats);
+  const final: Tramo = [recuerdos[1], recuerdos[1] + Math.max(4, durVoz(V.end) + 0.8)];
+  say(final[0], V.end);
+  return {
+    reloj,
+    persiana,
+    ventanilla,
+    libreta,
+    calendario,
+    piezas,
+    recuerdos,
+    final,
+    total: final[1] + 0.3,
+    voces,
+  };
 }
 
 /** Si la narradora no eligió vista, se elige por el contexto del periodo. */
@@ -174,7 +289,11 @@ export function elegirEscenario(
     case 'musica':
       return 'musica';
     case 'naturaleza':
-      return month >= 8 && month <= 10 ? 'otono' : month >= 2 && month <= 4 ? 'primavera' : 'montana';
+      return month >= 8 && month <= 10
+        ? 'otono'
+        : month >= 2 && month <= 4
+          ? 'primavera'
+          : 'montana';
     case 'amor':
       return 'estrellas';
     case 'noche':

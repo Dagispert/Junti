@@ -12,12 +12,26 @@ import { tag } from './pelicula';
 
 type Recap = ReturnType<typeof buildRecap>;
 const DAY = 86_400_000;
-const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const MESES = [
+  'enero',
+  'febrero',
+  'marzo',
+  'abril',
+  'mayo',
+  'junio',
+  'julio',
+  'agosto',
+  'septiembre',
+  'octubre',
+  'noviembre',
+  'diciembre',
+];
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 
 function km(a: { lat?: number; lng?: number }, b: { lat?: number; lng?: number }) {
   if (a.lat == null || a.lng == null || b.lat == null || b.lng == null) return 0;
-  const R = 6371, r = Math.PI / 180;
+  const R = 6371,
+    r = Math.PI / 180;
   const h =
     Math.sin(((b.lat - a.lat) * r) / 2) ** 2 +
     Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(((b.lng - a.lng) * r) / 2) ** 2;
@@ -43,7 +57,9 @@ export function datosPelicula(
   // Las piezas: los momentos que cuenta la narradora (en su orden) o los elegidos.
   const scenes = narration?.scenes ?? [];
   const byId = new Map(recap.moments.map((m) => [m.id, m]));
-  const told = scenes.map((s) => (s.momentId ? byId.get(s.momentId) : undefined)).filter((m): m is Moment => !!m);
+  const told = scenes
+    .map((s) => (s.momentId ? byId.get(s.momentId) : undefined))
+    .filter((m): m is Moment => !!m);
   const chosen = told.length ? [...new Set(told)] : recap.picks;
   const pieces: Pieza[] = chosen.slice(0, recap.kind === 'week' ? 10 : 14).map((m) => {
     const d = new Date(m.createdAt);
@@ -69,19 +85,23 @@ export function datosPelicula(
   const times = narration?.audioUrl && narration.sceneTimes?.length ? narration.sceneTimes : null;
   const endOf = (i: number) => times?.[i + 1] ?? narration?.audioDuration ?? undefined;
   let target: 'intro' | 'stats' | 'end' | string = 'intro';
+  const SLOTS = ['greeting', 'intro', 'route', 'stats', 'end'] as const;
   const put = (key: string, v: Voz) => {
-    const cur = key === 'intro' ? voices.intro : key === 'stats' ? voices.stats : key === 'end' ? voices.end : voices.pieces[key];
+    const slot = SLOTS.find((x) => x === key);
+    const cur = slot ? voices[slot] : voices.pieces[key];
     const next = cur ? { text: `${cur.text} ${v.text}`, from: cur.from, to: v.to } : v;
-    if (key === 'intro') voices.intro = next;
-    else if (key === 'stats') voices.stats = next;
-    else if (key === 'end') voices.end = next;
+    if (slot) voices[slot] = next;
     else voices.pieces[key] = next;
   };
   let scenario: string | undefined;
   scenes.forEach((s, i) => {
     const v: Voz = { text: s.text, ...(times ? { from: times[i], to: endOf(i) } : {}) };
     if (s.momentId?.startsWith('ventanilla:')) scenario = s.momentId.slice('ventanilla:'.length);
-    if (s.momentId === 'stats') target = 'stats';
+    if (s.momentId === 'greeting') target = 'greeting';
+    else if (s.momentId === 'route') target = 'route';
+    else if (s.momentId?.startsWith('ventanilla:') || (!s.momentId && target === 'greeting'))
+      target = 'intro';
+    else if (s.momentId === 'stats') target = 'stats';
     else if (s.momentId === 'end') target = 'end';
     else if (s.momentId && pieces.some((p) => p.id === s.momentId)) target = s.momentId;
     put(target, v);
@@ -117,10 +137,12 @@ export function datosPelicula(
     perDay = labels.map(() => 0);
     for (const m of recap.moments) perDay[(new Date(m.createdAt).getDay() + 6) % 7] += 1;
   } else {
-    const n = days.length, weeks = Math.ceil(n / 7);
+    const n = days.length,
+      weeks = Math.ceil(n / 7);
     labels = Array.from({ length: weeks }, (_, i) => `${i * 7 + 1}`);
     perDay = labels.map(() => 0);
-    for (const m of recap.moments) perDay[Math.min(weeks - 1, Math.floor((new Date(m.createdAt).getDate() - 1) / 7))] += 1;
+    for (const m of recap.moments)
+      perDay[Math.min(weeks - 1, Math.floor((new Date(m.createdAt).getDate() - 1) / 7))] += 1;
   }
 
   const mes = MESES[start.getMonth()];
@@ -145,14 +167,23 @@ export function datosPelicula(
     tags: {
       reloj:
         recap.kind === 'week'
-          ? tag('del', String(start.getDate()), 'al', String(last.getDate()), 'de', MESES[last.getMonth()])
+          ? tag(
+              'del',
+              String(start.getDate()),
+              'al',
+              String(last.getDate()),
+              'de',
+              MESES[last.getMonth()],
+            )
           : tag(mes, String(start.getFullYear())),
       ventanilla: tag(title),
       libreta: maxKm > 30 ? tag(`${Math.round(maxKm)}kmentrevosotros`) : '#todoscerca',
     },
     scenario: finalScenario,
     people,
-    mapa: { points: people.map((p) => ({ title: p.name, subtitle: p.city, lat: p.lat, lng: p.lng })) },
+    mapa: {
+      points: people.map((p) => ({ title: p.name, subtitle: p.city, lat: p.lat, lng: p.lng })),
+    },
     pieces,
     voices,
     stats: {
@@ -221,7 +252,10 @@ export function datosHistoria(
 ): DatosPelicula {
   const { user, scenes, narration } = opts;
   const first = (id: string) => user(id).name.split(' ')[0];
-  const times = narration?.audioUrl && narration.sceneTimes?.length && narration.scenes === (scenes as unknown) ? narration.sceneTimes : null;
+  const times =
+    narration?.audioUrl && narration.sceneTimes?.length && narration.scenes === (scenes as unknown)
+      ? narration.sceneTimes
+      : null;
   const endOf = (i: number) => times?.[i + 1] ?? narration?.audioDuration ?? undefined;
   const origin = story.items.find((i) => i.type === 'origin');
   const now = new Date().getFullYear();
@@ -236,13 +270,14 @@ export function datosHistoria(
   const voices: DatosPelicula['voices'] = { pieces: {} };
   let target = 'intro';
   const put = (key: string, v: Voz) => {
-    const cur = key === 'intro' ? voices.intro : key === 'end' ? voices.end : voices.pieces[key];
+    const slot = (['greeting', 'intro', 'end'] as const).find((x) => x === key);
+    const cur = slot ? voices[slot] : voices.pieces[key];
     const next = cur ? { text: `${cur.text} ${v.text}`, from: cur.from, to: v.to } : v;
-    if (key === 'intro') voices.intro = next;
-    else if (key === 'end') voices.end = next;
+    if (slot) voices[slot] = next;
     else voices.pieces[key] = next;
   };
-  const monthYear = (t: number) => new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' }).format(t);
+  const monthYear = (t: number) =>
+    new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' }).format(t);
   scenes.forEach((s, i) => {
     const v: Voz = { text: s.text, ...(times ? { from: times[i], to: endOf(i) } : {}) };
     const memory = story.memories.find((m) => m.id === s.momentId);
@@ -261,7 +296,9 @@ export function datosHistoria(
         photo: memory.imageUri ? (opts.photos?.[memory.imageUri] ?? memory.imageUri) : undefined,
         wave: memory.voice?.waveform,
         comments: [
-          ...(memory.additions ?? []).filter((a) => a.text).map((a) => ({ who: first(a.authorId), text: a.text! })),
+          ...(memory.additions ?? [])
+            .filter((a) => a.text)
+            .map((a) => ({ who: first(a.authorId), text: a.text! })),
           ...memory.comments.map((c) => ({ who: first(c.userId), text: c.text })),
         ],
         reactions: memory.reactions.map((r) => r.emoji),
@@ -282,7 +319,9 @@ export function datosHistoria(
       });
       target = id;
     } else if (s.momentId === 'end') target = 'end';
+    else if (s.momentId === 'greeting') target = 'greeting';
     // el comienzo («origin») se oye mientras se mira por la ventanilla
+    else if (s.momentId === 'origin' || target === 'greeting') target = 'intro';
     put(target, v);
   });
 
@@ -294,17 +333,33 @@ export function datosHistoria(
     if (last && last.title === title) return;
     points.push({ title, subtitle, lat, lng });
   };
-  if (origin?.type === 'origin') add(origin.origin.place.split(',')[0], origin.year ? String(origin.year) : 'el comienzo', origin.origin.lat, origin.origin.lng);
-  for (const m of story.memories) if (m.place) add(m.place.name.split(',')[0], String(new Date(m.createdAt).getFullYear()), m.place.lat, m.place.lng);
+  if (origin?.type === 'origin')
+    add(
+      origin.origin.place.split(',')[0],
+      origin.year ? String(origin.year) : 'el comienzo',
+      origin.origin.lat,
+      origin.origin.lng,
+    );
+  for (const m of story.memories)
+    if (m.place)
+      add(
+        m.place.name.split(',')[0],
+        String(new Date(m.createdAt).getFullYear()),
+        m.place.lat,
+        m.place.lng,
+      );
 
   // El reloj: los años, como mucho doce paradas.
   const span = Math.max(0, now - startYear);
   const n = Math.min(12, span + 1);
-  const clock = Array.from({ length: n }, (_, i) => String(Math.round(startYear + (span * i) / Math.max(1, n - 1))));
+  const clock = Array.from({ length: n }, (_, i) =>
+    String(Math.round(startYear + (span * i) / Math.max(1, n - 1))),
+  );
 
   // Cifras y gráfico: recuerdos por año (o por épocas, si hay muchos años).
   const memYears = story.memories.map((m) => new Date(m.createdAt).getFullYear());
-  const y0 = memYears.length ? Math.min(...memYears) : startYear, y1 = memYears.length ? Math.max(...memYears) : now;
+  const y0 = memYears.length ? Math.min(...memYears) : startYear,
+    y1 = memYears.length ? Math.max(...memYears) : now;
   const bins = Math.min(7, y1 - y0 + 1);
   const size = Math.ceil((y1 - y0 + 1) / Math.max(1, bins));
   const labels = Array.from({ length: bins }, (_, i) => String(y0 + i * size).slice(2));
@@ -316,7 +371,9 @@ export function datosHistoria(
     const u = user(id);
     return { id, name: first(id), city: u.city, lat: u.lat, lng: u.lng, tz: u.tz };
   });
-  const loved = [...story.memories].sort((a, b) => b.reactions.length + b.comments.length - (a.reactions.length + a.comments.length))[0];
+  const loved = [...story.memories].sort(
+    (a, b) => b.reactions.length + b.comments.length - (a.reactions.length + a.comments.length),
+  )[0];
   const texts = story.memories.flatMap((m) => [m.text ?? '']);
   return {
     kind: 'story',
@@ -329,7 +386,11 @@ export function datosHistoria(
     header: 'AÑO',
     closing: 'y la historia sigue…',
     tags: { reloj: `#desde${startYear}`, ventanilla: tag(opts.title), libreta: '#dondeempezótodo' },
-    scenario: elegirEscenario(texts, [], 6, { travel: points.length > 2, rain: false, snow: false }),
+    scenario: elegirEscenario(texts, [], 6, {
+      travel: points.length > 2,
+      rain: false,
+      snow: false,
+    }),
     people,
     mapa: { points, chronological: true },
     pieces,

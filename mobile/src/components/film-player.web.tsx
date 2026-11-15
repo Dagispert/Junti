@@ -86,17 +86,32 @@ export function FilmPlayer({
           // fotograma, que la hacía cortarse).
           if (seg && seg.voz.from != null && playing !== seg) {
             playing = seg;
-            voice.currentTime = seg.voz.from + Math.max(0, time - seg.a);
-            voice.play().catch(() => {});
+            const at = seg.voz.from + Math.max(0, time - seg.a);
+            // si ya viene sonando justo ahí (frases seguidas), no se toca
+            if (Math.abs(voice.currentTime - at) > 0.15) voice.currentTime = at;
+            if (voice.paused) voice.play().catch(() => {});
           } else if (playing && playing.voz.from != null) {
             const end = playing.voz.to ?? Infinity;
             const want = playing.voz.from + (time - playing.a);
-            if (voice.currentTime >= end - 0.02 || time > playing.b + 1.5) {
-              if (!voice.paused) voice.pause();
+            if (voice.currentTime >= end - 0.02) {
+              // ¿La siguiente frase va justo detrás (en el audio y en la película)?
+              // Entonces se sigue sin tocar nada: la voz no se para.
+              const cur = playing;
+              const next = plan.voces.find(
+                (v) =>
+                  v.voz.from != null &&
+                  Math.abs(v.voz.from - end) < 0.06 &&
+                  Math.abs(v.a - cur.b) < 0.06,
+              );
+              if (next) playing = next;
+              else if (!voice.paused) voice.pause();
             } else {
-              if (voice.paused) voice.play().catch(() => {});
-              // solo si se ha ido muy lejos (p. ej. tras saltar en la película)
+              if (voice.paused && time < playing.b + 1.5) voice.play().catch(() => {});
               if (Math.abs(voice.currentTime - want) > 1.5) voice.currentTime = want;
+              // La película sigue el reloj de la voz (así nunca se adelanta ni se queda atrás).
+              else if (!voice.paused && voice.readyState >= 3) {
+                t.current = playing.a + (voice.currentTime - playing.voz.from);
+              }
             }
           }
         }
@@ -104,7 +119,15 @@ export function FilmPlayer({
       const key = seg ? `${seg.a}|${Math.floor(((time - seg.a) / (seg.b - seg.a)) * 40)}` : '';
       if (key !== lastSub) {
         lastSub = key;
-        setSub(seg ? { text: seg.voz.text, k: (time - seg.a) / (seg.b - seg.a), day: time >= dayAt && time < plan.final[0] } : null);
+        setSub(
+          seg
+            ? {
+                text: seg.voz.text,
+                k: (time - seg.a) / (seg.b - seg.a),
+                day: time >= dayAt && time < plan.final[0],
+              }
+            : null,
+        );
       }
       raf = requestAnimationFrame(loop);
     };
@@ -137,7 +160,11 @@ export function FilmPlayer({
 
   return (
     <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
-      <svg ref={svgRef} style={{ width: '100%', height: '100%', display: 'block' }} preserveAspectRatio="xMidYMid meet" />
+      <svg
+        ref={svgRef}
+        style={{ width: '100%', height: '100%', display: 'block' }}
+        preserveAspectRatio="xMidYMid meet"
+      />
       {shown && (
         <div
           style={{

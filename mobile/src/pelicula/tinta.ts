@@ -44,7 +44,16 @@ export class Taller {
       cap?: 'round' | 'butt';
     } & HandOpts = {},
   ): SVGPathElement | SVGGElement {
-    const { color = 'currentColor', width = 2, fill = 'none', double, opacity, dash, cap = 'round', ...h } = o;
+    const {
+      color = 'currentColor',
+      width = 2,
+      fill = 'none',
+      double,
+      opacity,
+      dash,
+      cap = 'round',
+      ...h
+    } = o;
     const seed = h.seed ?? this.nextSeed();
     const g = double ? el('g', { opacity }, parent) : null;
     const p = el(
@@ -62,7 +71,17 @@ export class Taller {
     );
     this.register(p, hand(d, { ...h, seed }));
     if (g) {
-      const p2 = el('path', { fill: 'none', stroke: color, 'stroke-width': width * 0.55, 'stroke-linecap': 'round', opacity: 0.85 }, g);
+      const p2 = el(
+        'path',
+        {
+          fill: 'none',
+          stroke: color,
+          'stroke-width': width * 0.55,
+          'stroke-linecap': 'round',
+          opacity: 0.85,
+        },
+        g,
+      );
       this.register(p2, hand(d, { ...h, seed: seed + 999, amp: (h.amp ?? 1) * 1.5 + 0.5 }));
     }
     return g ?? p;
@@ -99,7 +118,8 @@ function visible(n: Element): boolean {
 
 /** Muestra la parte k (0…1) de los trazos, como si se dibujaran. */
 export function revelar(node: Element, k: number) {
-  const paths = node.tagName === 'path' ? [node as SVGPathElement] : [...node.querySelectorAll('path')];
+  const paths =
+    node.tagName === 'path' ? [node as SVGPathElement] : [...node.querySelectorAll('path')];
   for (const p of paths) {
     if (p.getAttribute('stroke-dasharray')) continue; // los discontinuos se revelan con máscara
     if (!p.hasAttribute('pathLength')) p.setAttribute('pathLength', '1');
@@ -114,10 +134,23 @@ export function revelar(node: Element, k: number) {
   }
 }
 
-export type Pose = { x?: number; y?: number; s?: number; sx?: number; sy?: number; r?: number; ox?: number; oy?: number; ky?: number };
+export type Pose = {
+  x?: number;
+  y?: number;
+  s?: number;
+  sx?: number;
+  sy?: number;
+  r?: number;
+  ox?: number;
+  oy?: number;
+  ky?: number;
+};
 
 /** Mueve/escala/gira alrededor de un origen. */
-export function mover(n: Element, { x = 0, y = 0, s = 1, sx = s, sy = s, r = 0, ox = 0, oy = 0, ky = 0 }: Pose = {}) {
+export function mover(
+  n: Element,
+  { x = 0, y = 0, s = 1, sx = s, sy = s, r = 0, ox = 0, oy = 0, ky = 0 }: Pose = {},
+) {
   n.setAttribute(
     'transform',
     `translate(${(x + ox).toFixed(2)},${(y + oy).toFixed(2)}) rotate(${r.toFixed(2)}) matrix(1,${ky.toFixed(4)},0,1,0,0) scale(${sx.toFixed(4)},${sy.toFixed(4)}) translate(${-ox},${-oy})`,
@@ -133,15 +166,28 @@ export const opacidad = (n: Element, v: number) => {
 
 /** Volteo sobre una bisagra horizontal (hojas de calendario, fotos). */
 export function voltearY(n: Element, ang: number, hingeY: number, cx: number, persp = 0.12) {
-  const c = Math.cos(ang), s = Math.sin(ang);
-  mover(n, { ox: cx, oy: hingeY, sy: Math.abs(c) < 0.02 ? 0.02 * Math.sign(c || 1) : c, sx: 1 + s * persp });
+  const c = Math.cos(ang),
+    s = Math.sin(ang);
+  mover(n, {
+    ox: cx,
+    oy: hingeY,
+    sy: Math.abs(c) < 0.02 ? 0.02 * Math.sign(c || 1) : c,
+    sx: 1 + s * persp,
+  });
   return c >= 0;
 }
 
 /** Volteo sobre una bisagra vertical (la tapa de la libreta). */
 export function voltearX(n: Element, ang: number, hingeX: number, cy: number, persp = 0.16) {
-  const c = Math.cos(ang), s = Math.sin(ang);
-  mover(n, { ox: hingeX, oy: cy, sx: Math.abs(c) < 0.02 ? 0.02 * Math.sign(c || 1) : c, sy: 1 + s * 0.1, ky: -s * persp * Math.sign(c || 1) });
+  const c = Math.cos(ang),
+    s = Math.sin(ang);
+  mover(n, {
+    ox: hingeX,
+    oy: cy,
+    sx: Math.abs(c) < 0.02 ? 0.02 * Math.sign(c || 1) : c,
+    sy: 1 + s * 0.1,
+    ky: -s * persp * Math.sign(c || 1),
+  });
   return c >= 0;
 }
 
@@ -149,7 +195,16 @@ export function voltearX(n: Element, ang: number, hingeX: number, cy: number, pe
 export function texto(
   parent: Element,
   s: string,
-  o: { x: number; y: number; size?: number; hand?: boolean; weight?: number; color?: string; anchor?: 'start' | 'middle' | 'end'; spacing?: number },
+  o: {
+    x: number;
+    y: number;
+    size?: number;
+    hand?: boolean;
+    weight?: number;
+    color?: string;
+    anchor?: 'start' | 'middle' | 'end';
+    spacing?: number;
+  },
 ) {
   const t = el(
     'text',
@@ -157,7 +212,10 @@ export function texto(
       x: o.x,
       y: o.y,
       'font-size': o.size ?? 24,
-      'font-family': o.hand === false ? 'system-ui, -apple-system, sans-serif' : 'Caveat_600SemiBold, Caveat, cursive',
+      'font-family':
+        o.hand === false
+          ? 'system-ui, -apple-system, sans-serif'
+          : 'Caveat_600SemiBold, Caveat, cursive',
       'font-weight': o.weight,
       fill: o.color ?? 'currentColor',
       'text-anchor': o.anchor ?? 'middle',
