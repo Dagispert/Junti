@@ -1,0 +1,99 @@
+/*
+ * Movimientos independientes (CSS): los pequeños detalles que viven solos y
+ * no necesitan estar sincronizados con la línea de tiempo.
+ * Al pausar la película, .pausado los congela también.
+ */
+
+/* Esquirlas del fondo: deriva lenta, giro y vuelta (cada una con su ritmo). */
+.esquirla {
+  fill: var(--esquirla-noche);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: deriva 14s ease-in-out infinite alternate;
+  transition: fill 0.2s;
+}
+.dia .esquirla {
+  fill: var(--esquirla-dia);
+}
+@keyframes deriva {
+  from {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  to {
+    transform: translate(var(--dx), var(--dy)) rotate(var(--giro));
+  }
+}
+
+/* El piloto de la alarma parpadea. */
+.piloto {
+  animation: parpadeo 0.9s steps(1, end) infinite;
+}
+@keyframes parpadeo {
+  50% {
+    fill-opacity: 0.25;
+  }
+}
+
+/* El vapor del café sube y se desvanece. */
+.vapor {
+  animation: vapor 1.6s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: bottom center;
+}
+.vapor1,
+.vapor3 {
+  animation-delay: -0.8s;
+}
+@keyframes vapor {
+  0% {
+    opacity: 0;
+    transform: translateY(4px) scaleY(0.7);
+  }
+  40% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-10px) scaleY(1.1);
+  }
+}
+
+/* Grano de película: el ruido salta 12 veces por segundo. */
+.grano {
+  position: absolute;
+  inset: -50%;
+  pointer-events: none;
+  opacity: 0.07;
+  mix-blend-mode: overlay;
+  animation: grano 1s steps(12) infinite;
+}
+.dia .grano {
+  opacity: 0.1;
+  mix-blend-mode: multiply;
+  filter: contrast(0.35) brightness(1.5);
+}
+@keyframes grano {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(-7%, 4%); }
+  50% { transform: translate(5%, -6%); }
+  75% { transform: translate(-3%, -2%); }
+  100% { transform: translate(6%, 5%); }
+}
+
+/* El texto hierve con el dibujo (el JS cambia data-hervor 8 veces por segundo). */
+[data-hervor='0'] .aspero { filter: url(#aspero0); }
+[data-hervor='1'] .aspero { filter: url(#aspero1); }
+[data-hervor='2'] .aspero { filter: url(#aspero2); }
+
+.pausado *,
+.pausado *::before,
+.pausado *::after {
+  animation-play-state: paused !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .esquirla,
+  .grano {
+    animation: none;
+  }
+}

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Junti · Rumbo a ti</title>
+    <meta name="description" content="Animación dibujada a mano: un viaje a distancia contado en recuerdos." />
+    <link rel="icon" href="../logo.svg" />
+    <link rel="preload" href="fuentes/patrick-hand-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="fuentes/jost-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="css/paleta.css" />
+    <link rel="stylesheet" href="css/escenario.css" />
+    <link rel="stylesheet" href="css/movimientos.css" />
+  </head>
+  <body>
+    <div id="marco">
+      <!-- Todo se dibuja aquí desde js/ (escenas, ilustraciones, transiciones). -->
+      <svg id="escenario" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Animación: un viaje para volver a vernos, contado en recuerdos dibujados a mano">
+        <defs></defs>
+      </svg>
+    </div>
+
+    <div id="controles">
+      <button id="play" type="button" aria-label="Reproducir" data-estado="pausa">
+        <svg class="icono-play" viewBox="0 0 18 18" aria-hidden="true"><path d="M4.5 2.6c0-.8.9-1.3 1.6-.9l9.3 5.7c.7.4.7 1.4 0 1.8l-9.3 5.7c-.7.4-1.6-.1-1.6-.9z" fill="currentColor" /></svg>
+        <svg class="icono-pausa" viewBox="0 0 18 18" aria-hidden="true"><path d="M4 2.5h3.2v13H4zM10.8 2.5H14v13h-3.2z" fill="currentColor" /></svg>
+      </button>
+      <input id="barra" type="range" min="0" step="0.01" value="0" aria-label="Tiempo" />
+      <span id="tiempo">00.0 s</span>
+      <nav id="capitulos" aria-label="Escenas"></nav>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,10 @@
+/* Paleta (la misma que js/config.js, para lo que pinta CSS). */
+:root {
+  --negro: #000000;
+  --crema: #fdfdd4;
+  --crema-sombra: #f1f0c6;
+  --rosa: #e3065f;
+  --tinta: #0b0b09;
+  --esquirla-noche: #262622;
+  --esquirla-dia: #e9e7bc;
+}

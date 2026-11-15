@@ -1,0 +1,136 @@
+/* Escenario a pantalla completa y controles discretos. */
+@font-face {
+  font-family: 'Patrick Hand';
+  src: url('../fuentes/patrick-hand-latin-400-normal.woff2') format('woff2');
+  font-display: block;
+}
+@font-face {
+  font-family: 'Jost';
+  font-weight: 400;
+  src: url('../fuentes/jost-latin-400-normal.woff2') format('woff2');
+  font-display: block;
+}
+@font-face {
+  font-family: 'Jost';
+  font-weight: 500;
+  src: url('../fuentes/jost-latin-500-normal.woff2') format('woff2');
+  font-display: block;
+}
+@font-face {
+  font-family: 'Jost';
+  font-weight: 600;
+  src: url('../fuentes/jost-latin-600-normal.woff2') format('woff2');
+  font-display: block;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--negro);
+  overflow: hidden;
+  font-family: 'Jost', system-ui, sans-serif;
+}
+#marco {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+#escenario {
+  width: 100%;
+  height: 100%;
+  display: block;
+  opacity: 0;
+  transition: opacity 0.4s;
+  cursor: pointer;
+}
+.listo #escenario {
+  opacity: 1;
+}
+
+/* Controles: una barra fina abajo que se esconde al mirar. */
+#controles {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  max-width: 760px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 18px;
+  background: rgba(20, 20, 18, 0.72);
+  backdrop-filter: blur(10px);
+  color: var(--crema);
+  transition: opacity 0.4s, transform 0.4s;
+  z-index: 2;
+}
+.quieto #controles {
+  opacity: 0;
+  transform: translateY(12px);
+  pointer-events: none;
+}
+.quieto #escenario {
+  cursor: none;
+}
+#play {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--crema);
+  color: var(--negro);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+#play svg {
+  width: 18px;
+  height: 18px;
+}
+#play[data-estado='marcha'] .icono-play,
+#play[data-estado='pausa'] .icono-pausa {
+  display: none;
+}
+#barra {
+  width: 100%;
+  accent-color: var(--rosa);
+}
+#tiempo {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  opacity: 0.8;
+  min-width: 48px;
+  text-align: right;
+}
+#capitulos {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+#capitulos button {
+  flex: none;
+  border: 1px solid rgba(253, 253, 212, 0.3);
+  background: transparent;
+  color: var(--crema);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+#capitulos button[aria-current='true'] {
+  background: var(--rosa);
+  border-color: var(--rosa);
+}
+button:focus-visible {
+  outline: 2px solid var(--rosa);
+  outline-offset: 2px;
+}
