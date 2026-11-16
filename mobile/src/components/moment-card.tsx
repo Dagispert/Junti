@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Check, Plus, Send, X } from 'lucide-react-native';
+import { Check, Maximize2, Plus, Send, X } from 'lucide-react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -181,6 +181,17 @@ export function MomentCard({
               {!moment.memory && <SkyBadge tz={moment.authorTz} at={moment.createdAt} size={16} />}
               <Text style={styles.overMetaText}>{where}</Text>
             </View>
+            {/* Un vídeo se reproduce al tocarlo: para abrirlo (y editarlo o borrarlo), este botón. */}
+            {!!moment.videoUri && !moment.gallery && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Abrir la publicación"
+                hitSlop={8}
+                onPress={() => router.push({ pathname: '/moment/[id]', params: { id: moment.id } })}
+                style={styles.openVideo}>
+                <Icon icon={Maximize2} size={16} color="#FFFFFF" />
+              </Pressable>
+            )}
             {(!!moment.text || !!proposal) && (
               <>
                 <Scrim edge="bottom" />
@@ -541,6 +552,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: 8,
+  },
+  openVideo: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.38)',
+    zIndex: 3,
   },
   overMetaText: { color: 'rgba(255,255,255,0.88)', fontSize: 15 },
   caption: { position: 'absolute', left: 20, right: 20, bottom: 20, gap: 4 },
