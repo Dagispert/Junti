@@ -1,7 +1,7 @@
 import { router, useIsFocused, useLocalSearchParams } from 'expo-router';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useGlobePeople } from '@/components/connection-card';
@@ -48,6 +48,9 @@ export default function MapScreen() {
   const enFoco = useIsFocused();
   const [llegada, setLlegada] = useState(0);
   const planeta = useRef<unknown>(null);
+  // Los botones de arriba y las tarjetas de abajo: entran suaves cuando el planeta crece.
+  const arriba = useRef<unknown>(null);
+  const abajo = useRef<unknown>(null);
   useLayoutEffect(() => {
     const el = planeta.current as unknown as HTMLElement | null;
     if (!enFoco || !el || typeof el.animate !== 'function') return;
@@ -59,7 +62,8 @@ export default function MapScreen() {
     if (g) delete g.dataset.globo;
     // Hasta que el planeta grande se dibuja no se enseña; entonces aparece
     // justo donde estaba el pequeño (y del mismo tamaño) y crece hasta su sitio.
-    el.style.opacity = '0';
+    const resto = [arriba.current, abajo.current] as unknown as (HTMLElement | null)[];
+    for (const x of [el, ...resto]) if (x) x.style.opacity = '0';
     let raf = 0;
     let n = 0;
     let listo = 0;
@@ -71,8 +75,17 @@ export default function MapScreen() {
         raf = requestAnimationFrame(esperar);
         return;
       }
-      el.style.opacity = '';
+      for (const x of [el, ...resto]) if (x) x.style.opacity = '';
       if (!c) return;
+      resto.forEach((x, k) =>
+        x?.animate(
+          [
+            { opacity: 0, transform: `translateY(${k ? 14 : -10}px)` },
+            { opacity: 1, transform: 'translateY(0px)' },
+          ],
+          { duration: 450, delay: 380 + k * 90, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' },
+        ),
+      );
       const b = el.getBoundingClientRect();
       el.style.transformOrigin = `${c.x - b.left}px ${c.y - b.top}px`;
       el.animate(
@@ -86,7 +99,7 @@ export default function MapScreen() {
     raf = requestAnimationFrame(esperar);
     return () => {
       cancelAnimationFrame(raf);
-      el.style.opacity = '';
+      for (const x of [el, ...resto]) if (x) x.style.opacity = '';
     };
   }, [enFoco]);
   // Personas o recuerdos, nunca a la vez: así el planeta no se llena de cosas.
@@ -201,7 +214,7 @@ export default function MapScreen() {
       </View>
 
       <Animated.View
-        entering={llegada ? FadeIn.delay(350).duration(400) : undefined}
+        ref={arriba as never}
         pointerEvents="box-none"
         style={[styles.top, { paddingTop: insets.top + 8 }]}>
         <View style={styles.topRow}>
@@ -260,7 +273,7 @@ export default function MapScreen() {
       </Animated.View>
 
       <Animated.View
-        entering={llegada ? FadeIn.delay(450).duration(400) : undefined}
+        ref={abajo as never}
         pointerEvents="box-none"
         style={styles.bottom}>
         {pickedMoments.length > 0 && (
