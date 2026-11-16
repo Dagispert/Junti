@@ -786,7 +786,7 @@ export function montarMesa(o: {
     } else if (tipo === 'retoNuevo') {
       // ── reto lanzado: se clava una bandera con el reto y salen los que se animaron
       const tit = ajustar(ex.titulo ?? '', WC - 220, [38, 34, 30], 3);
-      const hB = Math.max(150, tit.lines.length * tit.size * 1.18 + 50);
+      const hB = Math.max(150, 60 + tit.lines.length * tit.size * 1.12 + 34);
       const quienes = (ex.quienes ?? []).slice(0, 6);
       altoTarjeta = hB + 260 + (quienes.length ? 110 : 40);
       const px = -WC / 2 + 70;
