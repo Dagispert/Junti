@@ -761,6 +761,7 @@ export function GlobeMap({
   focusPoint = null,
   hidePeople = false,
   distScale = 1,
+  radio,
   shiftY = 0,
   daylight = true,
   countryMemories = [],
@@ -776,8 +777,8 @@ export function GlobeMap({
   originsRef.current = origins;
   const daylightRef = useRef(daylight);
   daylightRef.current = daylight;
-  const frameRef = useRef({ distScale, shiftY });
-  frameRef.current = { distScale, shiftY };
+  const frameRef = useRef({ distScale, shiftY, radio });
+  frameRef.current = { distScale, shiftY, radio };
   const host = useRef<HTMLDivElement>(null);
   const api = useRef<{
     setPeople: (p: GlobePerson[]) => void;
@@ -1360,7 +1361,8 @@ export function GlobeMap({
 
     aimOverview();
     if (!interactive) {
-      view.yaw = target.yaw;
+      // con tamaño fijo (la tarjeta de Hoy), al aparecer gira hasta su sitio
+      view.yaw = target.yaw + (frameRef.current.radio ? 1.6 : 0);
       view.pitch = target.pitch;
       view.dist = target.dist;
     } else {
@@ -1525,7 +1527,7 @@ export function GlobeMap({
         vel.pitch *= 0.93;
         if (Math.abs(vel.yaw) + Math.abs(vel.pitch) < 0.0004) {
           if (idle || focused) {
-            const k = interactive && t < 3.5 ? 0.035 : 0.05;
+            const k = t < 3.5 ? 0.035 : 0.05;
             view.yaw += (target.yaw - view.yaw) * k;
             view.pitch += (target.pitch - view.pitch) * k;
           }
@@ -1583,7 +1585,13 @@ export function GlobeMap({
       // Límites de reposo: sin tocarlo (ni nadie destacado ni dentro de un
       // país), el planeta vuelve a verse entero, con sus nubes, en la pantalla.
       const mult = (fit > 1 ? 0.62 + fit * 0.38 : 1) * frameRef.current.distScale;
-      if (idle && !dragging && !focused && !country) {
+      const radio = frameRef.current.radio;
+      if (radio && !interactive) {
+        // tamaño fijo: el mismo en todos los grupos
+        const z = Math.sqrt((0.5 / (Math.tan((16 * Math.PI) / 180) * radio)) ** 2 + 1);
+        target.dist = z / mult;
+        view.dist = target.dist;
+      } else if (idle && !dragging && !focused && !country) {
         const zMin = 1.36 / (Math.tan((16 * Math.PI) / 180) * Math.min(1, camera.aspect));
         if (target.dist * mult < zMin) target.dist = zMin / mult;
       }

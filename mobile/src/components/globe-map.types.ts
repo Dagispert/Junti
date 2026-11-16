@@ -35,6 +35,12 @@ export type GlobeMapProps = {
   transparent?: boolean;
   /** Cuánto más lejos se pone la cámara (1 = lo normal): un planeta más pequeño. */
   distScale?: number;
+  /**
+   * Tamaño fijo del planeta: su radio como fracción del alto del lienzo. Así se
+   * ve igual en todos los grupos, estén juntos o repartidos por el mundo, y al
+   * aparecer gira hasta colocarse.
+   */
+  radio?: number;
   /** Desplaza el planeta en vertical (fracción del alto; negativo = más arriba). */
   shiftY?: number;
   /** true (por defecto): la luz del sol de verdad, con día y noche. false: todo de día. */
