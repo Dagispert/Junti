@@ -731,12 +731,24 @@ function Montage({
       v.currentTime = clipOf(m);
       v.play().catch(() => {});
     }
+    mix.current?.resume();
     a.play().catch(() => {});
     setState('playing');
     let current = '';
     const saltos = new Map<string, number>();
+    // El reloj del montaje es el tiempo real desde que empieza: si la canción se
+    // atasca (en el iPhone pasa), los vídeos siguen igual y la canción se recoloca.
+    const t0 = performance.now();
+    let saltoAudio = 0;
     const loop = () => {
-      const t = a.currentTime - game.start;
+      const ahora = performance.now();
+      const t = (ahora - t0) / 1000;
+      const ta = a.currentTime - game.start;
+      if (a.paused && !a.ended) a.play().catch(() => {});
+      if (!a.seeking && Math.abs(ta - t) > 0.5 && ahora - saltoAudio > 1500) {
+        saltoAudio = ahora;
+        a.currentTime = game.start + t;
+      }
       setProgress(Math.max(0, Math.min(1, t / duration)));
       const part = partAt(parts, t);
       const singing = part?.singers ?? [];
@@ -752,7 +764,6 @@ function Montage({
         // Recolocar solo si se ha ido bastante, sin otro salto a medias y no más de
         // uno cada segundo y medio: en el iPhone cada salto tarda, y recolocar en
         // cada fotograma lo dejaba congelado en una imagen.
-        const ahora = performance.now();
         if (v.paused && !v.ended && want < (v.duration || 1e9)) v.play().catch(() => {});
         if (
           !v.seeking &&
@@ -765,7 +776,7 @@ function Montage({
         }
         mix.current?.set(v, singing.includes(m.id) ? 1 : 0);
       }
-      if (t >= duration || a.ended) {
+      if (t >= duration) {
         a.pause();
         videos.current.forEach((v) => v.pause());
         setState('ended');
