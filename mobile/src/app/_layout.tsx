@@ -15,7 +15,7 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { AuthScreen, ProfileSetup } from '@/components/auth-screen';
 import { ColaEnvio } from '@/components/cola-envio';
 import { IntroCinematic } from '@/components/cinematics';
-import { Colors, useTheme } from '@/constants/theme';
+import { useTheme } from '@/constants/theme';
 import { aplicarEnLaWeb, useEsquema } from '@/lib/appearance';
 import { StoreProvider, useStore } from '@/data/store';
 import { AlDia } from '@/lib/al-dia';
@@ -68,13 +68,27 @@ export default function RootLayout() {
   // claro, oscuro o como el móvil (se elige en Ajustes)
   const esquema = useEsquema();
   const dark = esquema === 'dark';
-  useEffect(() => aplicarEnLaWeb(esquema, Colors[esquema].background), [esquema]);
+  // y el tema de colores de cada persona
+  const tema = useTheme();
+  useEffect(() => aplicarEnLaWeb(esquema, tema.background), [esquema, tema.background]);
+  const base = dark ? DarkTheme : DefaultTheme;
+  const navTema = {
+    ...base,
+    colors: {
+      ...base.colors,
+      background: tema.background,
+      card: tema.card,
+      text: tema.text,
+      border: tema.border,
+      primary: tema.accent,
+    },
+  };
   useFonts({ Caveat_600SemiBold, Caveat_700Bold, Fraunces_400Regular_Italic, Fraunces_500Medium });
   useEffect(setupInstallable, []);
   useEffect(rememberInvite, []);
   useEffect(instalarErrores, []);
   return (
-    <ThemeProvider value={dark ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={navTema}>
       <StoreProvider>
         <Gate />
         <AlDia />

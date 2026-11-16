@@ -10,9 +10,18 @@ import { DatePick } from '@/components/date-pick';
 import { Icon } from '@/components/icon';
 import { FamilyTag } from '@/components/family';
 import { Avatar, Button, Card, Field, Lead, Notice, Screen, Tag, Title } from '@/components/ui';
-import { setModo, useModo } from '@/lib/appearance';
+import {
+  setFondo,
+  setModo,
+  setTema,
+  type TemaId,
+  useEsquema,
+  useFondo,
+  useModo,
+  useTema,
+} from '@/lib/appearance';
 import { setFamilyColorMode, useFamilyColorMode } from '@/lib/families';
-import { Spacing, useTheme } from '@/constants/theme';
+import { Spacing, TEMAS, useTheme } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
 import type { Place } from '@/lib/geo';
 import { soyAdmin } from '@/lib/errores';
@@ -28,6 +37,9 @@ export default function Settings() {
   const theme = useTheme();
   const colorMode = useFamilyColorMode();
   const apariencia = useModo();
+  const temaElegido = useTema();
+  const fondoElegido = useFondo();
+  const esquema = useEsquema();
   const { me, user, groups, saveProfile, saveAbout, setAvatar, signOut, deleteAccount } =
     useStore();
   const profile = user(me);
@@ -351,12 +363,84 @@ export default function Settings() {
             })}
           </View>
           <Text style={{ color: theme.textSecondary, fontSize: 13, lineHeight: 19 }}>
-            {apariencia === 'sistema'
-              ? 'Sigue al móvil: clara de día u oscura si lo tienes en modo oscuro.'
-              : apariencia === 'claro'
-                ? 'Siempre clara, aunque el móvil esté en modo oscuro.'
-                : 'Siempre oscura.'}
+            {temaElegido === 'noche'
+              ? 'Con el tema Noche la app siempre es oscura.'
+              : apariencia === 'sistema'
+                ? 'Sigue al móvil: clara de día u oscura si lo tienes en modo oscuro.'
+                : apariencia === 'claro'
+                  ? 'Siempre clara, aunque el móvil esté en modo oscuro.'
+                  : 'Siempre oscura.'}
           </Text>
+        </Card>
+
+        {/* El tema: los colores de la app, solo para ti. */}
+        <Card style={styles.card}>
+          <Text style={{ color: theme.text, fontSize: 17, fontWeight: '600' }}>Tema</Text>
+          <View style={styles.temas}>
+            {(Object.keys(TEMAS) as TemaId[]).map((id) => {
+              const t = TEMAS[id];
+              const p = t[esquema === 'dark' || id === 'noche' ? 'dark' : 'light'];
+              const on = temaElegido === id;
+              return (
+                <Pressable
+                  key={id}
+                  accessibilityRole="radio"
+                  aria-checked={on}
+                  accessibilityLabel={`Tema ${t.nombre}: ${t.lema}`}
+                  onPress={() => setTema(id)}
+                  style={[
+                    styles.tema,
+                    { borderColor: on ? theme.accent : theme.border, borderWidth: on ? 2 : 1 },
+                  ]}>
+                  {/* una miniatura de la app con esos colores */}
+                  <View style={[styles.mini, { backgroundColor: p.background }]}>
+                    <View style={[styles.miniCard, { backgroundColor: p.card }]}>
+                      <View style={[styles.miniLinea, { backgroundColor: p.text, width: '70%' }]} />
+                      <View
+                        style={[styles.miniLinea, { backgroundColor: p.textSecondary, width: '45%' }]}
+                      />
+                    </View>
+                    <View style={[styles.miniBoton, { backgroundColor: p.accent }]} />
+                  </View>
+                  <Text style={{ color: theme.text, fontSize: 14, fontWeight: '600' }}>
+                    {t.nombre}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Text style={{ color: theme.textSecondary, fontSize: 13, lineHeight: 19 }}>
+            {TEMAS[temaElegido].lema}. Solo lo ves tú; el color de cada grupo no cambia.
+          </Text>
+        </Card>
+
+        {/* Un fondo suave detrás de las pantallas. */}
+        <Card style={styles.card}>
+          <Text style={{ color: theme.text, fontSize: 17, fontWeight: '600' }}>Fondo</Text>
+          <View style={styles.chips}>
+            {(
+              [
+                ['liso', 'Liso'],
+                ['papel', 'Papel'],
+                ['puntos', 'Puntos'],
+                ['lineas', 'Líneas'],
+              ] as const
+            ).map(([value, label]) => {
+              const on = fondoElegido === value;
+              return (
+                <Pressable
+                  key={value}
+                  accessibilityRole="radio"
+                  aria-checked={on}
+                  onPress={() => setFondo(value)}
+                  style={[styles.chip, { backgroundColor: on ? theme.accent : theme.soft }]}>
+                  <Text style={{ color: on ? theme.onAccent : theme.text, fontSize: 15 }}>
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </Card>
       </View>
 
@@ -520,6 +604,12 @@ const styles = StyleSheet.create({
   avatarRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   aboutHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  temas: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  tema: { width: '31%', flexGrow: 1, borderRadius: 16, padding: 8, gap: 6, alignItems: 'center' },
+  mini: { width: '100%', height: 64, borderRadius: 10, padding: 7, gap: 6 },
+  miniCard: { borderRadius: 6, padding: 6, gap: 4 },
+  miniLinea: { height: 4, borderRadius: 2 },
+  miniBoton: { width: 22, height: 8, borderRadius: 4, alignSelf: 'flex-end' },
   chip: {
     height: 40,
     paddingHorizontal: 16,

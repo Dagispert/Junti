@@ -2,6 +2,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
+  Image as RNImage,
   Platform,
   Pressable,
   RefreshControl,
@@ -28,6 +29,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Fonts, MaxContentWidth, Radius, Spacing, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
+import { type Fondo, useFondo } from '@/lib/appearance';
 import { useEntradaSuave } from '@/lib/pestanas';
 
 import { EASE_IN_VIEW, SPRING } from './motion';
@@ -35,6 +37,37 @@ import { VideoClip, VideoFrame, Waveform } from './media-players';
 import type { Moment } from '@/data/types';
 
 /** Contenedor de pantalla con scroll, márgenes seguros y ancho máximo. Al tirar hacia abajo, recarga. */
+/** Las tramas del fondo, dibujadas con el color del texto del tema (muy suave). */
+function trama(fondo: Fondo, color: string): string | null {
+  const c = encodeURIComponent(color);
+  const svg =
+    fondo === 'puntos'
+      ? `<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22'><circle cx='11' cy='11' r='1.3' fill='${c}' fill-opacity='0.22'/></svg>`
+      : fondo === 'lineas'
+        ? `<svg xmlns='http://www.w3.org/2000/svg' width='40' height='30'><line x1='0' y1='29.5' x2='40' y2='29.5' stroke='${c}' stroke-opacity='0.13' stroke-width='1'/></svg>`
+        : fondo === 'papel'
+          ? `<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.09 0'/></filter><rect width='160' height='160' filter='url(%23g)'/></svg>`
+          : null;
+  return svg ? `data:image/svg+xml;utf8,${svg}` : null;
+}
+
+/** El fondo elegido en Ajustes (liso, papel, puntos o líneas), detrás de todo. */
+export function FondoTema() {
+  const theme = useTheme();
+  const fondo = useFondo();
+  if (Platform.OS !== 'web') return null;
+  const uri = trama(fondo, theme.text);
+  if (!uri) return null;
+  return (
+    <RNImage
+      source={{ uri }}
+      resizeMode="repeat"
+      pointerEvents="none"
+      style={StyleSheet.absoluteFill}
+    />
+  );
+}
+
 export function Screen({ children, header }: { children: ReactNode; header?: ReactNode }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -56,6 +89,7 @@ export function Screen({ children, header }: { children: ReactNode; header?: Rea
     <View
       ref={raiz as never}
       style={{ flex: 1, backgroundColor: theme.background, paddingTop: insets.top }}>
+      <FondoTema />
       <View style={styles.column}>{header}</View>
       <ScrollView
         contentContainerStyle={[styles.column, styles.content]}
