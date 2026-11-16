@@ -37,6 +37,23 @@ import { VideoClip, VideoFrame, Waveform } from './media-players';
 import type { Moment } from '@/data/types';
 
 /** Contenedor de pantalla con scroll, márgenes seguros y ancho máximo. Al tirar hacia abajo, recarga. */
+// Grano de papel: motas y fibras pequeñas repartidas (siempre las mismas).
+const PAPEL = (() => {
+  let x = 7;
+  const r = () => ((x = (x * 16807) % 2147483647) / 2147483647);
+  let out = '';
+  for (let i = 0; i < 140; i++)
+    out += `<circle cx='${(r() * 180).toFixed(1)}' cy='${(r() * 180).toFixed(1)}' r='${(0.4 + r() * 0.7).toFixed(2)}' fill='C' fill-opacity='${(0.05 + r() * 0.08).toFixed(3)}'/>`;
+  for (let i = 0; i < 22; i++) {
+    const a = r() * 180;
+    const b = r() * 180;
+    const ang = r() * Math.PI;
+    const l = 4 + r() * 8;
+    out += `<line x1='${a.toFixed(1)}' y1='${b.toFixed(1)}' x2='${(a + Math.cos(ang) * l).toFixed(1)}' y2='${(b + Math.sin(ang) * l).toFixed(1)}' stroke='C' stroke-opacity='0.07' stroke-width='0.6'/>`;
+  }
+  return out;
+})();
+
 /** Las tramas del fondo, dibujadas con el color del texto del tema (muy suave). */
 function trama(fondo: Fondo, color: string): string | null {
   const c = encodeURIComponent(color);
@@ -46,7 +63,7 @@ function trama(fondo: Fondo, color: string): string | null {
       : fondo === 'lineas'
         ? `<svg xmlns='http://www.w3.org/2000/svg' width='40' height='30'><line x1='0' y1='29.5' x2='40' y2='29.5' stroke='${c}' stroke-opacity='0.13' stroke-width='1'/></svg>`
         : fondo === 'papel'
-          ? `<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.09 0'/></filter><rect width='160' height='160' filter='url(%23g)'/></svg>`
+          ? `<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'>${PAPEL.replace(/C/g, c)}</svg>`
           : null;
   return svg ? `data:image/svg+xml;utf8,${svg}` : null;
 }
