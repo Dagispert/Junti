@@ -1027,12 +1027,6 @@ async function describePeriod(
     supabase.from('moment_media').select('moment_id, media_assets(kind)').in('moment_id', ids),
     supabase.from('reactions').select('moment_id, emoji').in('moment_id', ids),
     supabase
-      .from('questions')
-      .select('title')
-      .eq('group_id', groupId)
-      .order('created_at', { ascending: false })
-      .limit(30),
-    supabase
       .from('comments')
       .select('moment_id, user_id, text, created_at')
       .in('moment_id', ids)
@@ -1262,7 +1256,7 @@ Puedes proponer cualquiera de estos tipos (campo «tipo»):
 - "reto": algo pequeño que cada uno hace en su ciudad y comparte con foto, vídeo corto, nota de voz o texto, en 1 a 7 días. Ej.: «Foto de vuestro desayuno desde arriba», «5 segundos del sonido de tu calle».
 - "karaoke": que todos canten la misma canción. Elige una canción REAL y conocida que encaje con el grupo (algo que hayan mencionado, de su país, de una época compartida…). Rellena «cancion» con {"titulo","artista"}.
 - "encuesta": una pregunta para votar con 2 a 4 «opciones» cortas (máx. 40 caracteres cada una).
-- "quiz": «¿Quién de nosotros…?» para adivinar. Las «opciones» son los nombres de pila de las personas del grupo (2 a 4). Quien lo cree marcará la respuesta correcta.
+- "quiz": «¿Quién de nosotros…?» para adivinar. Las «opciones» son SOLO nombres de pila de personas del grupo (2 a 4, sin inventar otras como «nadie» o «alguien más»). Solo si el grupo tiene 2 personas o más. Quien lo cree marcará la respuesta correcta.
 - "pregunta": una pregunta abierta que cada uno responde con sus palabras.
 - "recuerdo": invitar a compartir una foto o historia de antes («¿Quién tiene una foto de…?»), relacionada con lo que han contado.
 
@@ -1333,6 +1327,12 @@ async function ideasDeRetos(me: string, groupId: string | undefined, otraVez: bo
       .eq('kind', 'challenge')
       .order('created_at', { ascending: false })
       .limit(40),
+    supabase
+      .from('questions')
+      .select('title')
+      .eq('group_id', groupId)
+      .order('created_at', { ascending: false })
+      .limit(30),
     supabase
       .from('comments')
       .select('user_id, text, moment_id, created_at')
