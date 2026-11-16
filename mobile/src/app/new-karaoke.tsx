@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Icon } from '@/components/icon';
+import { LyricsEditor, type LyricsValue } from '@/components/lyrics-editor';
 import { Button, Field, Notice, Screen, Tag, Title } from '@/components/ui';
 import { VideoTrimmer } from '@/components/video-trimmer';
 import { Spacing, useTheme } from '@/constants/theme';
@@ -47,7 +48,7 @@ export default function NewKaraoke() {
   const [duration, setDuration] = useState(0);
   const [clip, setClip] = useState({ start: 0, end: 0 });
   const [bars, setBars] = useState<number[]>([]);
-  const [lyrics, setLyrics] = useState('');
+  const [lyrics, setLyrics] = useState<LyricsValue>({});
   const [days, setDays] = useState(7);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
@@ -100,27 +101,43 @@ export default function NewKaraoke() {
   const [playing, setPlaying] = useState(false);
   const [at, setAt] = useState(0);
   useEffect(() => () => player.current?.pause(), []);
-  const listen = () => {
-    if (!chosen) return;
+  const ensurePlayer = () => {
+    if (!chosen) return null;
     let a = player.current;
-    if (playing && a) {
-      a.pause();
-      return;
-    }
     if (!a || a.dataset.src !== chosen.url) {
       a?.pause();
       a = new Audio(chosen.url);
       a.dataset.src = chosen.url;
       player.current = a;
-      a.ontimeupdate = () => {
-        setAt(a!.currentTime);
-        if (a!.currentTime >= latest.current.end) a!.pause();
+      const el = a;
+      let frame = 0;
+      // la posición, fotograma a fotograma (para que la letra vaya al segundo)
+      const tick = () => {
+        setAt(el.currentTime);
+        if (el.currentTime >= latest.current.end) el.pause();
+        else frame = requestAnimationFrame(tick);
       };
-      a.onpause = () => setPlaying(false);
-      a.onplay = () => setPlaying(true);
+      el.onpause = () => {
+        cancelAnimationFrame(frame);
+        setPlaying(false);
+      };
+      el.onplay = () => {
+        setPlaying(true);
+        cancelAnimationFrame(frame);
+        frame = requestAnimationFrame(tick);
+      };
     }
+    return a;
+  };
+  const playClip = () => {
+    const a = ensurePlayer();
+    if (!a) return;
     a.currentTime = latest.current.start;
     a.play().catch(() => setPlaying(false));
+  };
+  const listen = () => {
+    if (playing) player.current?.pause();
+    else playClip();
   };
   const latest = useRef(clip);
   latest.current = clip;
@@ -174,7 +191,8 @@ export default function NewKaraoke() {
           previewUrl: chosen.file ? undefined : chosen.url,
           start: clip.start,
           end: clip.end,
-          lyrics: lyrics.trim() || undefined,
+          lyrics: lyrics.lyrics,
+          lines: lyrics.lines,
         },
         days || undefined,
         chosen.file,
@@ -388,14 +406,18 @@ export default function NewKaraoke() {
         </View>
       )}
 
-      {chosen && (
-        <Field
-          label="La letra (opcional)"
-          value={lyrics}
-          onChangeText={setLyrics}
-          placeholder="Pega la letra del trozo: irá pasando mientras cantáis"
-          multiline
-          style={{ minHeight: 120, textAlignVertical: 'top' }}
+      {chosen && duration > 0 && (
+        <LyricsEditor
+          song={chosen.song}
+          artist={chosen.artist}
+          duration={duration}
+          clip={clip}
+          preview={!chosen.file}
+          audio={() => player.current}
+          playClip={playClip}
+          playing={playing}
+          at={at}
+          onChange={setLyrics}
         />
       )}
 

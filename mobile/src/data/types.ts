@@ -133,6 +133,8 @@ export type KaraokeGame = {
   start: number;
   end: number;
   lyrics?: string;
+  /** la letra con su ritmo: cada línea y su segundo dentro del audio */
+  lines?: { t: number; text: string }[];
 };
 
 export type Reaction = { emoji: string; userId: string };

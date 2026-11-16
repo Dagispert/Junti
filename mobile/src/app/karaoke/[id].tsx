@@ -10,6 +10,7 @@ import { Avatar } from '@/components/ui';
 import { errorText, useStore } from '@/data/store';
 import type { KaraokeGame, Moment } from '@/data/types';
 import { canRecord, mixer, partAt, planMontage, recorderType, trackUrl } from '@/lib/karaoke';
+import { lineAt } from '@/lib/lyrics';
 import { mmss } from '@/lib/music';
 
 const GOLD = '#F2B33D';
@@ -198,18 +199,25 @@ function Home({
 
 /* ───────────── Letra que va pasando ───────────── */
 
-function Lyrics({ text, progress }: { text: string; progress: number }) {
-  const lines = useMemo(
+function Lyrics({ game, progress }: { game: KaraokeGame; progress: number }) {
+  const plain = useMemo(
     () =>
-      text
+      (game.lyrics ?? '')
         .split(/\r?\n/)
         .map((l) => l.trim())
         .filter(Boolean),
-    [text],
+    [game.lyrics],
   );
+  const timed = game.lines?.length ? game.lines : null;
+  const lines = timed ? timed.map((l) => l.text) : plain;
   if (!lines.length) return null;
-  // Cada línea dura lo mismo; la actual, en grande y en el centro.
-  const current = Math.min(lines.length - 1, Math.floor(progress * lines.length));
+  // Con ritmo, la línea que toca en este segundo; sin él, cada línea dura lo mismo.
+  const time = game.start + progress * (game.end - game.start);
+  const current = timed
+    ? lineAt(timed, time + 0.05)
+    : Math.min(lines.length - 1, Math.floor(progress * lines.length));
+  // antes de la primera línea: se enseña cuál viene, con una cuenta de puntos
+  const waiting = timed && current < 0 ? Math.max(0, timed[0].t - time) : 0;
   return (
     <View pointerEvents="none" style={styles.lyrics}>
       {[-1, 0, 1, 2].map((d) => {
@@ -223,6 +231,9 @@ function Lyrics({ text, progress }: { text: string; progress: number }) {
           </Text>
         );
       })}
+      {waiting > 0.3 && waiting < 4 && (
+        <Text style={styles.lyricNow}>{'● '.repeat(Math.ceil(waiting)).trim()}</Text>
+      )}
     </View>
   );
 }
@@ -487,7 +498,7 @@ function Recorder({
               <View style={styles.recDot} />
               <Text style={styles.recText}>{mmss(progress * duration)}</Text>
             </View>
-            {!!game.lyrics && <Lyrics text={game.lyrics} progress={progress} />}
+            {(!!game.lyrics || !!game.lines?.length) && <Lyrics game={game} progress={progress} />}
           </>
         )}
         {phase === 'review' && !reviewing && (
@@ -754,7 +765,7 @@ function Montage({
                     : ''}
               </Text>
             </View>
-            {!!game.lyrics && <Lyrics text={game.lyrics} progress={progress} />}
+            {(!!game.lyrics || !!game.lines?.length) && <Lyrics game={game} progress={progress} />}
           </>
         )}
         {state !== 'playing' && (
