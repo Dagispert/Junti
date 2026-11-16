@@ -166,11 +166,53 @@ export function montarMesa(o: {
     let altoTarjeta: number;
     if (p.photo) {
       // la instantánea
-      const hFoto = WC * 1.16;
+      // con frase, el margen de abajo de la instantánea es más alto: ahí va
+      // escrita, en un recuadro fijo del que nunca se sale
+      const PIE = p.text ? 0.3 : 0.16;
+      const hFoto = WC * (1 + PIE);
       foto = el('g', {}, card);
       foto.setAttribute('transform', `translate(0,${y0 + hFoto / 2})`);
-      const ins = instantanea(foto, p.photo, WC);
-      void ins;
+      instantanea(foto, p.photo, WC, PIE);
+      if (p.text) {
+        const arriba = -hFoto / 2 + WC * 0.94 + 6,
+          abajo = hFoto / 2 - 10;
+        const alto = abajo - arriba;
+        const ancho = WC - 44;
+        // del tamaño más grande que quepa entero; si ni con el más pequeño
+        // (aún legible) cabe, se corta con «…»
+        const tamaños = [36, 32, 28, 26];
+        let size = tamaños[tamaños.length - 1];
+        let ls: string[] = [];
+        for (const sz of tamaños) {
+          const cabe = Math.max(1, Math.floor(alto / (sz * 1.15)));
+          const l = lineas(p.text, Math.max(8, Math.floor(ancho / (sz * 0.46))), 99);
+          if (l.length <= cabe) {
+            size = sz;
+            ls = l;
+            break;
+          }
+        }
+        if (!ls.length)
+          ls = lineas(
+            p.text,
+            Math.max(8, Math.floor(ancho / (size * 0.46))),
+            Math.max(1, Math.floor(alto / (size * 1.15))),
+          );
+        const lh = size * 1.15;
+        const y1 = arriba + (alto - ls.length * lh) / 2 + size * 0.88;
+        ls.forEach((ln, k) => {
+          const id = uid('ln');
+          const yy = y1 + k * lh;
+          const clip = el(
+            'rect',
+            { x: -WC / 2, y: yy - size, width: 0, height: size * 1.4 },
+            el('clipPath', { id }, defs),
+          );
+          const n = texto(foto!, ln, { x: 0, y: yy, size, color: TINTA });
+          n.setAttribute('clip-path', `url(#${id})`);
+          lineasTxt.push({ n, clip, w: WC });
+        });
+      }
       altoTarjeta = hFoto;
     } else if (p.wave?.length) {
       // una nota de voz: barras que crecen
@@ -233,23 +275,6 @@ export function montarMesa(o: {
       });
     }
     y0 += altoTarjeta + 22;
-    // la frase de la foto, escrita debajo (crece con el texto)
-    if (p.photo && p.text) {
-      const f = ajustar(p.text, WC - 30, [38, 34, 30], 5);
-      f.lines.forEach((ln, k) => {
-        const id = uid('ln');
-        const yy = y0 + f.size + k * f.size * 1.18;
-        const clip = el(
-          'rect',
-          { x: -WC / 2, y: yy - f.size, width: 0, height: f.size * 1.4 },
-          el('clipPath', { id }, defs),
-        );
-        const n = texto(g, ln, { x: 0, y: yy, size: f.size, color: TINTA });
-        n.setAttribute('clip-path', `url(#${id})`);
-        lineasTxt.push({ n, clip, w: WC });
-      });
-      y0 += f.lines.length * f.size * 1.18 + 26;
-    }
     // las notas de los comentarios
     const cs = p.comments.slice(0, 2);
     const NW = cs.length > 1 ? 262 : 380;
@@ -594,7 +619,7 @@ export function montarSubtitulos(o: {
         clave = key;
         g.innerHTML = '';
         const limpia = cur.s.trim().replace(/\.$/, '');
-        const f = ajustar(limpia, 650, [50, 44, 40], 3);
+        const f = ajustar(limpia, 640, [40, 36, 32], 3);
         const lh = f.size * 1.18;
         const y0 = 1185 - (f.lines.length - 1) * lh;
         palabras = [];
