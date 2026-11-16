@@ -734,6 +734,7 @@ function Montage({
     a.play().catch(() => {});
     setState('playing');
     let current = '';
+    const saltos = new Map<string, number>();
     const loop = () => {
       const t = a.currentTime - game.start;
       setProgress(Math.max(0, Math.min(1, t / duration)));
@@ -748,8 +749,20 @@ function Montage({
         const v = videos.current.get(m.id);
         if (!v) continue;
         const want = clipOf(m) + t;
-        if (!v.paused && Math.abs(v.currentTime - want) > 0.3 && want < (v.duration || 1e9))
+        // Recolocar solo si se ha ido bastante, sin otro salto a medias y no más de
+        // uno cada segundo y medio: en el iPhone cada salto tarda, y recolocar en
+        // cada fotograma lo dejaba congelado en una imagen.
+        const ahora = performance.now();
+        if (v.paused && !v.ended && want < (v.duration || 1e9)) v.play().catch(() => {});
+        if (
+          !v.seeking &&
+          Math.abs(v.currentTime - want) > 0.6 &&
+          want < (v.duration || 1e9) &&
+          ahora - (saltos.get(m.id) ?? 0) > 1500
+        ) {
+          saltos.set(m.id, ahora);
           v.currentTime = want;
+        }
         mix.current?.set(v, singing.includes(m.id) ? 1 : 0);
       }
       if (t >= duration || a.ended) {
