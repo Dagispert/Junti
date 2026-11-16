@@ -2,6 +2,7 @@ import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Headphones, Mic, Play, RotateCcw, Send, X } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -658,6 +659,9 @@ function Montage({
   const [active, setActive] = useState<string[]>([]);
   const [progress, setProgress] = useState(0);
   const frame = useRef(0);
+  // La letra (si tiene ritmo marcado), verso a verso.
+  const versos = useMemo(() => (game.lines ?? []).filter((l) => l.text.trim()), [game.lines]);
+  const [verso, setVerso] = useState(-1);
 
   // El sonido va aparte de los vídeos: la canción y la voz de cada uno se
   // descargan y se mezclan con Web Audio, con un único reloj. Los vídeos van
@@ -774,18 +778,24 @@ function Montage({
     c.resume().catch(() => {});
     parar();
     const cuando = c.currentTime + 0.25;
+    // Todo pasa por un compresor: las voces pueden ir fuertes sin saturar.
+    const salida = c.createDynamicsCompressor();
+    salida.threshold.value = -14;
+    salida.ratio.value = 4;
+    salida.connect(c.destination);
     const fuente = (buf: AudioBuffer, offset: number, nivel: number, id?: string) => {
       const src = c.createBufferSource();
       src.buffer = buf;
       const g = c.createGain();
       g.gain.value = nivel;
-      src.connect(g).connect(c.destination);
+      src.connect(g).connect(salida);
       src.start(cuando, Math.max(0, Math.min(offset, buf.duration - 0.05)));
       fuentes.current.push(src);
       if (id) ganancias.current.set(id, g);
     };
     const cancion = buffers.get('cancion');
-    if (cancion) fuente(cancion, game.start, 0.75);
+    // la canción, de fondo (10 %); las voces, delante
+    if (cancion) fuente(cancion, game.start, MUSICA);
     ganancias.current.clear();
     for (const m of takes) {
       const buf = buffers.get(m.id);
@@ -802,10 +812,19 @@ function Montage({
     );
     setState('playing');
     let current = '';
+    let versoVisto = -2;
     const saltos = new Map<string, number>();
     const loop = () => {
       const t = c.currentTime - cuando;
       setProgress(Math.max(0, Math.min(1, t / duration)));
+      // la letra: el verso que toca ahora en la canción
+      const enCancion = game.start + Math.max(0, t);
+      let v = -1;
+      for (let i = 0; i < versos.length; i++) if (versos[i].t <= enCancion + 0.15) v = i;
+      if (v !== versoVisto) {
+        versoVisto = v;
+        setVerso(v);
+      }
       const part = partAt(parts, Math.max(0, t));
       const singing = part?.singers ?? [];
       const key = singing.join(',');
@@ -814,7 +833,7 @@ function Montage({
         setActive(singing);
         // la voz de quien canta sube y las demás bajan (con un fundido corto)
         for (const [id, g] of ganancias.current)
-          g.gain.setTargetAtTime(singing.includes(id) ? 1 : 0, c.currentTime, 0.04);
+          g.gain.setTargetAtTime(singing.includes(id) ? VOZ : 0, c.currentTime, 0.04);
       }
       const ahora = performance.now();
       for (const m of takes) {
@@ -913,6 +932,21 @@ function Montage({
                     : ''}
               </Text>
             </View>
+            {verso >= 0 && (
+              <View pointerEvents="none" style={styles.letra}>
+                <Animated.Text
+                  key={verso}
+                  entering={FadeInDown.duration(260)}
+                  style={styles.letraAhora}>
+                  {versos[verso].text}
+                </Animated.Text>
+                {!!versos[verso + 1] && (
+                  <Text numberOfLines={1} style={styles.letraLuego}>
+                    {versos[verso + 1].text}
+                  </Text>
+                )}
+              </View>
+            )}
           </>
         )}
         {state !== 'playing' && (
@@ -933,6 +967,10 @@ function Montage({
     </View>
   );
 }
+
+/** Volumen de la canción y de las voces en el montaje. */
+const MUSICA = 0.1;
+const VOZ = 1.6;
 
 /** Lo que dura la portada antes de que empiece el montaje. */
 const INTRO_MS = 3200;
@@ -1228,6 +1266,33 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   whoText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
+  letra: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 34,
+    alignItems: 'center',
+    gap: 6,
+  },
+  letraAhora: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: '700',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.75)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 10,
+  },
+  letraLuego: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.7)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 8,
+  },
   lyrics: {
     position: 'absolute',
     left: 0,
