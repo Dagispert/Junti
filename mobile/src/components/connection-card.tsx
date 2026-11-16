@@ -62,7 +62,11 @@ export function ConnectionCard({ group }: { group: Group }) {
         accessibilityLabel="Abrir el mapa del grupo"
         onPress={() => router.navigate(`/group/${group.id}/mapa`)}>
         <View style={styles.globe}>
-          <GlobeMap people={people} height={260} interactive={false} rounded />
+          {/* Sin recuadro: el planeta flota sobre el fondo de la app (claro u
+              oscuro) y tiene sitio de sobra para que no se corten sus nubes. */}
+          <View style={styles.cielo} pointerEvents="none">
+            <GlobeMap people={people} height={400} interactive={false} transparent distScale={1.3} />
+          </View>
           <View style={styles.open}>
             <Text style={styles.openText}>Abrir el mapa</Text>
           </View>
@@ -101,17 +105,14 @@ function city(p: MapPerson, user: (id: string) => { city: string }) {
 }
 
 const styles = StyleSheet.create({
-  globe: {
-    height: 260,
-    borderRadius: 26,
-    overflow: 'hidden',
-    boxShadow: '0 18px 40px rgba(20, 22, 26, 0.14)',
-  },
+  globe: { height: 270, overflow: 'visible' },
+  cielo: { position: 'absolute', top: -70, left: -24, right: -24, height: 400 },
   open: {
     position: 'absolute',
-    right: 12,
-    bottom: 12,
+    right: 4,
+    bottom: 4,
     backgroundColor: 'rgba(255,255,255,0.94)',
+    boxShadow: '0 6px 16px rgba(20,22,26,0.16)',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 999,
