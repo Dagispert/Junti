@@ -21,6 +21,7 @@ import {
 import { accentDay, accentDeep, accentNight, accentTint, DEFAULT_ACCENT } from '@/lib/accent';
 
 import { dibujarEscenario } from './escenarios';
+import { montarMesa, montarSubtitulos } from './mesa';
 import { ESCENARIOS, type DatosPelicula, type Plan, planificar } from './guion';
 import {
   el,
@@ -222,6 +223,8 @@ const asientoTransform = (mirror: boolean) =>
 
 export class Pelicula {
   readonly plan: Plan;
+  /** Los subtítulos van dentro del dibujo (así salen igual al exportar). */
+  readonly subtitulos = true;
   private T = new Taller();
   private paint: ((t: number) => void)[] = [];
 
@@ -273,6 +276,9 @@ export class Pelicula {
     const lTapa = capa('tapa');
     const lRec = capa('recuerdos');
     const lRot = capa('rotulos');
+    // la mesa de los momentos (semana y mes): fuera de la cámara general
+    const usarMesa = d.kind !== 'story';
+    const lMesa = el('g', {}, svg);
     const lFin = el('g', {}, svg);
 
     // ────────────────────────────── RELOJ ──────────────────────────────
@@ -864,7 +870,8 @@ export class Pelicula {
       // subtítulos: la foto (lo más grande posible), su texto en un recuadro que
       // crece con el texto y, debajo, los comentarios.
       const FOTO_Y = ARRIBA + 190; // debajo del calendario y del pie
-      const marcos = d.pieces.map((p) => {
+      // (en la semana y el mes, los momentos van en la mesa: sin marcos aquí)
+      const marcos = (usarMesa ? [] : d.pieces).map((p) => {
         const g = el('g', {}, lCamara);
         const mov = el('g', {}, g);
         // al posarse, la foto crece (o encoge) hasta su sitio
@@ -1006,7 +1013,9 @@ export class Pelicula {
         // el calendario sube y se hace pequeño: es el contador de días
         const ku = S(t, tCal.sube, 0.7, ease.inOut);
         mover(cal, { ox: CX, oy: Y0, s: lerp(1, 0.3, ku), y: lerp(0, -Y0 + ARRIBA + 8, ku) });
-        opacidad(cal, 1 - S(t, cb - 0.2, 0.4));
+        // con la mesa, el calendario y la cámara se apartan al llegar el primer momento
+        const mesaLlega = usarMesa && P.piezas.length ? S(t, P.piezas[0].a - 0.35, 0.5) : 0;
+        opacidad(cal, (1 - S(t, cb - 0.2, 0.4)) * (1 - mesaLlega));
         // qué día enseña
         let di = 0,
           k = 0;
@@ -1033,7 +1042,7 @@ export class Pelicula {
           if (t >= pz.a && t < pz.b + 0.1)
             aparte = S(t, pz.a + 1.1, 0.35) * (1 - S(t, pz.b - 0.45, 0.35));
         });
-        opacidad(camara, kcam * 3 * (1 - S(t, cb - 0.1, 0.4)) * (1 - aparte));
+        opacidad(camara, kcam * 3 * (1 - S(t, cb - 0.1, 0.4)) * (1 - aparte) * (1 - mesaLlega));
         visor.setAttribute(
           'opacity',
           String(Math.sin(Math.PI * S(t, tCal.flash - 0.15, 0.2, ease.linear))),
@@ -1668,6 +1677,31 @@ export class Pelicula {
         lRot.setAttribute('fill', isDay(t) ? DIA.ink : NOCHE.ink);
       });
     }
+    // ── la mesa de los momentos ──
+    if (usarMesa && d.pieces.length)
+      this.paint.push(
+        montarMesa({
+          T,
+          defs,
+          parent: lMesa,
+          d,
+          A: DIA.accent,
+          piezas: P.piezas,
+          fin: P.recuerdos[0],
+          semi,
+          enSemi,
+        }),
+      );
+    // ── los subtítulos (dentro del dibujo, encima de todo) ──
+    this.paint.push(
+      montarSubtitulos({
+        svg,
+        voces: P.voces,
+        d,
+        tinta: (t) => (isDay(t) ? DIA.ink : NOCHE.ink),
+        acento: (t) => (isDay(t) ? DIA.accent : NOCHE.accent),
+      }),
+    );
   }
 }
 
