@@ -1,9 +1,16 @@
 import { Caveat_600SemiBold, Caveat_700Bold, useFonts } from '@expo-google-fonts/caveat';
 import { Fraunces_400Regular_Italic, Fraunces_500Medium } from '@expo-google-fonts/fraunces';
-import { DarkTheme, DefaultTheme, router, Stack, ThemeProvider } from 'expo-router';
+import {
+  DarkTheme,
+  DefaultTheme,
+  router,
+  Stack,
+  ThemeProvider,
+  type ErrorBoundaryProps,
+} from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
 import { AuthScreen, ProfileSetup } from '@/components/auth-screen';
 import { IntroCinematic } from '@/components/cinematics';
@@ -11,9 +18,50 @@ import { Colors, useTheme } from '@/constants/theme';
 import { aplicarEnLaWeb, useEsquema } from '@/lib/appearance';
 import { StoreProvider, useStore } from '@/data/store';
 import { AlDia } from '@/lib/al-dia';
+import { apuntarError, instalarErrores } from '@/lib/errores';
 import { rememberInvite, takeInvite } from '@/lib/invite';
 import { setupInstallable } from '@/lib/push';
 import { markIntroDone } from '@/lib/tour';
+
+/**
+ * Si una pantalla se rompe del todo: se apunta el error y, en vez de una
+ * pantalla en blanco, se ofrece volver a intentarlo.
+ */
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  useEffect(() => apuntarError(error, 'pantalla'), [error]);
+  const theme = useTheme();
+  return (
+    <View
+      style={{
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 16,
+        padding: 32,
+        backgroundColor: theme.background,
+      }}>
+      <Text style={{ color: theme.text, fontSize: 22, fontWeight: '600', textAlign: 'center' }}>
+        Algo se ha torcido
+      </Text>
+      <Text style={{ color: theme.textSecondary, fontSize: 16, textAlign: 'center' }}>
+        Ya nos ha llegado el aviso para arreglarlo. Prueba otra vez.
+      </Text>
+      <Pressable
+        accessibilityRole="button"
+        onPress={retry}
+        style={{
+          backgroundColor: theme.accent,
+          paddingHorizontal: 24,
+          paddingVertical: 12,
+          borderRadius: 999,
+        }}>
+        <Text style={{ color: theme.onAccent, fontSize: 16, fontWeight: '600' }}>
+          Volver a intentarlo
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
 
 export default function RootLayout() {
   // claro, oscuro o como el móvil (se elige en Ajustes)
@@ -23,6 +71,7 @@ export default function RootLayout() {
   useFonts({ Caveat_600SemiBold, Caveat_700Bold, Fraunces_400Regular_Italic, Fraunces_500Medium });
   useEffect(setupInstallable, []);
   useEffect(rememberInvite, []);
+  useEffect(instalarErrores, []);
   return (
     <ThemeProvider value={dark ? DarkTheme : DefaultTheme}>
       <StoreProvider>
@@ -75,6 +124,7 @@ function Gate() {
         <Stack.Screen name="add-song" options={{ presentation: 'modal' }} />
         <Stack.Screen name="event" options={{ presentation: 'modal' }} />
         <Stack.Screen name="legal" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="errores" options={{ presentation: 'modal' }} />
         <Stack.Screen name="add" options={{ presentation: 'modal' }} />
         <Stack.Screen name="new-challenge" options={{ presentation: 'modal' }} />
         <Stack.Screen name="ask" options={{ presentation: 'modal' }} />

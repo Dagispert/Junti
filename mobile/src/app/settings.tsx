@@ -15,11 +15,16 @@ import { setFamilyColorMode, useFamilyColorMode } from '@/lib/families';
 import { Spacing, useTheme } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
 import type { Place } from '@/lib/geo';
+import { soyAdmin } from '@/lib/errores';
 import { requestTour } from '@/lib/tour';
 import { disablePush, enablePush, pushState, type PushState } from '@/lib/push';
 
 /** Ajustes personales: cómo me ven los demás, cerrar sesión y borrar la cuenta. */
 export default function Settings() {
+  const [admin, setAdmin] = useState(false);
+  useEffect(() => {
+    soyAdmin().then(setAdmin, () => {});
+  }, []);
   const theme = useTheme();
   const colorMode = useFamilyColorMode();
   const apariencia = useModo();
@@ -464,6 +469,14 @@ export default function Settings() {
           variant="light"
           onPress={() => router.push('/compartir-ajustes')}
         />
+        {/* solo lo ve quien mantiene la app */}
+        {admin && (
+          <Button
+            label="Errores recientes"
+            variant="light"
+            onPress={() => router.push('/errores')}
+          />
+        )}
       </View>
 
       <View style={{ gap: Spacing.two }}>

@@ -3,6 +3,7 @@ import { createContext, use, useEffect, useState, type ReactNode } from 'react';
 
 import type { Place } from '@/lib/geo';
 import { extensionFor } from '@/lib/media';
+import { apuntarError } from '@/lib/errores';
 import { disablePush } from '@/lib/push';
 import { AVATAR_BUCKET, MEDIA_BUCKET, supabase } from '@/lib/supabase';
 
@@ -1719,5 +1720,7 @@ export function errorText(error: unknown): string {
     return 'Demasiados intentos seguidos. Espera un poco y prueba otra vez.';
   if (/Failed to fetch|Network request failed/i.test(message))
     return 'No hay conexión. Revisa tu internet y prueba otra vez.';
+  // un fallo que no esperábamos: se apunta para poder arreglarlo
+  apuntarError(error, 'aviso');
   return message;
 }
