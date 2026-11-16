@@ -1236,6 +1236,8 @@ export function GlobeMap({
       country = null;
       countryArmed = false;
       setTimeout(() => {
+        // si mientras tanto se ha entrado en otro país, el planeta sigue oculto
+        if (country) return;
         renderer.domElement.style.opacity = '1';
         pinLayer.style.opacity = '1';
       }, 350);
