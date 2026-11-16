@@ -159,44 +159,53 @@ export function FilmPlayer({
   }, [sub]);
 
   return (
-    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
-      <svg
-        ref={svgRef}
-        style={{ width: '100%', height: '100%', display: 'block' }}
-        preserveAspectRatio="xMidYMid meet"
-      />
-      {shown && (
-        <div
-          style={{
-            position: 'absolute',
-            left: '6%',
-            right: '6%',
-            bottom: 'max(32px, 4vh)',
-            textAlign: 'center',
-            fontFamily: Hand,
-            fontSize: 'clamp(22px, 3.4vh, 30px)',
-            lineHeight: 1.15,
-            color: sub?.day ? '#1D1F22' : '#F3F1E7',
-            pointerEvents: 'none',
-          }}>
-          {/* Con su fondo propio: se leen sobre cualquier escena, y aunque el
-              navegador cambie los colores (modo oscuro forzado en Android). */}
-          <span
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        containerType: 'size',
+      }}>
+      {/* El escenario: siempre 9:16 (el de Instagram, TikTok y los estados).
+          Al exportar se graba solo esto, con sus subtítulos. */}
+      <div
+        data-rec-stage
+        style={{
+          position: 'relative',
+          width: 'min(100cqw, calc(100cqh * 9 / 16))',
+          height: 'min(100cqh, calc(100cqw * 16 / 9))',
+          overflow: 'hidden',
+          containerType: 'size',
+        }}>
+        <svg
+          ref={svgRef}
+          style={{ width: '100%', height: '100%', display: 'block' }}
+          preserveAspectRatio="xMidYMid meet"
+        />
+        {shown && (
+          <div
             style={{
-              background: sub?.day ? 'rgba(255,253,246,.72)' : 'rgba(10,11,13,.5)',
-              boxShadow: sub?.day
-                ? '0 0 0 6px rgba(255,253,246,.72)'
-                : '0 0 0 6px rgba(10,11,13,.5)',
-              borderRadius: 6,
-              WebkitBoxDecorationBreak: 'clone',
-              boxDecorationBreak: 'clone',
-              textShadow: sub?.day ? '0 0 6px #FFFDF6' : '0 1px 6px #000',
+              position: 'absolute',
+              left: '6%',
+              right: '6%',
+              bottom: '5cqh',
+              textAlign: 'center',
+              fontFamily: Hand,
+              fontSize: 'clamp(18px, 4.6cqw, 34px)',
+              lineHeight: 1.15,
+              color: sub?.day ? '#1D1F22' : '#F3F1E7',
+              colorScheme: 'only light',
+              pointerEvents: 'none',
             }}>
-            {shown.said}
-          </span>
-          <span style={{ color: 'transparent' }}>{shown.rest}</span>
-        </div>
-      )}
+            {/* Solo la letra, sin fondo. */}
+            <span>{shown.said}</span>
+            <span style={{ color: 'transparent' }}>{shown.rest}</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

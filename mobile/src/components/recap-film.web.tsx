@@ -7,7 +7,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useExport } from '@/components/export-sheet';
 import { type FilmControl, FilmPlayer } from '@/components/film-player';
 import { Icon } from '@/components/icon';
-import { LogoMark } from '@/components/logo';
 import { Resting } from '@/components/narrator-resting';
 import { accentNight, DEFAULT_ACCENT } from '@/lib/accent';
 import { Hand } from '@/constants/theme';
@@ -404,12 +403,6 @@ export default function RecapFilm() {
         </View>
       )}
 
-      {exporter.live && (
-        <View pointerEvents="none" style={[styles.signature, { bottom: insets.bottom + 10 }]}>
-          <LogoMark size={24} inverted />
-          <Text style={styles.signatureText}>Junti</Text>
-        </View>
-      )}
       {exporter.overlay}
     </View>
   );

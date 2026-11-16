@@ -1115,7 +1115,8 @@ export class Pelicula {
         texto(g, 'desde', { x, y: y - 140, size: 30, color: '#6B6A62' });
       });
       // más fotos alrededor
-      const otras = d.pieces.filter((p) => p !== loved && p.photo).slice(0, 6);
+      // (con banda sonora, una casilla queda para su carátula)
+      const otras = d.pieces.filter((p) => p !== loved && p.photo).slice(0, d.song ? 5 : 6);
       [
         [-1, -2],
         [0, -2],
@@ -1126,9 +1127,31 @@ export class Pelicula {
       ].forEach(([i, j], k) =>
         celda(i, j, (g) => {
           const o = otras[k];
+          // la banda sonora: su carátula, en la primera casilla sin foto
+          // (en la fila de abajo, donde va la nota musical, que se ve entera)
+          const cancion = !o && d.song && k === Math.max(3, otras.length) ? d.song : null;
           if (o) {
             const c = el('g', { transform: `translate(${i * G},${j * G})` }, g);
             marco(T, c, defs, o.photo, o.text, o.wave);
+          } else if (cancion?.artwork) {
+            const c = el('g', { transform: `translate(${i * G},${j * G})` }, g);
+            marco(
+              T,
+              c,
+              defs,
+              cancion.artwork,
+              `♪ ${cancion.title}${cancion.artist ? ` · ${cancion.artist}` : ''}`,
+            );
+          } else if (cancion) {
+            // sin carátula: la nota y el nombre de la canción
+            const x = CX + i * G,
+              y = CY + j * G;
+            T.tinta(
+              g,
+              `M${x - 30},${y + 10} m-26,0 a26,20 0 1,0 52,0 a26,20 0 1,0 -52,0 M${x - 4},${y + 10} L${x - 4},${y - 120} C${x + 30},${y - 100} ${x + 50},${y - 80} ${x + 40},${y - 50}`,
+              { color: DIA.accent, width: 3.4, fill: TINTE },
+            );
+            texto(g, cancion.title, { x, y: y + 110, size: 34, color: DIA.ink });
           } else {
             // sin foto: un dibujito (corazón, estrella, sol, nota, nube, sobre)
             const x = CX + i * G,
@@ -1190,88 +1213,35 @@ export class Pelicula {
     // ─────────────────────────────── FINAL ───────────────────────────────
     {
       const [fa] = P.final;
-      // Con banda sonora, todo baja un poco y arriba sale su carátula.
-      const song = d.song;
-      const o = song ? 90 : 0;
       el('rect', { x: -2000, y: -2000, width: 5000, height: 5000, fill: '#0E0F11' }, lFin);
       const logo = texto(lFin, 'junti', {
         x: CX,
-        y: CY - 20 + o,
+        y: CY - 20,
         size: 120,
         hand: false,
         weight: 700,
         color: '#F3F1E7',
       });
-      const sub = texto(lFin, d.range, { x: CX, y: CY + 50 + o, size: 40, color: '#A9A79C' });
+      const sub = texto(lFin, d.range, { x: CX, y: CY + 50, size: 40, color: '#A9A79C' });
       const pregunta = texto(lFin, d.closing, {
         x: CX,
-        y: CY + 140 + o,
+        y: CY + 140,
         size: 44,
         color: NOCHE.accent,
       });
       const raya = T.tinta(
         lFin,
-        `M${CX - 120},${CY + 10 + o} C${CX - 40},${CY + 22 + o} ${CX + 40},${CY + 4 + o} ${CX + 120},${CY + 14 + o}`,
+        `M${CX - 120},${CY + 10} C${CX - 40},${CY + 22} ${CX + 40},${CY + 4} ${CX + 120},${CY + 14}`,
         { color: NOCHE.accent, width: 4 },
       );
-      // la carátula (o un disco, si no tiene) y el nombre de la canción
-      let disco: Element | null = null;
-      let nombre: Element | null = null;
-      if (song) {
-        const S2 = 210;
-        disco = el('g', {}, lFin);
-        if (song.artwork) {
-          const id = uid('cv');
-          el(
-            'rect',
-            { x: CX - S2 / 2, y: CY - 300, width: S2, height: S2, rx: 18 },
-            el('clipPath', { id }, defs),
-          );
-          el(
-            'rect',
-            { x: CX - S2 / 2 + 6, y: CY - 288, width: S2, height: S2, rx: 18, fill: 'rgba(0,0,0,0.45)' },
-            disco,
-          );
-          el(
-            'image',
-            {
-              href: song.artwork,
-              x: CX - S2 / 2,
-              y: CY - 300,
-              width: S2,
-              height: S2,
-              preserveAspectRatio: 'xMidYMid slice',
-              'clip-path': `url(#${id})`,
-            },
-            disco,
-          );
-        } else {
-          el('circle', { cx: CX, cy: CY - 195, r: S2 / 2, fill: '#24262B' }, disco);
-          for (const r of [92, 78, 64, 50])
-            el('circle', { cx: CX, cy: CY - 195, r, fill: 'none', stroke: '#33363C', 'stroke-width': 2 }, disco);
-          el('circle', { cx: CX, cy: CY - 195, r: 32, fill: NOCHE.accent }, disco);
-        }
-        nombre = texto(lFin, `♪ ${song.title}${song.artist ? ` — ${song.artist}` : ''}`, {
-          x: CX,
-          y: CY + 240 + o,
-          size: 32,
-          color: '#D9D6CC',
-        });
-      }
       this.paint.push((t) => {
         ver(lFin, t >= fa);
         if (t < fa) return;
         opacidad(logo, S(t, fa + 0.2, 0.5));
-        mover(logo, { ox: CX, oy: CY - 40 + o, s: 0.9 + 0.1 * S(t, fa + 0.2, 0.6) });
+        mover(logo, { ox: CX, oy: CY - 40, s: 0.9 + 0.1 * S(t, fa + 0.2, 0.6) });
         revelar(raya, S(t, fa + 0.6, 0.5, ease.inOut));
         opacidad(sub, S(t, fa + 0.8, 0.4));
         opacidad(pregunta, S(t, fa + 1.4, 0.5));
-        if (disco) {
-          const k = S(t, fa + 0.1, 0.7);
-          opacidad(disco, k);
-          mover(disco, { y: 24 * (1 - k) });
-        }
-        if (nombre) opacidad(nombre, S(t, fa + 1.9, 0.5));
       });
     }
 

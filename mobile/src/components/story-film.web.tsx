@@ -387,12 +387,6 @@ export default function StoryFilm() {
         </View>
       )}
 
-      {exporter.live && (
-        <View pointerEvents="none" style={[styles.signature, { bottom: insets.bottom + 10 }]}>
-          <LogoMark size={24} inverted />
-          <Text style={styles.signatureText}>Junti</Text>
-        </View>
-      )}
       {exporter.overlay}
     </View>
   );

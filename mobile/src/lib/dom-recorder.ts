@@ -49,6 +49,68 @@ export async function preloadImages(root: HTMLElement, more: (string | undefined
  * segundo y solo cuando la anterior ya está lista; mientras, se dibuja la
  * última. Se pasa por un Blob (sin copiar el texto en una dirección data:).
  */
+/**
+ * Las letras de la app (Caveat…) para los SVG: un SVG pasado a imagen no puede
+ * cargar fuentes de fuera, así que se le incrustan (en «data:») o saldría
+ * con la letra por defecto del navegador.
+ */
+let fontCss = '';
+let fontsLoading: Promise<void> | null = null;
+export function embedFonts(): Promise<void> {
+  if (fontsLoading) return fontsLoading;
+  fontsLoading = (async () => {
+    const rules: { family: string; weight: string; style: string; url: string }[] = [];
+    for (const sheet of Array.from(document.styleSheets)) {
+      let list: CSSRuleList;
+      try {
+        list = sheet.cssRules;
+      } catch {
+        continue;
+      }
+      for (const rule of Array.from(list)) {
+        if (!(rule instanceof CSSFontFaceRule)) continue;
+        const st = rule.style;
+        const url = /url\((["']?)([^"')]+)\1\)/.exec(st.getPropertyValue('src'))?.[2];
+        const family = st.getPropertyValue('font-family').replace(/["']/g, '').trim();
+        if (url && family && !url.startsWith('data:'))
+          rules.push({
+            family,
+            weight: st.getPropertyValue('font-weight') || 'normal',
+            style: st.getPropertyValue('font-style') || 'normal',
+            url: new URL(url, location.href).href,
+          });
+        else if (url && family)
+          rules.push({
+            family,
+            weight: st.getPropertyValue('font-weight') || 'normal',
+            style: st.getPropertyValue('font-style') || 'normal',
+            url,
+          });
+      }
+    }
+    const css = await Promise.all(
+      rules.map(async (r) => {
+        try {
+          const data = r.url.startsWith('data:')
+            ? r.url
+            : await new Promise<string>(async (resolve, reject) => {
+                const blob = await (await fetch(r.url)).blob();
+                const fr = new FileReader();
+                fr.onload = () => resolve(String(fr.result));
+                fr.onerror = reject;
+                fr.readAsDataURL(blob);
+              });
+          return `@font-face{font-family:"${r.family}";font-weight:${r.weight};font-style:${r.style};src:url(${data});}`;
+        } catch {
+          return '';
+        }
+      }),
+    );
+    fontCss = css.join('');
+  })();
+  return fontsLoading;
+}
+
 type SvgState = { ready: HTMLCanvasElement | null; busy: boolean; at: number; xml: string };
 /** A qué escala se graba (para pasar cada SVG a mapa de bits una sola vez). */
 let recScale = 2;
@@ -65,9 +127,11 @@ function svgImage(el: SVGElement): HTMLCanvasElement | null {
     const raw = new XMLSerializer().serializeToString(el);
     if (raw !== st.xml) {
       st.xml = raw;
-      const xml = raw.includes('xmlns=')
+      let xml = raw.includes('xmlns=')
         ? raw
         : raw.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+      // las letras de la app, dentro del propio SVG
+      if (fontCss) xml = xml.replace(/<svg[^>]*>/, (open) => `${open}<style>${fontCss}</style>`);
       const url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml' }));
       const img = new Image();
       st.busy = true;
@@ -454,6 +518,7 @@ let testing: Promise<string> | null = null;
  * Conviene llamarlo al abrir la pantalla, para tenerlo listo al exportar.
  */
 export function prepareRecording(): Promise<string> {
+  embedFonts().catch(() => {});
   if (tested !== null) return Promise.resolve(tested);
   if (testing) return testing;
   testing = (async () => {
@@ -532,6 +597,10 @@ export function recordScreen(
     audio,
   }: { width?: number; height?: number; audio?: MediaStream | null } = {},
 ) {
+  // Si la pantalla marca su escenario (la película, en 9:16), se graba solo él.
+  const stage = root.querySelector<HTMLElement>('[data-rec-stage]');
+  const bg = getComputedStyle(root).backgroundColor;
+  if (stage) root = stage;
   const rect = root.getBoundingClientRect();
   const W = width;
   const H = height;
@@ -561,7 +630,8 @@ export function recordScreen(
     if (!running) return;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = 1;
-    ctx.fillStyle = getComputedStyle(root).backgroundColor || '#FFFFFF';
+    const own = getComputedStyle(root).backgroundColor;
+    ctx.fillStyle = own && own !== 'rgba(0, 0, 0, 0)' ? own : bg || '#FFFFFF';
     ctx.fillRect(0, 0, W, H);
     ctx.translate(dx, dy);
     ctx.scale(scale, scale);
