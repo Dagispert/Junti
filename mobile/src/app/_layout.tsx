@@ -10,6 +10,7 @@ import { IntroCinematic } from '@/components/cinematics';
 import { Colors, useTheme } from '@/constants/theme';
 import { aplicarEnLaWeb, useEsquema } from '@/lib/appearance';
 import { StoreProvider, useStore } from '@/data/store';
+import { AlDia } from '@/lib/al-dia';
 import { rememberInvite, takeInvite } from '@/lib/invite';
 import { setupInstallable } from '@/lib/push';
 import { markIntroDone } from '@/lib/tour';
@@ -26,6 +27,7 @@ export default function RootLayout() {
     <ThemeProvider value={dark ? DarkTheme : DefaultTheme}>
       <StoreProvider>
         <Gate />
+        <AlDia />
         <StatusBar style={dark ? 'light' : 'dark'} />
       </StoreProvider>
     </ThemeProvider>

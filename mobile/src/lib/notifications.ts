@@ -73,9 +73,11 @@ const set = (patch: Partial<ReadState>) => {
   emit();
 };
 
-async function loadReads(user: string) {
-  if (state.user === user && state.loaded) return;
-  state = { user, loaded: false, seenAt: 0, readAllAt: 0, reads: {} };
+async function loadReads(user: string, otraVez = false) {
+  if (state.user === user && state.loaded && !otraVez) return;
+  // al recargar se mantiene lo que ya había (sin parpadeos de «no leído»)
+  if (!otraVez || state.user !== user)
+    state = { user, loaded: false, seenAt: 0, readAllAt: 0, reads: {} };
   const [st, rd] = await Promise.all([
     supabase.from('notif_state').select('seen_at, read_all_at').maybeSingle(),
     supabase
@@ -93,6 +95,11 @@ async function loadReads(user: string) {
     readAllAt: st.data?.read_all_at ? Date.parse(st.data.read_all_at) : Date.now() - 3 * 86_400_000,
     reads: { ...reads, ...state.reads },
   });
+}
+
+/** Vuelve a leer lo visto en otros dispositivos (al volver a la app o si cambia). */
+export function recargarLeidos() {
+  if (state.user) loadReads(state.user, true).catch(() => {});
 }
 
 /** Apunta que se ha visto algo (una publicación, un reto…). */
