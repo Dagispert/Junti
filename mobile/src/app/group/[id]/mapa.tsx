@@ -12,6 +12,7 @@ import { SkyBadge } from '@/components/sky-badge';
 import { Avatar } from '@/components/ui';
 import { Hand, Radius, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
+import { useEntradaSuave } from '@/lib/pestanas';
 import { distanceKm, formatKm } from '@/lib/geo';
 import { clockIn, useMinute } from '@/lib/time';
 import { useWeather } from '@/lib/weather';
@@ -36,6 +37,9 @@ export default function MapScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  // Entra suave (y al salir, la pestaña de destino también).
+  const raiz = useRef<unknown>(null);
+  useEntradaSuave(raiz, true);
   const { group: groupById, me, moments, user } = useStore();
   const group = groupById(id);
   const people = useGlobePeople(group);
@@ -119,7 +123,7 @@ export default function MapScreen() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <View ref={raiz as never} style={{ flex: 1, backgroundColor: theme.background }}>
       {/* Sin fondo propio: el del planeta se cortaba al llegar a la barra de abajo. */}
       <GlobeMap
         transparent

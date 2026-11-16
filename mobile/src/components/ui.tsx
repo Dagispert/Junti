@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Platform,
   Pressable,
@@ -28,6 +28,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Fonts, MaxContentWidth, Radius, Spacing, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
+import { useEntradaSuave } from '@/lib/pestanas';
 
 import { EASE_IN_VIEW, SPRING } from './motion';
 import { VideoClip, VideoFrame, Waveform } from './media-players';
@@ -48,8 +49,13 @@ export function Screen({ children, header }: { children: ReactNode; header?: Rea
     }
     setRefreshing(false);
   };
+  // Al volver del mapa, la pantalla entra suave en vez de aparecer de golpe.
+  const raiz = useRef<unknown>(null);
+  useEntradaSuave(raiz);
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background, paddingTop: insets.top }}>
+    <View
+      ref={raiz as never}
+      style={{ flex: 1, backgroundColor: theme.background, paddingTop: insets.top }}>
       <View style={styles.column}>{header}</View>
       <ScrollView
         contentContainerStyle={[styles.column, styles.content]}

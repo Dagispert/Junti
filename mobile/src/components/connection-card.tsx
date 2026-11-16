@@ -105,8 +105,10 @@ function city(p: MapPerson, user: (id: string) => { city: string }) {
 }
 
 const styles = StyleSheet.create({
-  globe: { height: 270, overflow: 'visible' },
-  cielo: { position: 'absolute', top: -70, left: -24, right: -24, height: 400 },
+  globe: { height: 320, overflow: 'visible' },
+  // El lienzo sobresale un poco por arriba (no más de lo que deja la lista,
+  // que lo cortaría) y por abajo, para que quepan el planeta y sus nubes.
+  cielo: { position: 'absolute', top: -24, left: -24, right: -24, height: 400 },
   open: {
     position: 'absolute',
     right: 4,
