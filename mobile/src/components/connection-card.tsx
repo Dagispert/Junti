@@ -67,9 +67,6 @@ export function ConnectionCard({ group }: { group: Group }) {
           <View style={styles.cielo} pointerEvents="none">
             <GlobeMap people={people} height={400} interactive={false} transparent distScale={1.3} />
           </View>
-          <View style={styles.open}>
-            <Text style={styles.openText}>Abrir el mapa</Text>
-          </View>
         </View>
       </Pressable>
       <Text style={[styles.line, { color: theme.textSecondary }]}>
@@ -109,16 +106,5 @@ const styles = StyleSheet.create({
   // El lienzo sobresale un poco por arriba (no más de lo que deja la lista,
   // que lo cortaría) y por abajo, para que quepan el planeta y sus nubes.
   cielo: { position: 'absolute', top: -24, left: -24, right: -24, height: 400 },
-  open: {
-    position: 'absolute',
-    right: 4,
-    bottom: 4,
-    backgroundColor: 'rgba(255,255,255,0.94)',
-    boxShadow: '0 6px 16px rgba(20,22,26,0.16)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 999,
-  },
-  openText: { color: '#1D1F22', fontSize: 13, fontWeight: '600' },
   line: { fontSize: 15, lineHeight: 21, paddingHorizontal: 4 },
 });
