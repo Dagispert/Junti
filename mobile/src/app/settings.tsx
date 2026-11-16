@@ -1,15 +1,25 @@
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import { X } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import {
+  Bug,
+  Camera,
+  Compass,
+  FileText,
+  LogOut,
+  MessageCircle,
+  Shield,
+  X,
+} from 'lucide-react-native';
+import { type ReactNode, useEffect, useState } from 'react';
 import { Image as RNImage, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { FilaEnlace, Lista, Row, SectionTitle } from '@/components/ajustes';
 import { AvatarCropper } from '@/components/avatar-cropper';
 import { CityPicker } from '@/components/city-picker';
 import { DatePick } from '@/components/date-pick';
 import { Icon } from '@/components/icon';
 import { FamilyTag } from '@/components/family';
-import { Avatar, Button, Card, Field, Lead, Notice, Screen, Tag, Title } from '@/components/ui';
+import { Avatar, Button, Field, Notice, Screen } from '@/components/ui';
 import {
   setFondo,
   setModo,
@@ -21,14 +31,20 @@ import {
   useTema,
 } from '@/lib/appearance';
 import { setFamilyColorMode, useFamilyColorMode } from '@/lib/families';
-import { Spacing, TEMAS, useTheme } from '@/constants/theme';
+import { Radius, Spacing, TEMAS, useTheme } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
 import type { Place } from '@/lib/geo';
 import { soyAdmin } from '@/lib/errores';
 import { requestTour } from '@/lib/tour';
 import { disablePush, enablePush, pushState, type PushState } from '@/lib/push';
 
-/** Ajustes personales: cómo me ven los demás, cerrar sesión y borrar la cuenta. */
+type Seccion = 'nombre' | 'sobre' | 'tema' | 'modo' | 'fondo' | 'colores' | 'avisos' | 'borrar';
+
+/**
+ * Tus ajustes, ordenados como los del grupo: arriba, tú de un vistazo; luego
+ * tu perfil, la apariencia, los avisos, la ayuda y la cuenta. Cada apartado
+ * enseña un resumen y se abre con un toque.
+ */
 export default function Settings() {
   const [admin, setAdmin] = useState(false);
   useEffect(() => {
@@ -53,6 +69,7 @@ export default function Settings() {
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [open, setOpen] = useState<Seccion | null>(null);
   // Sobre ti
   const about = profile.about;
   const [nickname, setNickname] = useState(about.nickname ?? '');
@@ -133,6 +150,71 @@ export default function Settings() {
     );
   }
 
+  const row = (id: Seccion, title: string, summary: ReactNode, body: ReactNode) => (
+    <Row
+      key={id}
+      title={title}
+      summary={summary}
+      open={open === id}
+      onToggle={() => setOpen(open === id ? null : id)}>
+      {body}
+    </Row>
+  );
+
+  const chips = <T extends string>(
+    opciones: readonly (readonly [T, string])[],
+    actual: T | undefined,
+    elegir: (v: T) => void,
+  ) => (
+    <View style={styles.chips}>
+      {opciones.map(([value, label]) => {
+        const on = actual === value;
+        return (
+          <Pressable
+            key={value}
+            accessibilityRole="radio"
+            aria-checked={on}
+            onPress={() => elegir(value)}
+            style={[styles.chip, { backgroundColor: on ? theme.accent : theme.soft }]}>
+            <Text style={{ color: on ? theme.onAccent : theme.text, fontSize: 15 }}>{label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+
+  const MODOS = [
+    ['sistema', 'Automático'],
+    ['claro', 'Claro'],
+    ['oscuro', 'Oscuro'],
+  ] as const;
+  const FONDOS = [
+    ['liso', 'Liso'],
+    ['papel', 'Papel'],
+    ['puntos', 'Puntos'],
+    ['lineas', 'Líneas'],
+  ] as const;
+  const COLORES = [
+    ['tinted', 'Tarjeta tintada'],
+    ['accent', 'Solo un detalle'],
+    ['plain', 'Sin color'],
+  ] as const;
+  const AVISOS: Record<PushState, string> = {
+    on: 'Activados',
+    off: 'Desactivados',
+    'needs-install': 'Falta instalar la app',
+    denied: 'Bloqueados',
+    unsupported: 'No disponibles',
+  };
+  const rellenos = [
+    about.nickname,
+    about.voiceGender,
+    about.birthMonth,
+    about.hometown,
+    about.bio,
+    about.interests?.length,
+  ].filter(Boolean).length;
+
   return (
     <Screen
       header={
@@ -140,403 +222,354 @@ export default function Settings() {
           <Button compact label="Cerrar" variant="quiet" onPress={() => router.back()} />
         </View>
       }>
-      <Title>Tu perfil</Title>
-
-      <Card style={styles.card}>
-        <View style={styles.avatarRow}>
-          <Avatar userId={me} size={72} />
-          <Button
-            compact
-            variant="quiet"
-            label="Cambiar foto"
-            disabled={busy}
-            onPress={pickAvatar}
-          />
+      {/* ── Tú, de un vistazo ── */}
+      <View style={[styles.hero, { backgroundColor: theme.card, boxShadow: theme.shadow }]}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Cambiar tu foto"
+          disabled={busy}
+          onPress={pickAvatar}
+          style={styles.heroFoto}>
+          <Avatar userId={me} size={84} />
+          <View style={[styles.heroCamara, { backgroundColor: theme.accent }]}>
+            <Icon icon={Camera} size={14} color={theme.onAccent} />
+          </View>
+        </Pressable>
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text numberOfLines={2} style={[styles.heroName, { color: theme.text }]}>
+            {profile.name}
+          </Text>
+          {!!(about.nickname || profile.city) && (
+            <Text numberOfLines={1} style={{ color: theme.textSecondary, fontSize: 14 }}>
+              {[about.nickname && `«${about.nickname}»`, profile.city].filter(Boolean).join(' · ')}
+            </Text>
+          )}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push({ pathname: '/person/[id]', params: { id: me } })}
+            style={{ alignSelf: 'flex-start', paddingVertical: 4 }}>
+            <Text style={{ color: theme.text, fontSize: 14, fontWeight: '600' }}>
+              Ver mi ficha →
+            </Text>
+          </Pressable>
         </View>
-        <Field label="Nombre" value={name} onChangeText={setName} />
-        <CityPicker value={place} onChange={setPlace} />
-        {!current && !!profile.city && !placeChanged && (
-          <Notice>
-            Tenías puesta «{profile.city}». Búscala en la lista para aparecer en el mapa.
-          </Notice>
-        )}
-        <Button
-          label="Guardar"
-          disabled={busy || !name.trim() || (name === profile.name && !placeChanged)}
-          onPress={() =>
-            run(() => saveProfile(name.trim(), placeChanged ? place : undefined), 'Guardado')
-          }
-        />
-      </Card>
+      </View>
       <Notice>{notice}</Notice>
 
-      <View style={{ gap: Spacing.two }}>
-        <View style={styles.aboutHead}>
-          <Tag>Sobre ti</Tag>
-          <Button
-            compact
-            variant="quiet"
-            label="Ver mi ficha"
-            onPress={() => router.push({ pathname: '/person/[id]', params: { id: me } })}
-          />
-        </View>
-        <Text style={{ color: theme.textSecondary, fontSize: 13, lineHeight: 19 }}>
-          Todo es opcional. Solo lo ven las personas de tus grupos, y la narradora lo usa para
-          contar vuestras historias con más cariño.
-        </Text>
-        <Card style={styles.card}>
-          <Field
-            label="Apodo"
-            value={nickname}
-            onChangeText={setNickname}
-            placeholder="Como te llaman los tuyos"
-            maxLength={40}
-          />
-
-          <View style={{ gap: 8 }}>
-            <Text style={{ color: theme.textSecondary, fontSize: 13 }}>Cuando hablen de ti</Text>
-            <View style={styles.chips}>
-              {(
+      {/* ── Tu perfil ── */}
+      <SectionTitle title="Tu perfil" hint="Lo que ven las personas de tus grupos." />
+      <Lista>
+        {row(
+          'nombre',
+          'Nombre y ciudad',
+          profile.city || 'Sin ciudad',
+          <>
+            <Field label="Nombre" value={name} onChangeText={setName} />
+            <CityPicker value={place} onChange={setPlace} />
+            {!current && !!profile.city && !placeChanged && (
+              <Notice>
+                Tenías puesta «{profile.city}». Búscala en la lista para aparecer en el mapa.
+              </Notice>
+            )}
+            <Button
+              compact
+              label="Guardar"
+              disabled={busy || !name.trim() || (name === profile.name && !placeChanged)}
+              onPress={() =>
+                run(() => saveProfile(name.trim(), placeChanged ? place : undefined), 'Guardado')
+              }
+            />
+          </>,
+        )}
+        {row(
+          'sobre',
+          'Sobre ti',
+          rellenos ? `${rellenos} de 6` : 'Sin rellenar',
+          <>
+            <Small>
+              Todo es opcional. Solo lo ven las personas de tus grupos, y la narradora lo usa para
+              contar vuestras historias con más cariño.
+            </Small>
+            <Field
+              label="Apodo"
+              value={nickname}
+              onChangeText={setNickname}
+              placeholder="Como te llaman los tuyos"
+              maxLength={40}
+            />
+            <View style={{ gap: 8 }}>
+              <Text style={{ color: theme.textSecondary, fontSize: 13 }}>Cuando hablen de ti</Text>
+              {chips(
                 [
                   ['f', 'En femenino'],
                   ['m', 'En masculino'],
                   ['n', 'Sin género'],
-                ] as const
-              ).map(([value, label]) => {
-                const on = gender === value;
+                ] as const,
+                gender,
+                (v) => setGender(gender === v ? undefined : v),
+              )}
+            </View>
+            <View style={{ gap: 8 }}>
+              <Check on={hasBirthday} onPress={() => setHasBirthday(!hasBirthday)}>
+                Mi cumpleaños
+              </Check>
+              {hasBirthday && (
+                <>
+                  <DatePick
+                    value={birthday}
+                    onChange={setBirthday}
+                    label="Día y mes"
+                    hideYear={!shareYear}
+                  />
+                  <Check on={shareYear} onPress={() => setShareYear(!shareYear)} small>
+                    Compartir también el año (para saber cuántos cumples)
+                  </Check>
+                </>
+              )}
+            </View>
+            <Field
+              label="De dónde eres"
+              value={hometown}
+              onChangeText={setHometown}
+              placeholder="Valladolid, Cádiz, Bogotá…"
+              maxLength={80}
+            />
+            <Field
+              label="Una frase sobre ti"
+              value={bio}
+              onChangeText={setBio}
+              placeholder="Bióloga en Lisboa y fan del café"
+              maxLength={160}
+              multiline
+            />
+            <View style={{ gap: 8 }}>
+              <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
+                Lo que te gusta (hasta 8)
+              </Text>
+              {interests.length > 0 && (
+                <View style={styles.chips}>
+                  {interests.map((i) => (
+                    <Pressable
+                      key={i}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Quitar ${i}`}
+                      onPress={() => setInterests(interests.filter((x) => x !== i))}
+                      style={[styles.chip, { backgroundColor: theme.soft }]}>
+                      <Text style={{ color: theme.text, fontSize: 15 }}>{i}</Text>
+                      <Icon icon={X} size={14} />
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+              {interests.length < 8 && (
+                <Field
+                  label="Añadir"
+                  value={interest}
+                  onChangeText={setInterest}
+                  onSubmitEditing={addInterest}
+                  onBlur={addInterest}
+                  placeholder="surf, cocinar, fotografía…"
+                  maxLength={30}
+                  returnKeyType="done"
+                />
+              )}
+            </View>
+            <Button
+              compact
+              label="Guardar"
+              disabled={busy}
+              onPress={() =>
+                run(
+                  () =>
+                    saveAbout({
+                      nickname: nickname.trim(),
+                      voiceGender: gender,
+                      birthMonth: hasBirthday ? birthday.getMonth() + 1 : undefined,
+                      birthDay: hasBirthday ? birthday.getDate() : undefined,
+                      birthYear: hasBirthday && shareYear ? birthday.getFullYear() : undefined,
+                      hometown: hometown.trim(),
+                      bio: bio.trim(),
+                      interests,
+                    }),
+                  'Guardado',
+                )
+              }
+            />
+          </>,
+        )}
+      </Lista>
+
+      {/* ── Apariencia ── */}
+      <SectionTitle title="Apariencia" hint="Solo para ti, en este dispositivo." />
+      <Lista>
+        {row(
+          'tema',
+          'Tema',
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={[styles.dot, { backgroundColor: theme.accent }]} />
+            <Text style={{ color: theme.textSecondary, fontSize: 14 }}>
+              {TEMAS[temaElegido].nombre}
+            </Text>
+          </View>,
+          <>
+            <View style={styles.temas}>
+              {(Object.keys(TEMAS) as TemaId[]).map((id) => {
+                const t = TEMAS[id];
+                const p = t[esquema === 'dark' || id === 'noche' ? 'dark' : 'light'];
+                const on = temaElegido === id;
                 return (
                   <Pressable
-                    key={value}
+                    key={id}
                     accessibilityRole="radio"
                     aria-checked={on}
-                    onPress={() => setGender(on ? undefined : value)}
-                    style={[styles.chip, { backgroundColor: on ? theme.accent : theme.soft }]}>
-                    <Text style={{ color: on ? theme.onAccent : theme.text, fontSize: 15 }}>
-                      {label}
+                    accessibilityLabel={`Tema ${t.nombre}: ${t.lema}`}
+                    onPress={() => setTema(id)}
+                    style={[
+                      styles.tema,
+                      { borderColor: on ? theme.accent : theme.border, borderWidth: on ? 2 : 1 },
+                    ]}>
+                    {/* una miniatura de la app con esos colores */}
+                    <View style={[styles.mini, { backgroundColor: p.background }]}>
+                      <View style={[styles.miniCard, { backgroundColor: p.card }]}>
+                        <View
+                          style={[styles.miniLinea, { backgroundColor: p.text, width: '70%' }]}
+                        />
+                        <View
+                          style={[
+                            styles.miniLinea,
+                            { backgroundColor: p.textSecondary, width: '45%' },
+                          ]}
+                        />
+                      </View>
+                      <View style={[styles.miniBoton, { backgroundColor: p.accent }]} />
+                    </View>
+                    <Text style={{ color: theme.text, fontSize: 14, fontWeight: '600' }}>
+                      {t.nombre}
                     </Text>
                   </Pressable>
                 );
               })}
             </View>
-          </View>
+            <Small>{TEMAS[temaElegido].lema}. El color de cada grupo no cambia.</Small>
+          </>,
+        )}
+        {row(
+          'modo',
+          'Claro u oscuro',
+          temaElegido === 'noche'
+            ? 'Oscuro (Noche)'
+            : (MODOS.find(([v]) => v === apariencia)?.[1] ?? ''),
+          <>
+            {chips(MODOS, apariencia, setModo)}
+            <Small>
+              {temaElegido === 'noche'
+                ? 'Con el tema Noche la app siempre es oscura.'
+                : apariencia === 'sistema'
+                  ? 'Sigue al móvil: clara de día u oscura si lo tienes en modo oscuro.'
+                  : apariencia === 'claro'
+                    ? 'Siempre clara, aunque el móvil esté en modo oscuro.'
+                    : 'Siempre oscura.'}
+            </Small>
+          </>,
+        )}
+        {row(
+          'fondo',
+          'Fondo',
+          FONDOS.find(([v]) => v === fondoElegido)?.[1] ?? '',
+          <>
+            {chips(FONDOS, fondoElegido, setFondo)}
+            <Small>Una trama muy suave detrás de las pantallas.</Small>
+          </>,
+        )}
+        {row(
+          'colores',
+          'Color de las etiquetas',
+          COLORES.find(([v]) => v === colorMode)?.[1] ?? '',
+          <>
+            <Small>
+              Cada cosa del grupo (momento, recuerdo, reto, encuesta…) lleva su etiqueta. Elige
+              cuánto color quieres ver en «Hoy».
+            </Small>
+            {chips(COLORES, colorMode, setFamilyColorMode)}
+            <View style={[styles.chips, { gap: 6 }]}>
+              {(['moment', 'memory', 'challenge', 'poll', 'quiz', 'open', 'prompt'] as const).map(
+                (f) => (
+                  <FamilyTag key={f} family={f} />
+                ),
+              )}
+            </View>
+          </>,
+        )}
+      </Lista>
 
-          <View style={{ gap: 8 }}>
-            <Pressable
-              accessibilityRole="checkbox"
-              aria-checked={hasBirthday}
-              onPress={() => setHasBirthday(!hasBirthday)}
-              style={styles.checkRow}>
-              <View
-                style={[
-                  styles.box,
-                  { borderColor: hasBirthday ? theme.accent : theme.textSecondary },
-                  hasBirthday && { backgroundColor: theme.accent },
-                ]}
-              />
-              <Text style={{ color: theme.text, fontSize: 17 }}>Mi cumpleaños</Text>
-            </Pressable>
-            {hasBirthday && (
+      {/* ── Avisos ── */}
+      <SectionTitle
+        title="Avisos"
+        hint="La hora y el descanso se eligen en los ajustes de cada grupo."
+      />
+      <Lista>
+        {row(
+          'avisos',
+          'Avisos en este dispositivo',
+          push ? AVISOS[push] : '',
+          <>
+            {push === 'on' && (
               <>
-                <DatePick
-                  value={birthday}
-                  onChange={setBirthday}
-                  label="Día y mes"
-                  hideYear={!shareYear}
+                <Small>
+                  Este dispositivo recibe la propuesta del día y lo nuevo de tus grupos.
+                </Small>
+                <Button
+                  compact
+                  label="Desactivar avisos aquí"
+                  variant="quiet"
+                  disabled={busy}
+                  onPress={() => run(async () => (await disablePush(), setPush(await pushState())))}
                 />
-                <Pressable
-                  accessibilityRole="checkbox"
-                  aria-checked={shareYear}
-                  onPress={() => setShareYear(!shareYear)}
-                  style={styles.checkRow}>
-                  <View
-                    style={[
-                      styles.box,
-                      { borderColor: shareYear ? theme.accent : theme.textSecondary },
-                      shareYear && { backgroundColor: theme.accent },
-                    ]}
-                  />
-                  <Text style={{ color: theme.text, fontSize: 15 }}>
-                    Compartir también el año (para saber cuántos cumples)
-                  </Text>
-                </Pressable>
               </>
             )}
-          </View>
-
-          <Field
-            label="De dónde eres"
-            value={hometown}
-            onChangeText={setHometown}
-            placeholder="Valladolid, Cádiz, Bogotá…"
-            maxLength={80}
-          />
-          <Field
-            label="Una frase sobre ti"
-            value={bio}
-            onChangeText={setBio}
-            placeholder="Bióloga en Lisboa y fan del café"
-            maxLength={160}
-            multiline
-          />
-
-          <View style={{ gap: 8 }}>
-            <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
-              Lo que te gusta (hasta 8)
-            </Text>
-            {interests.length > 0 && (
-              <View style={styles.chips}>
-                {interests.map((i) => (
-                  <Pressable
-                    key={i}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Quitar ${i}`}
-                    onPress={() => setInterests(interests.filter((x) => x !== i))}
-                    style={[styles.chip, { backgroundColor: theme.soft }]}>
-                    <Text style={{ color: theme.text, fontSize: 15 }}>{i}</Text>
-                    <Icon icon={X} size={14} />
-                  </Pressable>
-                ))}
-              </View>
+            {push === 'off' && (
+              <>
+                <Small>
+                  Recibe la propuesta del día a tu hora, aunque no tengas la app abierta. Nada más:
+                  ni rachas ni recordatorios insistentes.
+                </Small>
+                <Button
+                  compact
+                  label="Activar avisos aquí"
+                  disabled={busy}
+                  onPress={() => run(async () => (await enablePush(), setPush(await pushState())))}
+                />
+              </>
             )}
-            {interests.length < 8 && (
-              <Field
-                label="Añadir"
-                value={interest}
-                onChangeText={setInterest}
-                onSubmitEditing={addInterest}
-                onBlur={addInterest}
-                placeholder="surf, cocinar, fotografía…"
-                maxLength={30}
-                returnKeyType="done"
-              />
+            {push === 'needs-install' && (
+              <Small>
+                Para recibir avisos en el iPhone, añade Junti a la pantalla de inicio: en Safari,
+                pulsa Compartir y luego «Añadir a pantalla de inicio». Ábrela desde ese icono y
+                vuelve aquí.
+              </Small>
             )}
-          </View>
-
-          <Button
-            label="Guardar"
-            disabled={busy}
-            onPress={() =>
-              run(
-                () =>
-                  saveAbout({
-                    nickname: nickname.trim(),
-                    voiceGender: gender,
-                    birthMonth: hasBirthday ? birthday.getMonth() + 1 : undefined,
-                    birthDay: hasBirthday ? birthday.getDate() : undefined,
-                    birthYear: hasBirthday && shareYear ? birthday.getFullYear() : undefined,
-                    hometown: hometown.trim(),
-                    bio: bio.trim(),
-                    interests,
-                  }),
-                'Guardado',
-              )
-            }
-          />
-        </Card>
-      </View>
-
-      {/* Apariencia: clara, oscura o como el móvil. */}
-      <View style={{ gap: Spacing.two }}>
-        <Tag>Apariencia</Tag>
-        <Card style={styles.card}>
-          <View style={styles.chips}>
-            {(
-              [
-                ['sistema', 'Automático'],
-                ['claro', 'Claro'],
-                ['oscuro', 'Oscuro'],
-              ] as const
-            ).map(([value, label]) => {
-              const on = apariencia === value;
-              return (
-                <Pressable
-                  key={value}
-                  accessibilityRole="radio"
-                  aria-checked={on}
-                  onPress={() => setModo(value)}
-                  style={[styles.chip, { backgroundColor: on ? theme.accent : theme.soft }]}>
-                  <Text style={{ color: on ? theme.onAccent : theme.text, fontSize: 15 }}>
-                    {label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          <Text style={{ color: theme.textSecondary, fontSize: 13, lineHeight: 19 }}>
-            {temaElegido === 'noche'
-              ? 'Con el tema Noche la app siempre es oscura.'
-              : apariencia === 'sistema'
-                ? 'Sigue al móvil: clara de día u oscura si lo tienes en modo oscuro.'
-                : apariencia === 'claro'
-                  ? 'Siempre clara, aunque el móvil esté en modo oscuro.'
-                  : 'Siempre oscura.'}
-          </Text>
-        </Card>
-
-        {/* El tema: los colores de la app, solo para ti. */}
-        <Card style={styles.card}>
-          <Text style={{ color: theme.text, fontSize: 17, fontWeight: '600' }}>Tema</Text>
-          <View style={styles.temas}>
-            {(Object.keys(TEMAS) as TemaId[]).map((id) => {
-              const t = TEMAS[id];
-              const p = t[esquema === 'dark' || id === 'noche' ? 'dark' : 'light'];
-              const on = temaElegido === id;
-              return (
-                <Pressable
-                  key={id}
-                  accessibilityRole="radio"
-                  aria-checked={on}
-                  accessibilityLabel={`Tema ${t.nombre}: ${t.lema}`}
-                  onPress={() => setTema(id)}
-                  style={[
-                    styles.tema,
-                    { borderColor: on ? theme.accent : theme.border, borderWidth: on ? 2 : 1 },
-                  ]}>
-                  {/* una miniatura de la app con esos colores */}
-                  <View style={[styles.mini, { backgroundColor: p.background }]}>
-                    <View style={[styles.miniCard, { backgroundColor: p.card }]}>
-                      <View style={[styles.miniLinea, { backgroundColor: p.text, width: '70%' }]} />
-                      <View
-                        style={[styles.miniLinea, { backgroundColor: p.textSecondary, width: '45%' }]}
-                      />
-                    </View>
-                    <View style={[styles.miniBoton, { backgroundColor: p.accent }]} />
-                  </View>
-                  <Text style={{ color: theme.text, fontSize: 14, fontWeight: '600' }}>
-                    {t.nombre}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          <Text style={{ color: theme.textSecondary, fontSize: 13, lineHeight: 19 }}>
-            {TEMAS[temaElegido].lema}. Solo lo ves tú; el color de cada grupo no cambia.
-          </Text>
-        </Card>
-
-        {/* Un fondo suave detrás de las pantallas. */}
-        <Card style={styles.card}>
-          <Text style={{ color: theme.text, fontSize: 17, fontWeight: '600' }}>Fondo</Text>
-          <View style={styles.chips}>
-            {(
-              [
-                ['liso', 'Liso'],
-                ['papel', 'Papel'],
-                ['puntos', 'Puntos'],
-                ['lineas', 'Líneas'],
-              ] as const
-            ).map(([value, label]) => {
-              const on = fondoElegido === value;
-              return (
-                <Pressable
-                  key={value}
-                  accessibilityRole="radio"
-                  aria-checked={on}
-                  onPress={() => setFondo(value)}
-                  style={[styles.chip, { backgroundColor: on ? theme.accent : theme.soft }]}>
-                  <Text style={{ color: on ? theme.onAccent : theme.text, fontSize: 15 }}>
-                    {label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </Card>
-      </View>
-
-      {/* De prueba: cuánto color lleva cada familia en «Hoy», para decidir viéndolo. */}
-      <View style={{ gap: Spacing.two }}>
-        <Tag>Colores de las familias (prueba)</Tag>
-        <Text style={{ color: theme.textSecondary, fontSize: 13, lineHeight: 19 }}>
-          Cada cosa del grupo (momento, recuerdo, reto, encuesta…) lleva su etiqueta. Elige cuánto
-          color quieres ver y mira cómo queda en «Hoy».
-        </Text>
-        <Card style={styles.card}>
-          <View style={styles.chips}>
-            {(
-              [
-                ['tinted', 'Tarjeta tintada'],
-                ['accent', 'Solo un detalle'],
-                ['plain', 'Sin color'],
-              ] as const
-            ).map(([value, label]) => {
-              const on = colorMode === value;
-              return (
-                <Pressable
-                  key={value}
-                  accessibilityRole="radio"
-                  aria-checked={on}
-                  onPress={() => setFamilyColorMode(value)}
-                  style={[styles.chip, { backgroundColor: on ? theme.accent : theme.soft }]}>
-                  <Text style={{ color: on ? theme.onAccent : theme.text, fontSize: 15 }}>
-                    {label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          <View style={[styles.chips, { gap: 6 }]}>
-            {(['moment', 'memory', 'challenge', 'poll', 'quiz', 'open', 'prompt'] as const).map(
-              (f) => (
-                <FamilyTag key={f} family={f} />
-              ),
+            {push === 'denied' && (
+              <Small>
+                Los avisos están bloqueados para Junti en este navegador. Puedes permitirlos en los
+                ajustes del navegador o del teléfono.
+              </Small>
             )}
-          </View>
-        </Card>
-      </View>
+            {push === 'unsupported' && (
+              <Small>
+                Este navegador no admite avisos. Prueba desde el móvil, con la app añadida a la
+                pantalla de inicio.
+              </Small>
+            )}
+          </>,
+        )}
+      </Lista>
 
-      <View style={{ gap: Spacing.two }}>
-        <Tag>Avisos</Tag>
-        {push === 'on' && (
-          <>
-            <Lead strong="Este dispositivo recibe la propuesta del día">
-              de tus grupos, a la hora que elijas en los ajustes de cada grupo.
-            </Lead>
-            <Button
-              label="Desactivar avisos aquí"
-              variant="quiet"
-              disabled={busy}
-              onPress={() => run(async () => (await disablePush(), setPush(await pushState())))}
-            />
-          </>
-        )}
-        {push === 'off' && (
-          <>
-            <Lead strong="Recibe la propuesta del día">
-              a tu hora, aunque no tengas la app abierta. Nada más: ni rachas ni recordatorios
-              insistentes.
-            </Lead>
-            <Button
-              label="Activar avisos en este dispositivo"
-              disabled={busy}
-              onPress={() => run(async () => (await enablePush(), setPush(await pushState())))}
-            />
-          </>
-        )}
-        {push === 'needs-install' && (
-          <Lead strong="Para recibir avisos en el iPhone,">
-            añade Junti a la pantalla de inicio: en Safari, pulsa Compartir y luego «Añadir a
-            pantalla de inicio». Ábrela desde ese icono y vuelve aquí.
-          </Lead>
-        )}
-        {push === 'denied' && (
-          <Lead strong="Los avisos están bloqueados">
-            para Junti en este navegador. Puedes permitirlos en los ajustes del navegador o del
-            teléfono.
-          </Lead>
-        )}
-        {push === 'unsupported' && (
-          <Lead strong="Este navegador no admite avisos.">
-            Prueba desde el móvil, con la app añadida a la pantalla de inicio.
-          </Lead>
-        )}
-      </View>
-
-      <View style={{ gap: Spacing.two }}>
-        <Tag>Ayuda</Tag>
-        <Button
-          label="Ver la guía de Junti"
-          variant="light"
+      {/* ── Ayuda ── */}
+      <SectionTitle title="Ayuda" />
+      <Lista>
+        <FilaEnlace
+          icon={Compass}
+          title="Ver la guía de Junti"
           onPress={() => {
             const first = groups[0];
             if (!first) {
@@ -548,61 +581,134 @@ export default function Settings() {
             router.push({ pathname: '/group/[id]', params: { id: first.id } });
           }}
         />
-        <Button
-          label="Guardar desde WhatsApp"
-          variant="light"
+        <FilaEnlace
+          icon={MessageCircle}
+          title="Guardar desde WhatsApp"
           onPress={() => router.push('/compartir-ajustes')}
         />
         {/* solo lo ve quien mantiene la app */}
         {admin && (
-          <Button
-            label="Errores recientes"
-            variant="light"
+          <FilaEnlace
+            icon={Bug}
+            title="Errores recientes"
             onPress={() => router.push('/errores')}
           />
         )}
-      </View>
+      </Lista>
 
-      <View style={{ gap: Spacing.two }}>
-        <Tag>Privacidad</Tag>
-        <Button
-          label="Política de privacidad"
-          variant="quiet"
+      {/* ── Privacidad y cuenta ── */}
+      <SectionTitle title="Privacidad y cuenta" />
+      <Lista>
+        <FilaEnlace
+          icon={Shield}
+          title="Política de privacidad"
           onPress={() => router.push({ pathname: '/legal', params: { doc: 'privacidad' } })}
         />
-        <Button
-          label="Condiciones de uso"
-          variant="quiet"
+        <FilaEnlace
+          icon={FileText}
+          title="Condiciones de uso"
           onPress={() => router.push({ pathname: '/legal', params: { doc: 'condiciones' } })}
         />
-      </View>
-
-      <Button label="Cerrar sesión" variant="quiet" onPress={signOut} />
-
-      <View style={{ gap: Spacing.two }}>
-        <Tag>Zona delicada</Tag>
-        <Lead strong="Borrar tu cuenta elimina tu perfil,">
-          tus momentos, tus fotos, tus comentarios y tus reacciones en todos los grupos. No se puede
-          deshacer.
-        </Lead>
-        {confirming ? (
-          <View style={styles.confirm}>
-            <Button label="Sí, borrar todo" disabled={busy} onPress={() => run(deleteAccount)} />
-            <Button label="Cancelar" variant="quiet" onPress={() => setConfirming(false)} />
-          </View>
-        ) : (
-          <Button label="Borrar mi cuenta" variant="quiet" onPress={() => setConfirming(true)} />
+        <FilaEnlace icon={LogOut} title="Cerrar sesión" onPress={signOut} />
+        {row(
+          'borrar',
+          'Borrar mi cuenta',
+          '',
+          <>
+            <Small>
+              Borrar tu cuenta elimina tu perfil, tus momentos, tus fotos, tus comentarios y tus
+              reacciones en todos los grupos. No se puede deshacer.
+            </Small>
+            {confirming ? (
+              <View style={styles.confirm}>
+                <Button
+                  compact
+                  label="Sí, borrar todo"
+                  disabled={busy}
+                  onPress={() => run(deleteAccount)}
+                />
+                <Button
+                  compact
+                  label="Cancelar"
+                  variant="quiet"
+                  onPress={() => setConfirming(false)}
+                />
+              </View>
+            ) : (
+              <Button
+                compact
+                label="Borrar mi cuenta"
+                variant="quiet"
+                onPress={() => setConfirming(true)}
+              />
+            )}
+          </>,
         )}
-      </View>
+      </Lista>
     </Screen>
+  );
+}
+
+function Small({ children }: { children: ReactNode }) {
+  const theme = useTheme();
+  return (
+    <Text style={{ color: theme.textSecondary, fontSize: 14, lineHeight: 19 }}>{children}</Text>
+  );
+}
+
+/** Una casilla con su texto. */
+function Check({
+  on,
+  onPress,
+  small,
+  children,
+}: {
+  on: boolean;
+  onPress: () => void;
+  small?: boolean;
+  children: ReactNode;
+}) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="checkbox"
+      aria-checked={on}
+      onPress={onPress}
+      style={styles.checkRow}>
+      <View
+        style={[
+          styles.box,
+          { borderColor: on ? theme.accent : theme.textSecondary },
+          on && { backgroundColor: theme.accent },
+        ]}
+      />
+      <Text style={{ color: theme.text, fontSize: small ? 15 : 17, flex: 1 }}>{children}</Text>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   header: { alignItems: 'flex-start', paddingVertical: Spacing.two },
-  card: { padding: 20, gap: Spacing.three },
-  avatarRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
-  aboutHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  hero: {
+    borderRadius: Radius.frame,
+    padding: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  heroFoto: { position: 'relative' },
+  heroCamara: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroName: { fontSize: 26, lineHeight: 31, fontWeight: '500', letterSpacing: -0.5 },
+  dot: { width: 12, height: 12, borderRadius: 6 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   temas: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   tema: { width: '31%', flexGrow: 1, borderRadius: 16, padding: 8, gap: 6, alignItems: 'center' },
