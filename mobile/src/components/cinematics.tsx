@@ -1,5 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect } from 'react';
+import { useEsquema } from '@/lib/appearance';
+import { useTheme } from '@/constants/theme';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { Brand, TAGLINE } from '@/constants/brand';
@@ -37,6 +39,12 @@ export function useAllGlobePeople(): GlobePerson[] {
 
 /** El cielo claro de la marca, detrás del planeta. */
 export const SKY = ['#FFFFFF', '#EAF6F8', '#D8EEF2'] as const;
+/** El cielo de noche, para el modo oscuro. */
+export const SKY_NOCHE = ['#0F1011', '#111A22', '#16232D'] as const;
+/** El cielo de fondo según el modo (claro u oscuro). */
+export function useSky() {
+  return useEsquema() === 'dark' ? SKY_NOCHE : SKY;
+}
 
 /**
  * Entrada de la app: nuestro planeta se acerca desde lejos, se trazan los
@@ -48,6 +56,8 @@ export function IntroCinematic({ onDone }: { onDone: () => void }) {
   const { height, width } = useWindowDimensions();
   const t = useClock(true, 4600);
   const END = 4300;
+  const sky = useSky();
+  const theme = useTheme();
 
   useEffect(() => {
     const id = setTimeout(onDone, END);
@@ -62,7 +72,7 @@ export function IntroCinematic({ onDone }: { onDone: () => void }) {
 
   return (
     <View style={[StyleSheet.absoluteFill, { opacity: fadeOut, zIndex: 100 }]}>
-      <LinearGradient colors={SKY} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={sky} style={StyleSheet.absoluteFill} />
       <View style={{ position: 'absolute', top: height * 0.3, left: 0, right: 0, height: globe }}>
         <GlobeMap people={people} height={globe} interactive transparent />
       </View>
@@ -74,7 +84,9 @@ export function IntroCinematic({ onDone }: { onDone: () => void }) {
           style={{ opacity: title, transform: [{ translateY: (1 - title) * 12 }], marginTop: 12 }}>
           <Wordmark height={52} />
         </View>
-        <Text style={[styles.subtitle, { opacity: subtitle }]}>{TAGLINE}</Text>
+        <Text style={[styles.subtitle, { opacity: subtitle, color: theme.textSecondary }]}>
+          {TAGLINE}
+        </Text>
       </View>
       {/* Un toque en cualquier sitio la salta. */}
       <Pressable

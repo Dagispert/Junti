@@ -3,18 +3,22 @@ import { Fraunces_400Regular_Italic, Fraunces_500Medium } from '@expo-google-fon
 import { DarkTheme, DefaultTheme, router, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, useColorScheme, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 
 import { AuthScreen, ProfileSetup } from '@/components/auth-screen';
 import { IntroCinematic } from '@/components/cinematics';
-import { useTheme } from '@/constants/theme';
+import { Colors, useTheme } from '@/constants/theme';
+import { aplicarEnLaWeb, useEsquema } from '@/lib/appearance';
 import { StoreProvider, useStore } from '@/data/store';
 import { rememberInvite, takeInvite } from '@/lib/invite';
 import { setupInstallable } from '@/lib/push';
 import { markIntroDone } from '@/lib/tour';
 
 export default function RootLayout() {
-  const dark = useColorScheme() === 'dark';
+  // claro, oscuro o como el móvil (se elige en Ajustes)
+  const esquema = useEsquema();
+  const dark = esquema === 'dark';
+  useEffect(() => aplicarEnLaWeb(esquema, Colors[esquema].background), [esquema]);
   useFonts({ Caveat_600SemiBold, Caveat_700Bold, Fraunces_400Regular_Italic, Fraunces_500Medium });
   useEffect(setupInstallable, []);
   useEffect(rememberInvite, []);
@@ -22,22 +26,15 @@ export default function RootLayout() {
     <ThemeProvider value={dark ? DarkTheme : DefaultTheme}>
       <StoreProvider>
         <Gate />
-        <StatusBar style="auto" />
+        <StatusBar style={dark ? 'light' : 'dark'} />
       </StoreProvider>
     </ThemeProvider>
   );
 }
 
-// La app ya trae su propio modo oscuro: se lo decimos al navegador para que
-// no «oscurezca» la página por su cuenta (Samsung Internet y otros Android
-// cambian los colores del texto y dejan letras invisibles sobre el fondo).
-if (typeof document !== 'undefined' && !document.querySelector('meta[name="color-scheme"]')) {
-  const m = document.createElement('meta');
-  m.name = 'color-scheme';
-  m.content = 'light dark';
-  document.head.appendChild(m);
-  document.documentElement.style.colorScheme = 'light dark';
-}
+// La app ya trae su propio modo oscuro: se le dice al navegador cuál usa
+// (ver aplicarEnLaWeb) para que no «oscurezca» la página por su cuenta
+// (Samsung Internet y otros Android dejaban letras invisibles sobre el fondo).
 
 /** Sin sesión no se llega a ninguna pantalla de la app. */
 function Gate() {

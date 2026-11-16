@@ -1,6 +1,8 @@
 import '@/global.css';
 
-import { Platform, useColorScheme } from 'react-native';
+import { Platform } from 'react-native';
+
+import { useEsquema } from '@/lib/appearance';
 
 // Estilo: minimalista y neutro. El color lo ponen las fotos; la interfaz es
 // blanco, grises suaves y tinta casi negra, con esquinas muy redondeadas.
@@ -32,7 +34,7 @@ export const Colors = {
 export type Theme = { [K in keyof typeof Colors.light]: string };
 
 export function useTheme(): Theme {
-  return Colors[useColorScheme() === 'dark' ? 'dark' : 'light'];
+  return Colors[useEsquema()];
 }
 
 export const Fonts = Platform.select({

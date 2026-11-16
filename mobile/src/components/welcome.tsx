@@ -10,7 +10,7 @@ import type { Moment } from '@/data/types';
 import { progress, useClock } from '@/lib/clock';
 import { clockIn } from '@/lib/time';
 
-import { SKY } from './cinematics';
+import { useSky } from './cinematics';
 import { GlobeMap } from './globe-map';
 import type { GlobePerson } from './globe-map.types';
 import { Icon } from './icon';
@@ -107,6 +107,7 @@ export function Welcome({
   onLegal: (doc: 'privacidad' | 'condiciones') => void;
 }) {
   const theme = useTheme();
+  const sky = useSky();
   const { width, height } = useWindowDimensions();
   const t = useClock(true, 3000);
   const mark = progress(t, 300, 1800);
@@ -118,10 +119,12 @@ export function Welcome({
       contentContainerStyle={{ paddingBottom: 64 }}>
       {/* Portada: la marca, el planeta con el grupo de ejemplo y las dos acciones */}
       <View style={{ minHeight: height }}>
-        <LinearGradient colors={SKY} style={StyleSheet.absoluteFill} />
+        <LinearGradient colors={sky} style={StyleSheet.absoluteFill} />
         <View style={[styles.column, { paddingTop: 48, gap: 12 }]}>
           <Logo size={40} drawn={mark} />
-          <Animated.Text entering={FadeInDown.delay(1100).duration(600)} style={styles.headline}>
+          <Animated.Text
+            entering={FadeInDown.delay(1100).duration(600)}
+            style={[styles.headline, { color: theme.text }]}>
             Para quienes se quieren y viven lejos
           </Animated.Text>
           <Animated.Text
@@ -233,7 +236,10 @@ export function Welcome({
         </Section>
 
         <View style={{ gap: 8, alignItems: 'stretch' }}>
-          <Text style={[styles.headline, { fontSize: 28, lineHeight: 34 }]}>{TAGLINE}</Text>
+          <Text
+            style={[[styles.headline, { color: theme.text }], { fontSize: 28, lineHeight: 34 }]}>
+            {TAGLINE}
+          </Text>
           <Button label="Crear mi cuenta" onPress={onCreate} />
           <Button label="Ya tengo cuenta" variant="quiet" onPress={onSignIn} />
         </View>

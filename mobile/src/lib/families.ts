@@ -10,7 +10,7 @@ import {
   Music,
 } from 'lucide-react-native';
 import { useSyncExternalStore } from 'react';
-import { useColorScheme } from 'react-native';
+import { useEsquema } from './appearance';
 
 // Las familias: todo lo que se añade con el «+» es de una familia, y cada una
 // tiene nombre, icono y color propios para que en «Hoy» se entienda de un
@@ -88,7 +88,7 @@ export const FAMILIES: Record<FamilyId, Family> = {
 
 /** El color y el tinte de una familia en el tema actual. */
 export function useFamily(id: FamilyId) {
-  const dark = useColorScheme() === 'dark';
+  const dark = useEsquema() === 'dark';
   const f = FAMILIES[id];
   return {
     ...f,

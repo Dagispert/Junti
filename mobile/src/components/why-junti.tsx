@@ -3,10 +3,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
-import { Hand } from '@/constants/theme';
+import { Hand, useTheme } from '@/constants/theme';
 
 import { GlobeMap } from './globe-map';
 import type { GlobeMemory, GlobePerson } from './globe-map.types';
+import { useSky } from './cinematics';
 import { Logo } from './logo';
 
 const base =
@@ -129,6 +130,8 @@ const web = (o: Record<string, unknown>) => o as object;
  * subtítulo.
  */
 export function WhyJunti({ text, spoken }: { text: string; spoken: number }) {
+  const theme = useTheme();
+  const sky = useSky();
   useCss();
   const { width, height } = useWindowDimensions();
   const at = Math.floor(text.length * Math.min(1, spoken));
@@ -169,7 +172,7 @@ export function WhyJunti({ text, spoken }: { text: string; spoken: number }) {
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      <LinearGradient colors={['#FFFFFF', '#E7F5F8', '#D5ECF1']} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={sky} style={StyleSheet.absoluteFill} />
       {/* Luces suaves que se mueven detrás */}
       <View
         style={[
@@ -325,7 +328,7 @@ export function WhyJunti({ text, spoken }: { text: string; spoken: number }) {
 
       {/* Subtítulo, abajo */}
       <View style={[styles.subtitle, { bottom: 170 }]}>
-        <Text style={styles.subtitleText}>
+        <Text style={[styles.subtitleText, { color: theme.text }]}>
           {said}
           <Text style={{ color: 'transparent' }}>{rest}</Text>
         </Text>

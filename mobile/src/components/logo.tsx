@@ -1,5 +1,6 @@
 import { useId } from 'react';
 import { View } from 'react-native';
+import { useEsquema } from '@/lib/appearance';
 import Svg, { Circle, ClipPath, Defs, G, Path } from 'react-native-svg';
 
 import { Brand } from '@/constants/brand';
@@ -86,13 +87,15 @@ const ease = (x: number) => 1 - (1 - x) ** 3;
 export function LogoMark({
   size = 48,
   drawn = 1,
-  inverted = false,
+  inverted: inv,
 }: {
   size?: number;
   drawn?: number;
-  /** Negro sobre fondos oscuros. */
+  /** Negro sobre fondos oscuros (si no se dice, según el modo claro u oscuro). */
   inverted?: boolean;
 }) {
+  const oscuro = useEsquema() === 'dark';
+  const inverted = inv ?? oscuro;
   const bg = inverted ? '#FFFFFF' : Brand.ink;
   const fg = inverted ? Brand.ink : '#FFFFFF';
   const shape = ease(clamp(drawn / 0.25));
@@ -151,7 +154,9 @@ export function LogoMark({
 }
 
 /** El nombre, «junti», dibujado en Fraunces (convertido a trazos). */
-export function Wordmark({ height = 32, color = Brand.ink }: { height?: number; color?: string }) {
+export function Wordmark({ height = 32, color }: { height?: number; color?: string }) {
+  const oscuro = useEsquema() === 'dark';
+  color = color ?? (oscuro ? '#F3F3F4' : Brand.ink);
   return (
     <Svg width={(height * WORD_W) / WORD_H} height={height} viewBox={`0 0 ${WORD_W} ${WORD_H}`}>
       <Path d={WORD} fill={color} />
@@ -163,12 +168,13 @@ export function Wordmark({ height = 32, color = Brand.ink }: { height?: number; 
 export function Logo({
   size = 40,
   drawn = 1,
-  inverted = false,
+  inverted: inv,
 }: {
   size?: number;
   drawn?: number;
   inverted?: boolean;
 }) {
+  const inverted = inv ?? useEsquema() === 'dark';
   const word = clamp((drawn - 0.55) / 0.45);
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: size * 0.28 }}>

@@ -10,6 +10,7 @@ import { DatePick } from '@/components/date-pick';
 import { Icon } from '@/components/icon';
 import { FamilyTag } from '@/components/family';
 import { Avatar, Button, Card, Field, Lead, Notice, Screen, Tag, Title } from '@/components/ui';
+import { setModo, useModo } from '@/lib/appearance';
 import { setFamilyColorMode, useFamilyColorMode } from '@/lib/families';
 import { Spacing, useTheme } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
@@ -21,6 +22,7 @@ import { disablePush, enablePush, pushState, type PushState } from '@/lib/push';
 export default function Settings() {
   const theme = useTheme();
   const colorMode = useFamilyColorMode();
+  const apariencia = useModo();
   const { me, user, groups, saveProfile, saveAbout, setAvatar, signOut, deleteAccount } =
     useStore();
   const profile = user(me);
@@ -313,6 +315,43 @@ export default function Settings() {
               )
             }
           />
+        </Card>
+      </View>
+
+      {/* Apariencia: clara, oscura o como el móvil. */}
+      <View style={{ gap: Spacing.two }}>
+        <Tag>Apariencia</Tag>
+        <Card style={styles.card}>
+          <View style={styles.chips}>
+            {(
+              [
+                ['sistema', 'Automático'],
+                ['claro', 'Claro'],
+                ['oscuro', 'Oscuro'],
+              ] as const
+            ).map(([value, label]) => {
+              const on = apariencia === value;
+              return (
+                <Pressable
+                  key={value}
+                  accessibilityRole="radio"
+                  aria-checked={on}
+                  onPress={() => setModo(value)}
+                  style={[styles.chip, { backgroundColor: on ? theme.accent : theme.soft }]}>
+                  <Text style={{ color: on ? theme.onAccent : theme.text, fontSize: 15 }}>
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Text style={{ color: theme.textSecondary, fontSize: 13, lineHeight: 19 }}>
+            {apariencia === 'sistema'
+              ? 'Sigue al móvil: clara de día u oscura si lo tienes en modo oscuro.'
+              : apariencia === 'claro'
+                ? 'Siempre clara, aunque el móvil esté en modo oscuro.'
+                : 'Siempre oscura.'}
+          </Text>
         </Card>
       </View>
 
