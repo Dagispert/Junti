@@ -43,6 +43,32 @@ const CX = 360,
 const X0 = CX - L / 2,
   Y0 = CY - L / 2;
 
+/**
+ * Zonas seguras del escenario (720×1280): arriba quedan la isla del móvil y la
+ * barra de la app (y en Instagram, su cabecera); abajo, los subtítulos de la
+ * narradora. Nada importante se pinta fuera de [ARRIBA, ABAJO].
+ */
+const ARRIBA = 120;
+const ABAJO = 1060;
+/** La cuadrícula de las cifras (3×5 casillas de 420, cada 448): su encuadre. */
+const REC_S = (ABAJO - ARRIBA - 20) / (4 * (L + 28) + L);
+const REC_Y = -((ARRIBA + ABAJO) / 2 - CY) / REC_S;
+
+/**
+ * Cabe el texto entero en un recuadro de «ancho»: prueba tamaños de mayor a
+ * menor (nunca por debajo del último, para que se lea) y, solo si ni así cabe,
+ * lo corta con «…». Caveat ocupa unos 0,46 del tamaño por letra.
+ */
+function ajustar(text: string, ancho: number, tamaños: number[], maxLineas: number) {
+  for (const size of tamaños) {
+    const chars = Math.max(8, Math.floor(ancho / (size * 0.46)));
+    const ls = lineas(text, chars, 99);
+    if (ls.length <= maxLineas) return { size, lines: ls };
+  }
+  const size = tamaños[tamaños.length - 1];
+  return { size, lines: lineas(text, Math.max(8, Math.floor(ancho / (size * 0.46))), maxLineas) };
+}
+
 /** Colores: de noche (hasta el flash de la cámara) y de día. */
 // El acento sale del color del grupo (ver usarColor, al empezar cada película).
 let NOCHE = { bg: '#141518', ink: '#F3F1E7', accent: '#E5568E', foco: '#23252A' };
@@ -61,8 +87,6 @@ function usarColor(hex: string) {
 
 /** Segundos desde que empieza el calendario hasta el flash de la cámara (noche → día). */
 export const FLASH = 1.45;
-/** Cuánto crece la foto de cada momento al posarse. */
-const ZOOM = 1.36;
 
 const tile = (inset = 0, dx = 0, dy = 0) =>
   squircle(CX + dx, CY + dy, L - 2 * inset, L - 2 * inset);
@@ -826,71 +850,108 @@ export class Pelicula {
         { x: -500, y: RANURA, width: 2000, height: 1200 },
         el('clipPath', { id: idS }, defs),
       );
+      // Cada momento, colocado para que todo quepa entre el calendario y los
+      // subtítulos: la foto (lo más grande posible), su texto en un recuadro que
+      // crece con el texto y, debajo, los comentarios.
+      const FOTO_Y = ARRIBA + 190; // debajo del calendario y del pie
       const marcos = d.pieces.map((p) => {
         const g = el('g', {}, lCamara);
         const mov = el('g', {}, g);
-        // al posarse, la foto crece para verse bien (más grande que la cámara)
+        // al posarse, la foto crece (o encoge) hasta su sitio
         const zoom = el('g', {}, mov);
         const card = el('g', {}, zoom);
-        marco(T, card, defs, p.photo, p.text, p.wave);
-        const notas = p.comments.slice(0, 2).map((c, j) => {
+        // con foto, el texto va aparte (en su recuadro); sin foto, dentro de la tarjeta
+        const conFoto = !!p.photo;
+        marco(T, card, defs, p.photo, conFoto ? undefined : p.text, p.wave);
+        // el texto de la foto
+        const W = 560;
+        const cap = conFoto && p.text ? ajustar(p.text, W - 44, [32, 28, 26], 5) : null;
+        const capH = cap ? Math.round(cap.lines.length * cap.size * 1.22 + 30) : 0;
+        // los comentarios (dos como mucho, uno al lado del otro)
+        const cs = p.comments.slice(0, 2);
+        const NW = cs.length > 1 ? 272 : 400;
+        const notasTxt = cs.map((c) => ajustar(`${c.who}: ${c.text}`, NW - 30, [26, 24], 4));
+        const notasH = notasTxt.length
+          ? Math.max(...notasTxt.map((n) => Math.round(n.lines.length * n.size * 1.2 + 26)))
+          : 0;
+        // la foto: lo que quede, entre 340 y 540
+        const libre = ABAJO - FOTO_Y - (capH ? capH + 16 : 0) - (notasH ? notasH + 22 : 0);
+        const P = Math.max(340, Math.min(540, libre));
+        const Z = P / L;
+        const capY = FOTO_Y + P + 16;
+        const notasY = capY + (capH ? capH + 22 : 6);
+        let capG: SVGGElement | null = null;
+        if (cap) {
+          capG = el('g', {}, g);
+          T.tinta(capG, roundRect(CX - W / 2, capY, W, capH, 14), {
+            color: DIA.ink,
+            width: 2,
+            fill: '#FFFFFF',
+          });
+          cap.lines.forEach((ln, k) =>
+            texto(capG!, ln, {
+              x: CX,
+              y: capY + 15 + cap.size * 0.95 + k * cap.size * 1.22,
+              size: cap.size,
+              color: DIA.ink,
+            }),
+          );
+        }
+        const notas = cs.map((_, j) => {
           const n = el('g', {}, g);
-          const x = j % 2 ? CX + 60 : CX - 260,
-            y = Y0 + L + 150 + j * 40;
-          T.tinta(n, roundRect(x, y, 200, 110, 10), {
+          const t = notasTxt[j];
+          const h = Math.round(t.lines.length * t.size * 1.2 + 26);
+          const x = cs.length > 1 ? (j ? CX + 8 : CX - 8 - NW) : CX - NW / 2;
+          T.tinta(n, roundRect(x, notasY, NW, h, 10), {
             color: DIA.ink,
             width: 2,
             fill: j % 2 ? TINTE : '#FFFFFF',
           });
-          const ls = lineas(`${c.who}: ${c.text}`, 18, 3);
-          ls.forEach((ln, k) =>
+          t.lines.forEach((ln, k) =>
             texto(n, ln, {
-              x: x + 14,
-              y: y + 34 + k * 26,
-              size: 24,
+              x: x + 15,
+              y: notasY + 13 + t.size * 0.95 + k * t.size * 1.2,
+              size: t.size,
               color: DIA.ink,
               anchor: 'start',
             }),
           );
-          return { n, x: x + 100, y: y + 55, r: j % 2 ? 4 : -5 };
+          return { n, x: x + NW / 2, y: notasY + h / 2, r: cs.length > 1 ? (j ? 2.5 : -2.5) : -1.5 };
         });
         const pega = el('g', {}, g);
+        // la reacción, en la esquina de la foto (por debajo del pie, sin taparlo)
+        const pegaX = CX + P / 2 - 10,
+          pegaY = FOTO_Y + 46;
         if (p.reactions.length) {
           el(
             'circle',
-            {
-              cx: CX + 272,
-              cy: CY - 272,
-              r: 38,
-              fill: '#FFFFFF',
-              stroke: DIA.ink,
-              'stroke-width': 2,
-            },
+            { cx: pegaX, cy: pegaY, r: 36, fill: '#FFFFFF', stroke: DIA.ink, 'stroke-width': 2 },
             pega,
           );
           texto(pega, [...new Set(p.reactions)].slice(0, 2).join(''), {
-            x: CX + 272,
-            y: CY - 259,
-            size: 32,
+            x: pegaX,
+            y: pegaY + 12,
+            size: 30,
             hand: false,
           });
           if (p.reactions.length > 2)
             texto(pega, `${p.reactions.length}`, {
-              x: CX + 322,
-              y: CY - 300,
+              x: pegaX + 44,
+              y: pegaY - 26,
               size: 28,
               color: DIA.accent,
             });
         }
         const pie = el('g', {}, g);
-        texto(pie, [p.author, p.when, p.place].filter(Boolean).join(' · '), {
+        const pieTxt = ajustar([p.author, p.when, p.place].filter(Boolean).join(' · '), 640, [32, 28, 24], 1);
+        texto(pie, pieTxt.lines[0] ?? '', {
           x: CX,
-          y: CY - 310,
-          size: 32,
+          y: FOTO_Y - 18,
+          size: pieTxt.size,
           color: DIA.ink,
         });
         const tension = el('path', { fill: 'none', stroke: DIA.accent, 'stroke-width': 2 }, g);
-        return { p, g, mov, zoom, card, notas, pega, pie, tension };
+        return { p, g, mov, zoom, card, notas, pega, pegaX, pegaY, pie, tension, capG, Z, P };
       });
       const tCal = { sube: ca + 0.55, flash: ca + FLASH };
       this.paint.push((t) => {
@@ -900,7 +961,7 @@ export class Pelicula {
         if (!on) return;
         // el calendario sube y se hace pequeño: es el contador de días
         const ku = S(t, tCal.sube, 0.7, ease.inOut);
-        mover(cal, { ox: CX, oy: Y0, s: lerp(1, 0.36, ku), y: lerp(0, -Y0 + 30, ku) });
+        mover(cal, { ox: CX, oy: Y0, s: lerp(1, 0.3, ku), y: lerp(0, -Y0 + ARRIBA + 8, ku) });
         opacidad(cal, 1 - S(t, cb - 0.2, 0.4));
         // qué día enseña
         let di = 0,
@@ -921,7 +982,14 @@ export class Pelicula {
         // la cámara aparece debajo
         const kcam = S(t, tCal.sube + 0.2, 0.5, ease.linear);
         mover(camara, { ox: CX, oy: CY, s: 0.6 + 0.4 * ease.back(kcam), y: 60 });
-        opacidad(camara, kcam * 3 * (1 - S(t, cb - 0.1, 0.4)));
+        // la cámara se aparta mientras se ve cada foto (no asoma por detrás) y
+        // vuelve cuando sale la siguiente
+        let aparte = 0;
+        P.piezas.forEach((pz) => {
+          if (t >= pz.a && t < pz.b + 0.1)
+            aparte = S(t, pz.a + 1.1, 0.35) * (1 - S(t, pz.b - 0.45, 0.35));
+        });
+        opacidad(camara, kcam * 3 * (1 - S(t, cb - 0.1, 0.4)) * (1 - aparte));
         visor.setAttribute(
           'opacity',
           String(Math.sin(Math.PI * S(t, tCal.flash - 0.15, 0.2, ease.linear))),
@@ -945,11 +1013,19 @@ export class Pelicula {
           else if (t < pz.a + 0.84)
             mover(m.card, { y: lerp(fuera + 200, 60, ksu), ox: CX, oy: Y0, sy: lerp(1, 0.1, ksu) });
           else mover(m.card, { y: 60, ox: CX, oy: Y0, sy: lerp(0.1, 1, kd) });
+          // a su sitio: centrada y con el tamaño que le toca (FOTO_Y … FOTO_Y + P)
+          const kz = S(t, pz.a + 1.15, 0.5, ease.inOut);
           mover(m.zoom, {
             ox: CX,
             oy: CY + 60,
-            s: 1 + (ZOOM - 1) * S(t, pz.a + 1.15, 0.5, ease.inOut),
+            s: lerp(1, m.Z, kz),
+            y: lerp(0, FOTO_Y + m.P / 2 - (CY + 60), kz),
           });
+          if (m.capG) {
+            const kc = S(t, pz.a + 1.45, 0.4);
+            opacidad(m.capG, kc * (1 - kx));
+            mover(m.capG, { y: 14 * (1 - kc) });
+          }
           mover(m.mov, { x: -560 * kx, r: -14 * kx, ox: CX, oy: CY });
           opacidad(m.mov, 1 - kx);
           m.tension.setAttribute(
@@ -960,14 +1036,14 @@ export class Pelicula {
           );
           m.notas.forEach((n, j) => {
             const kn = S(t, pz.a + 1.5 + j * 0.6, 0.4, ease.linear);
-            mover(n.n, { ox: n.x, oy: n.y, s: 0.5 + 0.5 * ease.back(kn), r: n.r, y: 60 });
+            mover(n.n, { ox: n.x, oy: n.y, s: 0.5 + 0.5 * ease.back(kn), r: n.r });
             opacidad(n.n, kn * 3 * (1 - kx));
           });
           const kp = S(t, pz.a + 1.2, 0.35, ease.linear);
-          mover(m.pega, { ox: CX + 272, oy: CY - 272, s: 0.4 + 0.6 * ease.back(kp), y: 60 });
+          mover(m.pega, { ox: m.pegaX, oy: m.pegaY, s: 0.4 + 0.6 * ease.back(kp) });
           opacidad(m.pega, kp * 3 * (1 - kx));
           opacidad(m.pie, S(t, pz.a + 1.0, 0.4) * (1 - kx));
-          mover(m.pie, { y: 60 - 10 * (1 - S(t, pz.a + 1.0, 0.4)) });
+          mover(m.pie, { y: -10 * (1 - S(t, pz.a + 1.0, 0.4)) });
         });
       });
     }
@@ -1288,8 +1364,9 @@ export class Pelicula {
         [vb - 0.8, { s: 0.88, x: 0, y: 60 }],
         [vb, { s: 1, x: 0, y: 0 }],
         [ra, { s: 1, x: 0, y: 0 }],
-        [ra + 1.4, { s: 0.52, x: 0, y: 0 }],
-        [rb + 5, { s: 0.52, x: 0, y: 0 }],
+        // la cuadrícula entera (5 filas) entre ARRIBA y ABAJO
+        [ra + 1.4, { s: REC_S, x: 0, y: REC_Y }],
+        [rb + 5, { s: REC_S, x: 0, y: REC_Y }],
       ];
       const flashT = P.calendario[0] + FLASH;
       this.paint.push((t) => {
@@ -1320,7 +1397,7 @@ export class Pelicula {
   }
 }
 
-/** El marco de un momento: la ventana con cortinas del dibujo del faro. */
+/** El marco de un momento: un borde fino de rotulador, con la foto entera dentro. */
 function marco(
   T: Taller,
   g: Element,
@@ -1331,29 +1408,37 @@ function marco(
 ) {
   T.tinta(g, tile(), { color: DIA.ink, width: 3, fill: '#FFFFFF' });
   const id = uid('mc');
-  el('path', { d: tile(16) }, el('clipPath', { id }, defs));
+  el('path', { d: tile(10) }, el('clipPath', { id }, defs));
   const dentro = el('g', { 'clip-path': `url(#${id})` }, g);
   if (photo) {
     el(
       'image',
       {
         href: photo,
-        x: X0 + 16,
-        y: Y0 + 16,
-        width: L - 32,
-        height: L - 32,
+        x: X0 + 10,
+        y: Y0 + 10,
+        width: L - 20,
+        height: L - 20,
         preserveAspectRatio: 'xMidYMid slice',
       },
       dentro,
     );
     if (text) {
+      // (en las casillas de las cifras): una franja que mide lo que el texto
+      const f = ajustar(text, L - 70, [34, 30], 2);
+      const h = Math.round(f.lines.length * f.size * 1.18 + 30);
       el(
         'rect',
-        { x: X0, y: Y0 + L - 110, width: L, height: 110, fill: 'rgba(0,0,0,0.42)' },
+        { x: X0, y: Y0 + L - 10 - h, width: L, height: h + 10, fill: 'rgba(0,0,0,0.5)' },
         dentro,
       );
-      lineas(text, 28, 2).forEach((ln, i) =>
-        texto(dentro, ln, { x: CX, y: Y0 + L - 66 + i * 34, size: 32, color: '#FFFFFF' }),
+      f.lines.forEach((ln, i) =>
+        texto(dentro, ln, {
+          x: CX,
+          y: Y0 + L - 10 - h + 14 + f.size * 0.92 + i * f.size * 1.18,
+          size: f.size,
+          color: '#FFFFFF',
+        }),
       );
     }
   } else if (wave?.length) {
@@ -1383,33 +1468,19 @@ function marco(
       r += `M${X0 + 30},${y} L${X0 + L - 30},${y + 0.5} `;
     T.tinta(dentro, r, { color: '#DAD6C4', width: 2, step: 10 });
     texto(dentro, '“', { x: X0 + 50, y: Y0 + 100, size: 110, color: DIA.accent });
-    lineas(text ?? '', 20, 7).forEach((ln, i) =>
+    // el texto entero: más pequeño cuanto más largo (nunca ilegible)
+    const f = ajustar(text ?? '', L - 92, [40, 36, 32, 28], 7);
+    f.lines.forEach((ln, i) =>
       texto(dentro, ln, {
         x: X0 + 46,
-        y: Y0 + 116 + i * 44,
-        size: 38,
+        y: Y0 + 116 + i * f.size * 1.16,
+        size: f.size,
         color: DIA.ink,
         anchor: 'start',
       }),
     );
   }
-  // las cortinas (enmarcan sin tapar casi nada)
-  T.tinta(
-    dentro,
-    `M${X0 + 70},${Y0 + 16} C${X0 + 40},${Y0 + 40} ${X0 + 30},${Y0 + 80} ${X0 + 28},${Y0 + 140} L${X0 + 26},${Y0 + L} L${X0},${Y0 + L} L${X0},${Y0} Z`,
-    { color: DIA.ink, width: 2, fill: '#FFFFFF' },
-  );
-  T.tinta(
-    dentro,
-    `M${X0 + L - 60},${Y0 + 16} C${X0 + L - 62},${Y0 + 120} ${X0 + L - 50},${Y0 + 220} ${X0 + L - 20},${Y0 + 290} C${X0 + L - 10},${Y0 + 320} ${X0 + L},${Y0 + 340} ${X0 + L},${Y0 + 360} L${X0 + L},${Y0} Z`,
-    { color: DIA.ink, width: 2, fill: '#FFFFFF' },
-  );
-  T.tinta(
-    dentro,
-    `M${X0 + L - 44},${Y0 + 20} C${X0 + L - 44},${Y0 + 120} ${X0 + L - 30},${Y0 + 200} ${X0 + L - 12},${Y0 + 250}`,
-    { color: DIA.ink, width: 1.4 },
-  );
-  T.tinta(g, tile(16), { color: DIA.ink, width: 1.4 });
+  T.tinta(g, tile(10), { color: DIA.ink, width: 1.4 });
 }
 
 function haversine(a: { lat?: number; lng?: number }, b: { lat?: number; lng?: number }) {
