@@ -20,6 +20,7 @@ import {
   recordScreen,
 } from '@/lib/dom-recorder';
 import { whereOf } from '@/lib/film';
+import { analizarRitmo, type Ritmo } from '@/lib/beats';
 import { usePreview } from '@/lib/music';
 import { narratorAudio, narratorStream, primeNarrator, stopNarrator } from '@/lib/narrator';
 import { buildRecap } from '@/lib/recap';
@@ -133,6 +134,11 @@ export default function RecapFilm() {
   // la banda sonora: una canción del periodo o, si no, la última del grupo
   const song =
     recap.songs.find((s) => s.preview) ?? songs.find((s) => s.groupId === groupId && s.preview);
+  // el pulso de la canción, para que la película se mueva a su ritmo
+  const [ritmo, setRitmo] = useState<Ritmo | null>(null);
+  useEffect(() => {
+    analizarRitmo(song?.preview).then(setRitmo);
+  }, [song?.preview]);
   const data = useMemo(
     () =>
       started
@@ -146,6 +152,7 @@ export default function RecapFilm() {
             song: song
               ? { title: song.title, artist: song.artist, artwork: song.artwork }
               : undefined,
+            ritmo,
           })
         : null,
     // Se fija al empezar: la película no cambia mientras se ve.

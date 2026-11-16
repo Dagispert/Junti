@@ -141,6 +141,8 @@ export type DatosPelicula = {
   header: string;
   /** La pregunta del final. */
   closing: string;
+  /** El pulso de la música (para mover las cosas a su ritmo). */
+  ritmo?: { periodo: number; desfase: number };
   /** La banda sonora: su carátula y su nombre salen en el final. */
   song?: { title: string; artist?: string; artwork?: string };
   /** Rótulos: bajo el reloj, la ventanilla y la libreta. */

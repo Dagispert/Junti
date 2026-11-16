@@ -51,6 +51,7 @@ export function datosPelicula(
     /** Fotos ya copiadas en la página (para poder exportar el vídeo). */
     photos?: Record<string, string>;
     song?: { title: string; artist?: string; artwork?: string };
+    ritmo?: { periodo: number; desfase: number } | null;
   },
 ): DatosPelicula {
   const { user, narration } = opts;
@@ -168,6 +169,7 @@ export function datosPelicula(
       : recap.kind === 'week'
         ? '¿qué pasará la semana que viene?'
         : '¿qué pasará el mes que viene?',
+    ritmo: opts.ritmo ?? undefined,
     song: opts.song
       ? {
           ...opts.song,
@@ -261,6 +263,7 @@ export function datosHistoria(
     title: string;
     photos?: Record<string, string>;
     song?: { title: string; artist?: string; artwork?: string };
+    ritmo?: { periodo: number; desfase: number } | null;
   },
 ): DatosPelicula {
   const { user, scenes, narration } = opts;
@@ -399,6 +402,7 @@ export function datosHistoria(
     clock,
     header: 'AÑO',
     closing: 'y la historia sigue…',
+    ritmo: opts.ritmo ?? undefined,
     song: opts.song
       ? {
           ...opts.song,

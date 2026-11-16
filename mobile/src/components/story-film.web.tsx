@@ -20,6 +20,7 @@ import {
   prepareRecording,
   recordScreen,
 } from '@/lib/dom-recorder';
+import { analizarRitmo, type Ritmo } from '@/lib/beats';
 import { usePreview } from '@/lib/music';
 import { narratorAudio, narratorStream, primeNarrator, stopNarrator } from '@/lib/narrator';
 import { buildStory, parseGap, templateScenes } from '@/lib/story';
@@ -112,6 +113,11 @@ export default function StoryFilm() {
   const ready = !!photos && (state === 'ready' || waited);
 
   const [started, setStarted] = useState(false);
+  // el pulso de la canción, para que la película se mueva a su ritmo
+  const [ritmo, setRitmo] = useState<Ritmo | null>(null);
+  useEffect(() => {
+    analizarRitmo(song?.preview).then(setRitmo);
+  }, [song?.preview]);
   const data = useMemo(() => {
     if (!started || !group) return null;
     const scenes = narration?.scenes?.length ? narration.scenes : templateScenes(story.items);
@@ -123,6 +129,7 @@ export default function StoryFilm() {
       title: narration?.title || 'Nuestra historia',
       photos: photos ?? {},
       song: song ? { title: song.title, artist: song.artist, artwork: song.artwork } : undefined,
+      ritmo,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [started]);

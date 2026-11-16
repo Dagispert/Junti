@@ -246,6 +246,21 @@ export class Pelicula {
     const defs = el('defs', {}, svg);
     const dayAt = P.calendario[0] + FLASH + 0.2;
     const isDay = (t: number) => t >= dayAt && t < P.final[0];
+    // El pulso de la música: «golpe» vale 1 justo en cada golpe y se apaga
+    // enseguida; las semicorcheas (un cuarto de golpe) marcan los cambios rápidos.
+    const R = d.ritmo;
+    const golpe = (t: number) => {
+      if (!R) return 0;
+      const ph = ((((t - R.desfase) % R.periodo) + R.periodo) % R.periodo) / R.periodo;
+      return Math.exp(-ph * 7);
+    };
+    const semi = R ? R.periodo / 4 : 0.12;
+    /** La primera semicorchea a partir de «t0». */
+    const enSemi = (t0: number) =>
+      R ? R.desfase + Math.ceil((t0 - R.desfase) / semi - 1e-6) * semi : t0;
+    // La última foto vuela a su casilla de las cifras (se sabe al montar las cifras).
+    let destinoUltima: { x: number; y: number } | null = null;
+    let celdaUltima: SVGGElement | null = null;
 
     // ── Fondo plano, que cambia con el flash ──
     const base = el('rect', { x: -2000, y: -2000, width: 5000, height: 5000, fill: NOCHE.bg }, svg);
@@ -916,7 +931,12 @@ export class Pelicula {
               anchor: 'start',
             }),
           );
-          return { n, x: x + NW / 2, y: notasY + h / 2, r: cs.length > 1 ? (j ? 2.5 : -2.5) : -1.5 };
+          return {
+            n,
+            x: x + NW / 2,
+            y: notasY + h / 2,
+            r: cs.length > 1 ? (j ? 2.5 : -2.5) : -1.5,
+          };
         });
         const pega = el('g', {}, g);
         // la reacción, en la esquina de la foto (por debajo del pie, sin taparlo)
@@ -943,7 +963,12 @@ export class Pelicula {
             });
         }
         const pie = el('g', {}, g);
-        const pieTxt = ajustar([p.author, p.when, p.place].filter(Boolean).join(' · '), 640, [32, 28, 24], 1);
+        const pieTxt = ajustar(
+          [p.author, p.when, p.place].filter(Boolean).join(' · '),
+          640,
+          [32, 28, 24],
+          1,
+        );
         texto(pie, pieTxt.lines[0] ?? '', {
           x: CX,
           y: FOTO_Y - 18,
@@ -951,7 +976,31 @@ export class Pelicula {
           color: DIA.ink,
         });
         const tension = el('path', { fill: 'none', stroke: DIA.accent, 'stroke-width': 2 }, g);
-        return { p, g, mov, zoom, card, notas, pega, pegaX, pegaY, pie, tension, capG, Z, P };
+        // desenfoque de movimiento (al saltar de la cámara y al irse)
+        const fid = uid('mb');
+        const blur = el(
+          'feGaussianBlur',
+          { stdDeviation: '0 0' },
+          el('filter', { id: fid, x: '-40%', y: '-40%', width: '180%', height: '180%' }, defs),
+        );
+        return {
+          p,
+          g,
+          mov,
+          zoom,
+          card,
+          notas,
+          pega,
+          pegaX,
+          pegaY,
+          pie,
+          tension,
+          capG,
+          Z,
+          P,
+          blur,
+          fid,
+        };
       });
       const tCal = { sube: ca + 0.55, flash: ca + FLASH };
       this.paint.push((t) => {
@@ -999,13 +1048,18 @@ export class Pelicula {
         // cada momento: sale por la ranura, salta, se despliega; al final se va
         marcos.forEach((m, i) => {
           const pz = P.piezas[i];
-          const vis = t >= pz.a && t < pz.b + 0.1;
+          // la última no se va: vuela a su casilla mientras la cámara se aleja
+          const dest = i === marcos.length - 1 ? destinoUltima : null;
+          const vis = t >= pz.a && t < pz.b + (dest ? 1.35 : 0.1);
           ver(m.g, vis);
           if (!vis) return;
           const ke = S(t, pz.a, 0.6);
           const ksu = S(t, pz.a + 0.6, 0.24, ease.in);
           const kd = S(t, pz.a + 0.84, 0.36, (x) => 1 + 1.9 * (x - 1) ** 3 + 0.9 * (x - 1) ** 2);
-          const kx = S(t, pz.b - 0.45, 0.45, ease.in);
+          const kx = dest ? 0 : S(t, pz.b - 0.45, 0.45, ease.in);
+          const kl = dest ? S(t, pz.b - 0.15, 1.4, ease.inOut) : 0;
+          // lo de alrededor (texto, notas, reacción, pie) se va antes
+          const fuera2 = (1 - kx) * (1 - (dest ? S(t, pz.b - 0.55, 0.4) : 0));
           const enRanura = t < pz.a + 0.6;
           m.mov.setAttribute('clip-path', enRanura ? `url(#${idS})` : '');
           const fuera = RANURA - Y0 - L; // con este desplazamiento, el borde de abajo está en la ranura
@@ -1015,15 +1069,23 @@ export class Pelicula {
           else mover(m.card, { y: 60, ox: CX, oy: Y0, sy: lerp(0.1, 1, kd) });
           // a su sitio: centrada y con el tamaño que le toca (FOTO_Y … FOTO_Y + P)
           const kz = S(t, pz.a + 1.15, 0.5, ease.inOut);
+          const zy = lerp(0, FOTO_Y + m.P / 2 - (CY + 60), kz);
           mover(m.zoom, {
             ox: CX,
             oy: CY + 60,
-            s: lerp(1, m.Z, kz),
-            y: lerp(0, FOTO_Y + m.P / 2 - (CY + 60), kz),
+            s: lerp(lerp(1, m.Z, kz), 1, kl),
+            x: dest ? (dest.x - CX) * kl : 0,
+            y: dest ? lerp(zy, dest.y - (CY + 60), kl) : zy,
           });
+          // estela: al salir disparada de la cámara (vertical) y al irse (horizontal)
+          const bx = 26 * Math.sin(Math.PI * kx) + (dest ? 7 * Math.sin(Math.PI * kl) : 0);
+          const by = 10 * Math.sin(Math.PI * ksu) + (dest ? 7 * Math.sin(Math.PI * kl) : 0);
+          m.blur.setAttribute('stdDeviation', `${bx.toFixed(1)} ${by.toFixed(1)}`);
+          if (bx + by > 0.6) m.mov.setAttribute('filter', `url(#${m.fid})`);
+          else m.mov.removeAttribute('filter');
           if (m.capG) {
             const kc = S(t, pz.a + 1.45, 0.4);
-            opacidad(m.capG, kc * (1 - kx));
+            opacidad(m.capG, kc * fuera2);
             mover(m.capG, { y: 14 * (1 - kc) });
           }
           mover(m.mov, { x: -560 * kx, r: -14 * kx, ox: CX, oy: CY });
@@ -1037,12 +1099,12 @@ export class Pelicula {
           m.notas.forEach((n, j) => {
             const kn = S(t, pz.a + 1.5 + j * 0.6, 0.4, ease.linear);
             mover(n.n, { ox: n.x, oy: n.y, s: 0.5 + 0.5 * ease.back(kn), r: n.r });
-            opacidad(n.n, kn * 3 * (1 - kx));
+            opacidad(n.n, Math.min(1, kn * 3) * fuera2);
           });
           const kp = S(t, pz.a + 1.2, 0.35, ease.linear);
           mover(m.pega, { ox: m.pegaX, oy: m.pegaY, s: 0.4 + 0.6 * ease.back(kp) });
-          opacidad(m.pega, kp * 3 * (1 - kx));
-          opacidad(m.pie, S(t, pz.a + 1.0, 0.4) * (1 - kx));
+          opacidad(m.pega, Math.min(1, kp * 3) * fuera2);
+          opacidad(m.pie, S(t, pz.a + 1.0, 0.4) * fuera2);
           mover(m.pie, { y: -10 * (1 - S(t, pz.a + 1.0, 0.4)) });
         });
       });
@@ -1052,28 +1114,41 @@ export class Pelicula {
     {
       const [ra, rb] = P.recuerdos;
       const G = L + 28;
-      const cells: { cx: number; cy: number; g: SVGGElement; dist: number }[] = [];
+      const cells: {
+        cx: number;
+        cy: number;
+        g: SVGGElement;
+        dist: number;
+        pid?: string;
+        order?: number;
+      }[] = [];
       const celda = (
         i: number,
         j: number,
         draw: (g: SVGGElement, x: number, y: number) => void,
+        pid?: string,
       ) => {
         const cx = CX + i * G,
           cy = CY + j * G;
         const g = el('g', {}, lRec);
         T.tinta(g, squircle(cx, cy, L, L), { color: DIA.ink, width: 3, fill: '#FFFFFF' });
         draw(g, cx, cy);
-        cells.push({ cx, cy, g, dist: Math.hypot(i, j) });
+        cells.push({ cx, cy, g, dist: Math.hypot(i, j), pid });
       };
       const loved =
         d.pieces.find((p) => p.id === d.lovedId) ?? d.pieces.find((p) => p.photo) ?? d.pieces[0];
       // el centro: lo que más os llegó
-      celda(0, 0, (g) => {
-        if (loved) {
-          const c = el('g', {}, g);
-          marco(T, c, defs, loved.photo, loved.text, loved.wave);
-        }
-      });
+      celda(
+        0,
+        0,
+        (g) => {
+          if (loved) {
+            const c = el('g', {}, g);
+            marco(T, c, defs, loved.photo, loved.text, loved.wave);
+          }
+        },
+        loved?.id,
+      );
       const numero = (
         g: SVGGElement,
         x: number,
@@ -1201,53 +1276,70 @@ export class Pelicula {
         [0, 2],
         [1, 2],
       ].forEach(([i, j], k) =>
-        celda(i, j, (g) => {
-          const o = otras[k];
-          // la banda sonora: su carátula, en la primera casilla sin foto
-          // (en la fila de abajo, donde va la nota musical, que se ve entera)
-          const cancion = !o && d.song && k === Math.max(3, otras.length) ? d.song : null;
-          if (o) {
-            const c = el('g', { transform: `translate(${i * G},${j * G})` }, g);
-            marco(T, c, defs, o.photo, o.text, o.wave);
-          } else if (cancion?.artwork) {
-            const c = el('g', { transform: `translate(${i * G},${j * G})` }, g);
-            marco(
-              T,
-              c,
-              defs,
-              cancion.artwork,
-              `♪ ${cancion.title}${cancion.artist ? ` · ${cancion.artist}` : ''}`,
-            );
-          } else if (cancion) {
-            // sin carátula: la nota y el nombre de la canción
-            const x = CX + i * G,
-              y = CY + j * G;
-            T.tinta(
-              g,
-              `M${x - 30},${y + 10} m-26,0 a26,20 0 1,0 52,0 a26,20 0 1,0 -52,0 M${x - 4},${y + 10} L${x - 4},${y - 120} C${x + 30},${y - 100} ${x + 50},${y - 80} ${x + 40},${y - 50}`,
-              { color: DIA.accent, width: 3.4, fill: TINTE },
-            );
-            texto(g, cancion.title, { x, y: y + 110, size: 34, color: DIA.ink });
-          } else {
-            // sin foto: un dibujito (corazón, estrella, sol, nota, nube, sobre)
-            const x = CX + i * G,
-              y = CY + j * G;
-            const dibujos = [
-              `M${x},${y + 60} C${x - 70},${y + 10} ${x - 90},${y - 40} ${x - 60},${y - 70} C${x - 40},${y - 90} ${x - 10},${y - 80} ${x},${y - 50} C${x + 10},${y - 80} ${x + 40},${y - 90} ${x + 60},${y - 70} C${x + 90},${y - 40} ${x + 70},${y + 10} ${x},${y + 60} Z`,
-              `M${x},${y - 90} L${x + 24},${y - 28} L${x + 90},${y - 28} L${x + 36},${y + 12} L${x + 56},${y + 80} L${x},${y + 40} L${x - 56},${y + 80} L${x - 36},${y + 12} L${x - 90},${y - 28} L${x - 24},${y - 28} Z`,
-              ellipse(x, y, 60),
-              `M${x - 30},${y + 50} m-26,0 a26,20 0 1,0 52,0 a26,20 0 1,0 -52,0 M${x - 4},${y + 50} L${x - 4},${y - 80} C${x + 30},${y - 60} ${x + 50},${y - 40} ${x + 40},${y - 10}`,
-              cloud(x - 100, y + 40, 200),
-              `M${x - 100},${y - 60} L${x + 100},${y - 60} L${x + 100},${y + 70} L${x - 100},${y + 70} Z M${x - 100},${y - 60} L${x},${y + 10} L${x + 100},${y - 60}`,
-            ];
-            T.tinta(g, dibujos[k % dibujos.length], {
-              color: k % 2 ? DIA.accent : DIA.ink,
-              width: 3.4,
-              fill: k % 3 === 0 ? TINTE : 'none',
-            });
-          }
-        }),
+        celda(
+          i,
+          j,
+          (g) => {
+            const o = otras[k];
+            // la banda sonora: su carátula, en la primera casilla sin foto
+            // (en la fila de abajo, donde va la nota musical, que se ve entera)
+            const cancion = !o && d.song && k === Math.max(3, otras.length) ? d.song : null;
+            if (o) {
+              const c = el('g', { transform: `translate(${i * G},${j * G})` }, g);
+              marco(T, c, defs, o.photo, o.text, o.wave);
+            } else if (cancion?.artwork) {
+              const c = el('g', { transform: `translate(${i * G},${j * G})` }, g);
+              marco(
+                T,
+                c,
+                defs,
+                cancion.artwork,
+                `♪ ${cancion.title}${cancion.artist ? ` · ${cancion.artist}` : ''}`,
+              );
+            } else if (cancion) {
+              // sin carátula: la nota y el nombre de la canción
+              const x = CX + i * G,
+                y = CY + j * G;
+              T.tinta(
+                g,
+                `M${x - 30},${y + 10} m-26,0 a26,20 0 1,0 52,0 a26,20 0 1,0 -52,0 M${x - 4},${y + 10} L${x - 4},${y - 120} C${x + 30},${y - 100} ${x + 50},${y - 80} ${x + 40},${y - 50}`,
+                { color: DIA.accent, width: 3.4, fill: TINTE },
+              );
+              texto(g, cancion.title, { x, y: y + 110, size: 34, color: DIA.ink });
+            } else {
+              // sin foto: un dibujito (corazón, estrella, sol, nota, nube, sobre)
+              const x = CX + i * G,
+                y = CY + j * G;
+              const dibujos = [
+                `M${x},${y + 60} C${x - 70},${y + 10} ${x - 90},${y - 40} ${x - 60},${y - 70} C${x - 40},${y - 90} ${x - 10},${y - 80} ${x},${y - 50} C${x + 10},${y - 80} ${x + 40},${y - 90} ${x + 60},${y - 70} C${x + 90},${y - 40} ${x + 70},${y + 10} ${x},${y + 60} Z`,
+                `M${x},${y - 90} L${x + 24},${y - 28} L${x + 90},${y - 28} L${x + 36},${y + 12} L${x + 56},${y + 80} L${x},${y + 40} L${x - 56},${y + 80} L${x - 36},${y + 12} L${x - 90},${y - 28} L${x - 24},${y - 28} Z`,
+                ellipse(x, y, 60),
+                `M${x - 30},${y + 50} m-26,0 a26,20 0 1,0 52,0 a26,20 0 1,0 -52,0 M${x - 4},${y + 50} L${x - 4},${y - 80} C${x + 30},${y - 60} ${x + 50},${y - 40} ${x + 40},${y - 10}`,
+                cloud(x - 100, y + 40, 200),
+                `M${x - 100},${y - 60} L${x + 100},${y - 60} L${x + 100},${y + 70} L${x - 100},${y + 70} Z M${x - 100},${y - 60} L${x},${y + 10} L${x + 100},${y - 60}`,
+              ];
+              T.tinta(g, dibujos[k % dibujos.length], {
+                color: k % 2 ? DIA.accent : DIA.ink,
+                width: 3.4,
+                fill: k % 3 === 0 ? TINTE : 'none',
+              });
+            }
+          },
+          otras[k]?.id,
+        ),
       );
+      // el orden en que aparecen (de dentro afuera), una por semicorchea
+      [...cells]
+        .filter((c) => c.dist > 0)
+        .sort((a, b) => a.dist - b.dist || a.cy - b.cy || a.cx - b.cx)
+        .forEach((c, k) => (c.order = k));
+      // la casilla de la última foto: allí aterriza
+      const ultimaId = d.pieces[d.pieces.length - 1]?.id;
+      const cu = cells.find((c) => c.pid && c.pid === ultimaId);
+      if (cu) {
+        destinoUltima = { x: cu.cx, y: cu.cy };
+        celdaUltima = cu.g;
+      }
       // el cursor rosa que da un corazón
       const cursor = el('g', {}, lRec);
       const onda = el(
@@ -1263,10 +1355,30 @@ export class Pelicula {
       this.paint.push((t) => {
         ver(lRec, t >= ra && t < rb + 0.1);
         if (t < ra || t > rb + 0.1) return;
+        // al final, todas se recogen hacia el centro (de fuera adentro) y llega el final
+        const t0 = enSemi(ra + 0.25);
         cells.forEach((c) => {
-          const k = S(t, ra + 0.15 + c.dist * 0.28, 0.5, ease.linear);
-          opacidad(c.g, c.dist === 0 ? 1 : k * 3);
-          mover(c.g, { ox: c.cx, oy: c.cy, s: c.dist === 0 ? 1 : 0.5 + 0.5 * ease.back(k) });
+          let k: number, s0: number;
+          if (c.g === celdaUltima) {
+            // la última foto aterriza aquí: la casilla aparece justo debajo
+            k = t >= P.piezas[P.piezas.length - 1].b + 1.25 ? 1 : 0;
+            s0 = 1;
+          } else if (c.dist === 0) {
+            k = S(t, ra, 0.4);
+            s0 = 1;
+          } else {
+            k = S(t, t0 + (c.order ?? 0) * semi, 0.35, ease.linear);
+            s0 = 0.55 + 0.45 * ease.back(k);
+          }
+          const kc = S(t, rb - 0.95 + (2.5 - c.dist) * 0.06, 0.7, ease.in);
+          opacidad(c.g, k * (1 - 0.6 * kc));
+          mover(c.g, {
+            ox: c.cx,
+            oy: c.cy,
+            s: s0 * (1 - 0.85 * kc) * (1 + 0.03 * golpe(t) * (1 - kc)),
+            x: (CX - c.cx) * kc,
+            y: (CY - c.cy) * kc,
+          });
         });
         const tq = ra + 3.2;
         const cxp = CX - G,
@@ -1289,7 +1401,11 @@ export class Pelicula {
     // ─────────────────────────────── FINAL ───────────────────────────────
     {
       const [fa] = P.final;
-      el('rect', { x: -2000, y: -2000, width: 5000, height: 5000, fill: '#0E0F11' }, lFin);
+      const fondo = el(
+        'rect',
+        { x: -2000, y: -2000, width: 5000, height: 5000, fill: '#0E0F11' },
+        lFin,
+      );
       const logo = texto(lFin, 'junti', {
         x: CX,
         y: CY - 20,
@@ -1311,8 +1427,10 @@ export class Pelicula {
         { color: NOCHE.accent, width: 4 },
       );
       this.paint.push((t) => {
-        ver(lFin, t >= fa);
-        if (t < fa) return;
+        // (entra fundiendo mientras las casillas se recogen: sin cortes)
+        ver(lFin, t >= fa - 0.55);
+        if (t < fa - 0.55) return;
+        opacidad(fondo, S(t, fa - 0.55, 0.55));
         opacidad(logo, S(t, fa + 0.2, 0.5));
         mover(logo, { ox: CX, oy: CY - 40, s: 0.9 + 0.1 * S(t, fa + 0.2, 0.6) });
         revelar(raya, S(t, fa + 0.6, 0.5, ease.inOut));
@@ -1369,6 +1487,20 @@ export class Pelicula {
         [rb + 5, { s: REC_S, x: 0, y: REC_Y }],
       ];
       const flashT = P.calendario[0] + FLASH;
+      // dónde empieza cada escena (y cada momento)
+      const cortes = [
+        ...new Set([
+          0,
+          P.persiana[0],
+          P.ventanilla[0],
+          P.libreta[0],
+          P.calendario[0],
+          ...P.piezas.slice(1).map((x) => x.a),
+          P.recuerdos[0],
+          P.final[0],
+          P.total + 1,
+        ]),
+      ].sort((a, b) => a - b);
       this.paint.push((t) => {
         let k = keys[keys.length - 1][1];
         for (let i = 1; i < keys.length; i++)
@@ -1379,7 +1511,18 @@ export class Pelicula {
             k = { s: lerp(a.s, b.s, e), x: lerp(a.x, b.x, e), y: lerp(a.y, b.y, e) };
             break;
           }
-        const s = k.s * (1 + 0.004 * Math.sin(t * 1.3));
+        // La cámara nunca se queda quieta: en cada escena se acerca o se aleja un
+        // poco (alternando, para que al cambiar de escena siga donde iba) y
+        // respira con los golpes de la música.
+        let seg = 0;
+        while (seg < cortes.length - 2 && t >= cortes[seg + 1]) seg++;
+        const fr = Math.max(
+          0,
+          Math.min(1, (t - cortes[seg]) / Math.max(0.001, cortes[seg + 1] - cortes[seg])),
+        );
+        const e = ease.inOut(fr);
+        const deriva = 1 + 0.03 * (seg % 2 ? 0.5 - e : e - 0.5);
+        const s = k.s * deriva * (1 + 0.006 * golpe(t));
         cam.setAttribute(
           'transform',
           `translate(${CX},${CY}) scale(${s.toFixed(4)}) translate(${(-CX - k.x).toFixed(2)},${(-CY - k.y).toFixed(2)})`,
