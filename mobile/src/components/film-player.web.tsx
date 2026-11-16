@@ -4,6 +4,7 @@ import { Hand, HandBold } from '@/constants/theme';
 import { accentDay, accentNight, DEFAULT_ACCENT } from '@/lib/accent';
 import type { DatosPelicula, Plan } from '@/pelicula/guion';
 import { FLASH, Pelicula } from '@/pelicula/pelicula';
+import { Semana } from '@/pelicula/semana';
 
 // El reproductor de la película: la pinta fotograma a fotograma, lleva la voz
 // de la narradora a cada tramo y pone los subtítulos.
@@ -28,7 +29,8 @@ export function FilmPlayer({
   control?: { current: FilmControl | null };
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
-  const film = useRef<Pelicula | null>(null);
+  // la semana y el mes: «la mesa de la semana»; la historia, su película
+  const film = useRef<Pelicula | Semana | null>(null);
   const [plan, setPlan] = useState<Plan | null>(null);
   const t = useRef(0);
   const stop = useRef(paused);
@@ -40,7 +42,8 @@ export function FilmPlayer({
 
   useEffect(() => {
     if (!svgRef.current) return;
-    film.current = new Pelicula(svgRef.current, data);
+    film.current =
+      data.kind === 'story' ? new Pelicula(svgRef.current, data) : new Semana(svgRef.current, data);
     setPlan(film.current.plan);
     t.current = 0;
     ended.current = false;
@@ -118,7 +121,11 @@ export function FilmPlayer({
         }
       }
       const key = seg ? `${seg.a}|${Math.floor(((time - seg.a) / (seg.b - seg.a)) * 40)}` : '';
-      if (key !== lastSub) {
+      // (la película nueva pone ella misma sus subtítulos, dentro del dibujo)
+      if (film.current instanceof Semana) {
+        if (lastSub) setSub(null);
+        lastSub = '';
+      } else if (key !== lastSub) {
         lastSub = key;
         setSub(
           seg
