@@ -39,6 +39,12 @@ const norm = (s: string) =>
  * Monta la mesa dentro de «parent» y devuelve cómo pintarla en cada instante.
  * «piezas»: cuándo entra y sale cada momento; «fin»: cuándo se va la mesa.
  */
+export type Mesa = {
+  pintar: (t: number) => void;
+  /** Dónde sale (en pantalla) la etiqueta del primer día, y a qué escala. */
+  etiqueta: () => { x: number; y: number; z: number };
+};
+
 export function montarMesa(o: {
   T: Taller;
   defs: Element;
@@ -49,7 +55,11 @@ export function montarMesa(o: {
   fin: number;
   semi: number;
   enSemi: (t: number) => number;
-}): (t: number) => void {
+  /** Dónde está ahora (en pantalla) la casilla de cifras de cada foto: allí vuela. */
+  destino?: (id: string) => { x: number; y: number; size: number } | null;
+  /** Cuándo aterrizan las fotos en sus casillas. */
+  aterriza?: number;
+}): Mesa {
   const { T, defs, d, A, piezas, fin, semi, enSemi } = o;
   const paints: ((t: number) => void)[] = [];
   const mundo = el('g', {}, o.parent);
@@ -361,12 +371,11 @@ export function montarMesa(o: {
     : { x: 0, y: 0, z: 1 };
   const centroSeguro = (ARRIBA + ABAJO) / 2;
 
-  paints.push((t) => {
-    const da = piezas[0]?.a ?? 0;
-    const on = t > da - 0.6 && t < fin + 1.0;
-    ver(mundo, on);
-    if (!on || !cartas.length) return;
-    // ── cámara ──
+  const da = piezas[0]?.a ?? 0;
+  // al acabar, la mesa se queda quieta y sus fotos vuelan a las casillas
+  const congela = fin - 0.15;
+  /** La cámara de la mesa en el instante «t». */
+  const camAt = (t: number) => {
     let cam = encuadre(cartas[0]);
     let giro = 0;
     piezas.forEach((pz, i) => {
@@ -384,25 +393,86 @@ export function montarMesa(o: {
         giro = Math.sin(Math.PI * k) * (i % 2 ? 2.2 : -2.2);
       }
     });
-    // la mesa entera
-    // al acabar, se aleja un poco mientras llegan las cifras
-    const km = 0.35 * S(t, fin - 0.3, 1.2, ease.inOut);
-    if (km > 0) {
-      const last = encuadre(cartas[cartas.length - 1]);
-      cam = {
-        x: lerp(last.x, todo.x, km),
-        y: lerp(last.y, todo.y, km),
-        z: lerp(last.z, todo.z, km),
-      };
-    }
     // deriva lenta (la cámara nunca está quieta)
-    const deriva = 1 + 0.025 * Math.sin((t - da) * 0.35);
-    const salida = S(t, fin - 0.1, 0.9, ease.in);
+    const z = cam.z * (1 + 0.025 * Math.sin((t - da) * 0.35));
+    return { x: cam.x, y: cam.y, z, giro };
+  };
+  /** Un punto de la mesa, en pantalla. */
+  const aPantalla = (px: number, py: number, c: ReturnType<typeof camAt>) => {
+    const a = (c.giro * Math.PI) / 180;
+    const dx = (px - c.x) * c.z,
+      dy = (py - c.y) * c.z;
+    return {
+      x: CX + dx * Math.cos(a) - dy * Math.sin(a),
+      y: centroSeguro + dx * Math.sin(a) + dy * Math.cos(a),
+    };
+  };
+  const WC0 = 540; // (el ancho de la instantánea)
+  // las copias que vuelan de la mesa a las casillas (en pantalla)
+  const volando = el('g', {}, o.parent);
+  const copias = cartas
+    .map((c) => {
+      if (!c.p.photo || !o.destino) return null;
+      const g = el('g', {}, volando);
+      const marco = el('rect', { fill: '#FFFFFF', rx: 8 }, g);
+      const im = el(
+        'image',
+        { href: c.p.photo, preserveAspectRatio: 'xMidYMid slice', 'clip-path': `url(#${recorte})` },
+        g,
+      );
+      return { c, g, marco, im };
+    })
+    .filter(Boolean) as {
+    c: (typeof cartas)[number];
+    g: SVGGElement;
+    marco: SVGRectElement;
+    im: SVGImageElement;
+  }[];
+  const aterriza = o.aterriza ?? fin + 1.4;
+
+  paints.push((t) => {
+    const on = t > da - 0.6 && t < aterriza + 0.4;
+    ver(mundo, on && t < fin + 0.6);
+    ver(volando, on && t >= congela && t < aterriza + 0.3);
+    if (!on || !cartas.length) return;
+    const cam = camAt(Math.min(t, congela));
     mundo.setAttribute(
       'transform',
-      `translate(${CX},${centroSeguro - 260 * salida}) rotate(${giro.toFixed(2)}) scale(${(cam.z * deriva * (1 - 0.2 * salida)).toFixed(4)}) translate(${(-cam.x).toFixed(1)},${(-cam.y).toFixed(1)})`,
+      `translate(${CX},${centroSeguro}) rotate(${cam.giro.toFixed(2)}) scale(${cam.z.toFixed(4)}) translate(${(-cam.x).toFixed(1)},${(-cam.y).toFixed(1)})`,
     );
-    opacidad(mundo, S(t, da - 0.6, 0.6) * (1 - salida));
+    // entra fundiendo; al final, lo que no vuela (marcos, textos, notas) se va
+    opacidad(mundo, S(t, da - 0.6, 0.6) * (1 - S(t, congela, 0.35)));
+    // las fotos vuelan a sus casillas (las de la mesa se esconden justo entonces)
+    copias.forEach((cp, j) => {
+      const dest = o.destino!(cp.c.p.id);
+      // (la instantánea entera se va con ella: no queda el marco vacío)
+      ver(cp.c.card, !(dest && t >= congela));
+      if (!dest || t < congela) return;
+      const k = S(
+        t,
+        congela + j * 0.05,
+        Math.max(0.4, aterriza - congela - 0.05 - j * 0.05),
+        ease.inOut,
+      );
+      // de dónde sale: la foto de la instantánea, tal como está en pantalla
+      const ini = aPantalla(cp.c.x, cp.c.y + 140 + WC0 / 2, cam);
+      const iniLado = WC0 * cam.z;
+      const lado = lerp(iniLado, dest.size, k);
+      const x = lerp(ini.x, dest.x, k);
+      const y = lerp(ini.y, dest.y, k) - Math.sin(Math.PI * k) * 90;
+      const m = lado * lerp(0.06, 0.024, k);
+      cp.marco.setAttribute('x', String(-lado / 2));
+      cp.marco.setAttribute('y', String(-lado / 2));
+      cp.marco.setAttribute('width', String(lado));
+      cp.marco.setAttribute('height', String(lado));
+      cp.im.setAttribute('x', String(-lado / 2 + m));
+      cp.im.setAttribute('y', String(-lado / 2 + m));
+      cp.im.setAttribute('width', String(lado - 2 * m));
+      cp.im.setAttribute('height', String(lado - 2 * m));
+      mover(cp.g, { x, y, r: lerp(cam.giro + cp.c.rot, 0, k) });
+      // al aterrizar se funde con su casilla
+      opacidad(cp.g, 1 - S(t, aterriza - 0.05, 0.25));
+    });
     // ── cada carta ──
     cartas.forEach((c, i) => {
       const pz = piezas[i];
@@ -471,7 +541,15 @@ export function montarMesa(o: {
     });
   });
 
-  return (t: number) => paints.forEach((p) => p(t));
+  return {
+    pintar: (t: number) => paints.forEach((p) => p(t)),
+    etiqueta: () => {
+      if (!cartas.length) return { x: CX, y: centroSeguro, z: 1 };
+      const c = camAt(da + 0.1);
+      const p = aPantalla(cartas[0].x + 20 + cartas[0].p.badge.length * 15, cartas[0].y + 32, c);
+      return { x: p.x, y: p.y, z: c.z };
+    },
+  };
 }
 
 /**

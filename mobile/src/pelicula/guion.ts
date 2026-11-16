@@ -227,7 +227,8 @@ export function planificar(d: DatosPelicula): Plan {
   const c0 = libreta[1] - 0.4;
   // 4. El calendario y la cámara; la primera frase empieza ya durante el flash.
   let tv = V.route ? routeStart + durVoz(V.route) : introEnd; // donde acaba la última frase
-  let t = c0 + 2.0;
+  // (en la semana y el mes, un poco más: el calendario vuela hasta la mesa)
+  let t = c0 + (d.kind === 'story' ? 2.0 : 2.6);
   const piezas = d.pieces.map((p, i) => {
     const v = d.voices.pieces[p.id];
     const a = t;

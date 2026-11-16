@@ -21,7 +21,7 @@ import {
 import { accentDay, accentDeep, accentNight, accentTint, DEFAULT_ACCENT } from '@/lib/accent';
 
 import { dibujarEscenario } from './escenarios';
-import { montarMesa, montarSubtitulos } from './mesa';
+import { type Mesa, montarMesa, montarSubtitulos } from './mesa';
 import { ESCENARIOS, type DatosPelicula, type Plan, planificar } from './guion';
 import {
   el,
@@ -54,6 +54,8 @@ const ABAJO = 1060;
 /** La cuadrícula de las cifras (3×5 casillas de 420, cada 448): su encuadre. */
 const REC_S = (ABAJO - ARRIBA - 20) / (4 * (L + 28) + L);
 const REC_Y = -((ARRIBA + ABAJO) / 2 - CY) / REC_S;
+/** Cuánto tardan las fotos de la mesa en llegar a sus casillas (desde que empiezan las cifras). */
+const ATERRIZA = 1.45;
 
 /**
  * Cabe el texto entero en un recuadro de «ancho»: prueba tamaños de mayor a
@@ -258,6 +260,13 @@ export class Pelicula {
       R ? R.desfase + Math.ceil((t0 - R.desfase) / semi - 1e-6) * semi : t0;
     // La última foto vuela a su casilla de las cifras (se sabe al montar las cifras).
     let destinoUltima: { x: number; y: number } | null = null;
+    // (la mesa de los momentos se monta al final; el calendario y las cifras la consultan)
+    let mesa: Mesa | null = null;
+    let etiqueta: { x: number; y: number; z: number } | null = null;
+    /** El estado de la cámara general en este fotograma (para llevar fotos a su casilla). */
+    const camEstado = { s: 1, x: 0, y: 0 };
+    /** Las casillas a las que llega volando una foto de la mesa. */
+    const aterrizan = new Map<string, { g: SVGGElement; cx: number; cy: number }>();
     let celdaUltima: SVGGElement | null = null;
 
     // ── Fondo plano, que cambia con el flash ──
@@ -1011,11 +1020,29 @@ export class Pelicula {
         ver(lCamara, on);
         if (!on) return;
         // el calendario sube y se hace pequeño: es el contador de días
-        const ku = S(t, tCal.sube, 0.7, ease.inOut);
-        mover(cal, { ox: CX, oy: Y0, s: lerp(1, 0.3, ku), y: lerp(0, -Y0 + ARRIBA + 8, ku) });
-        // con la mesa, el calendario y la cámara se apartan al llegar el primer momento
-        const mesaLlega = usarMesa && P.piezas.length ? S(t, P.piezas[0].a - 0.35, 0.5) : 0;
-        opacidad(cal, (1 - S(t, cb - 0.2, 0.4)) * (1 - mesaLlega));
+        let mesaLlega = 0;
+        if (usarMesa && P.piezas.length) {
+          // sin cámara: el calendario se queda grande, da el flash y luego vuela
+          // hasta la etiqueta del primer día de la mesa y se convierte en ella
+          if (!etiqueta && mesa) etiqueta = mesa.etiqueta();
+          const lab = etiqueta ?? { x: CX, y: ARRIBA + 60, z: 1 };
+          const a0 = P.piezas[0].a;
+          const kv = S(t, a0 - 0.75, 0.75, ease.inOut);
+          mover(cal, {
+            ox: CX,
+            oy: CY,
+            s: lerp(1, 0.26 * lab.z, kv),
+            x: (lab.x - CX) * kv,
+            y: (lab.y - CY) * kv,
+            r: Math.sin(Math.PI * kv) * -6,
+          });
+          mesaLlega = S(t, a0 - 0.12, 0.3);
+          opacidad(cal, 1 - mesaLlega);
+        } else {
+          const ku = S(t, tCal.sube, 0.7, ease.inOut);
+          mover(cal, { ox: CX, oy: Y0, s: lerp(1, 0.3, ku), y: lerp(0, -Y0 + ARRIBA + 8, ku) });
+          opacidad(cal, 1 - S(t, cb - 0.2, 0.4));
+        }
         // qué día enseña
         let di = 0,
           k = 0;
@@ -1042,7 +1069,11 @@ export class Pelicula {
           if (t >= pz.a && t < pz.b + 0.1)
             aparte = S(t, pz.a + 1.1, 0.35) * (1 - S(t, pz.b - 0.45, 0.35));
         });
-        opacidad(camara, kcam * 3 * (1 - S(t, cb - 0.1, 0.4)) * (1 - aparte) * (1 - mesaLlega));
+        // (con la mesa, la cámara instantánea ya no sale)
+        opacidad(
+          camara,
+          usarMesa ? 0 : kcam * 3 * (1 - S(t, cb - 0.1, 0.4)) * (1 - aparte) * (1 - mesaLlega),
+        );
         visor.setAttribute(
           'opacity',
           String(Math.sin(Math.PI * S(t, tCal.flash - 0.15, 0.2, ease.linear))),
@@ -1363,7 +1394,9 @@ export class Pelicula {
           otras[k]?.id,
         ),
       );
-      const finRodillo = enSemi(ra + 0.3) + Math.max(8, vistas.length * 2) * semi;
+      // (con la mesa, el rodillo espera a que las fotos lleguen a sus casillas)
+      const inicioRodillo = enSemi(ra + (usarMesa ? ATERRIZA + 0.15 : 0.3));
+      const finRodillo = inicioRodillo + Math.max(8, vistas.length * 2) * semi;
       // el orden en que aparecen (de dentro afuera), una por semicorchea
       [...cells]
         .filter((c) => c.dist > 0)
@@ -1372,10 +1405,17 @@ export class Pelicula {
       // la casilla de la última foto: allí aterriza
       const ultimaId = d.pieces[d.pieces.length - 1]?.id;
       const cu = cells.find((c) => c.pid && c.pid === ultimaId);
-      if (cu) {
+      if (cu && !usarMesa) {
         destinoUltima = { x: cu.cx, y: cu.cy };
         celdaUltima = cu.g;
       }
+      // con la mesa: cada foto vuela a su casilla (que espera vacía hasta que llega)
+      if (usarMesa)
+        for (const c of cells) {
+          const pz = c.pid ? d.pieces.find((x) => x.id === c.pid) : undefined;
+          if (pz?.photo) aterrizan.set(pz.id, { g: c.g, cx: c.cx, cy: c.cy });
+        }
+      const llegan = new Set([...aterrizan.values()].map((x) => x.g));
       // el cursor rosa que da un corazón
       const cursor = el('g', {}, lRec);
       const onda = el(
@@ -1393,7 +1433,7 @@ export class Pelicula {
         if (t < ra || t > rb + 0.1) return;
         // el rodillo del centro (si la última foto no aterriza justo ahí)
         const rueda = vistas.length > 0 && cells[0].g !== celdaUltima;
-        const t1 = enSemi(ra + 0.3);
+        const t1 = inicioRodillo;
         const corriendo = rueda && t >= t1 && t < finRodillo;
         const n = corriendo ? Math.floor((t - t1) / semi + 1e-6) : -1;
         vistas.forEach((v, i) => ver(v.im, corriendo && n % vistas.length === i));
@@ -1404,7 +1444,11 @@ export class Pelicula {
         const t0 = enSemi(ra + 0.25);
         cells.forEach((c) => {
           let k: number, s0: number;
-          if (c.g === celdaUltima) {
+          if (llegan.has(c.g)) {
+            // aquí aterriza una foto de la mesa: la casilla aparece justo debajo
+            k = S(t, ra + ATERRIZA - 0.05, 0.25);
+            s0 = 1;
+          } else if (c.g === celdaUltima) {
             // la última foto aterriza aquí: la casilla aparece justo debajo
             k = t >= P.piezas[P.piezas.length - 1].b + 1.25 ? 1 : 0;
             s0 = 1;
@@ -1415,14 +1459,21 @@ export class Pelicula {
             k = S(t, t0 + (c.order ?? 0) * semi, 0.35, ease.linear);
             s0 = 0.55 + 0.45 * ease.back(k);
           }
-          const kc = S(t, rb - 0.95 + (2.5 - c.dist) * 0.06, 0.7, ease.in);
-          opacidad(c.g, k * (1 - 0.6 * kc));
+          // al final se dispersan: cada una sale despedida hacia fuera (y se va de la pantalla)
+          const kc = S(t, rb - 1.0 + (c.order ?? 0) * 0.025, 0.75, ease.in);
+          const dx = c.cx - CX,
+            dy = c.cy - CY;
+          const dl = Math.hypot(dx, dy) || 1;
+          const ux = c.dist === 0 ? 0 : dx / dl,
+            uy = c.dist === 0 ? -1 : dy / dl;
+          opacidad(c.g, k);
           mover(c.g, {
             ox: c.cx,
             oy: c.cy,
-            s: s0 * (1 - 0.85 * kc),
-            x: (CX - c.cx) * kc,
-            y: (CY - c.cy) * kc,
+            s: s0 * (1 - 0.25 * kc),
+            x: ux * 2200 * kc,
+            y: uy * 2200 * kc,
+            r: (ux >= 0 ? 1 : -1) * 28 * kc,
           });
         });
         const tq = ra + 3.2;
@@ -1446,61 +1497,44 @@ export class Pelicula {
     // ─────────────────────────────── FINAL ───────────────────────────────
     {
       const [fa] = P.final;
-      const fondo = el(
-        'rect',
-        { x: -2000, y: -2000, width: 5000, height: 5000, fill: '#0E0F11' },
-        lFin,
-      );
-      // Las fotos del periodo estallan desde el centro, flotan y vuelven a
-      // juntarse en un anillo que se cierra sobre el nombre, que se escribe
-      // letra a letra.
-      const fotos = [
-        ...new Set([...d.pieces.map((p) => p.photo), d.song?.artwork].filter(Boolean)),
-      ] as string[];
-      const N = fotos.length ? Math.min(28, Math.max(14, fotos.length * 4)) : 0;
+      // la noche entra como una mancha de tinta que crece desde el centro (sin grises)
+      const fondo = el('circle', { cx: CX, cy: CY, r: 0, fill: '#0E0F11' }, lFin);
+      // Las casillas del resumen, ya dispersas, vuelven cayendo desde arriba y
+      // entran en «junti»: cada letra se enciende cuando le cae la primera.
+      const fotos = [...new Set(d.pieces.map((p) => p.photo).filter(Boolean))] as string[];
+      const N = 15; // (las casillas de la cuadrícula)
       const idR = uid('fr');
-      const clipR = el('clipPath', { id: idR, clipPathUnits: 'objectBoundingBox' }, defs);
-      el('rect', { width: 1, height: 1, rx: 0.14 }, clipR);
+      el(
+        'rect',
+        { width: 1, height: 1, rx: 0.08 },
+        el('clipPath', { id: idR, clipPathUnits: 'objectBoundingBox' }, defs),
+      );
       const LY = CY - 40; // el centro del nombre
-      const rafaga = Array.from({ length: N }, (_, i) => {
+      const S0 = 120;
+      const caen = Array.from({ length: N }, (_, i) => {
         const g = el('g', {}, lFin);
-        const S0 = 118;
-        el(
-          'rect',
-          {
-            x: -S0 / 2 - 6,
-            y: -S0 / 2 - 6,
-            width: S0 + 12,
-            height: S0 + 12,
-            rx: 18,
-            fill: '#F3F1E7',
-          },
-          g,
-        );
-        el(
-          'image',
-          {
-            href: fotos[i % fotos.length],
-            x: -S0 / 2,
-            y: -S0 / 2,
-            width: S0,
-            height: S0,
-            preserveAspectRatio: 'xMidYMid slice',
-            'clip-path': `url(#${idR})`,
-          },
-          g,
-        );
-        // a dónde sale: en espiral (ángulo áureo), a distintas distancias
-        const ang = i * 2.39996 + 0.3;
-        const r = 330 + ((i * 97) % 5) * 70;
+        el('rect', { x: -S0 / 2, y: -S0 / 2, width: S0, height: S0, rx: 16, fill: '#FFFFFF' }, g);
+        const foto = fotos.length && i % 3 !== 2 ? fotos[i % fotos.length] : null;
+        if (foto)
+          el(
+            'image',
+            {
+              href: foto,
+              x: -S0 / 2 + 6,
+              y: -S0 / 2 + 6,
+              width: S0 - 12,
+              height: S0 - 12,
+              preserveAspectRatio: 'xMidYMid slice',
+              'clip-path': `url(#${idR})`,
+            },
+            g,
+          );
+        else el('circle', { cx: 0, cy: 0, r: 16, fill: NOCHE.accent }, g);
         return {
           g,
-          ang,
-          r,
-          rot: ((i * 53) % 31) - 15,
-          // en el anillo, todas repartidas
-          ringAng: (i / Math.max(1, N)) * Math.PI * 2 - Math.PI / 2,
-          salida: (i % 8) * semi * 0.5,
+          letra: i % 5,
+          rot: ((i * 53) % 41) - 20,
+          dx: ((i * 37) % 60) - 30,
         };
       });
       const letras = 'junti'.split('');
@@ -1522,6 +1556,20 @@ export class Pelicula {
         ts.textContent = ch;
         return ts;
       });
+      // dónde cae cada letra (se mide al verse; si no, un reparto aproximado)
+      let xs: number[] | null = null;
+      const medir = () => {
+        try {
+          const m = letras.map((_, i) => {
+            const r = (logo as SVGTextElement).getExtentOfChar(i);
+            return r.x + r.width / 2;
+          });
+          if (m.every((x) => Number.isFinite(x) && x > 0)) xs = m;
+        } catch {
+          // todavía no se puede medir
+        }
+      };
+      const aprox = [-104, -48, 20, 74, 106].map((x) => CX + x);
       const sub = texto(lFin, d.range, { x: CX, y: CY + 50, size: 40, color: '#A9A79C' });
       const pregunta = texto(lFin, d.closing, {
         x: CX,
@@ -1534,48 +1582,35 @@ export class Pelicula {
         `M${CX - 120},${CY + 10} C${CX - 40},${CY + 22} ${CX + 40},${CY + 4} ${CX + 120},${CY + 14}`,
         { color: NOCHE.accent, width: 4 },
       );
-      const tEst = fa - 0.25; // estallan
-      const tAnillo = fa + 1.7; // vuelven al anillo
-      const tCierre = fa + 2.55; // el anillo se cierra sobre el nombre
-      const tNombre = fa + 2.6; // el nombre se escribe
+      const CAE = 0.8; // lo que tarda cada una en caer
+      const sale = (i: number) => enSemi(fa + 0.15) + i * semi;
+      const llega = (i: number) => sale(i) + CAE;
+      const tUltima = llega(N - 1);
       this.paint.push((t) => {
-        // (entra fundiendo mientras las casillas se recogen: sin cortes)
+        // (entra fundiendo mientras las casillas se dispersan: sin cortes)
         ver(lFin, t >= fa - 0.55);
         if (t < fa - 0.55) return;
-        opacidad(fondo, S(t, fa - 0.55, 0.55));
-        rafaga.forEach((f) => {
-          const ke = S(t, tEst + f.salida, 1.1, ease.out);
-          const ka = S(t, tAnillo, 0.85, ease.inOut);
-          const kc = S(t, tCierre, 0.55, ease.in);
-          // fuera: flotan alejándose despacio
-          const deriva = 1 + 0.06 * Math.max(0, t - tEst - f.salida);
-          const ox = Math.cos(f.ang) * f.r * ke * deriva,
-            oy = Math.sin(f.ang) * f.r * ke * deriva;
-          // el anillo, alrededor del nombre
-          const rr = 250 * (1 - kc);
-          const ax = Math.cos(f.ringAng + 0.6 * ka) * rr,
-            ay = Math.sin(f.ringAng + 0.6 * ka) * rr * 0.62;
-          const x = CX + lerp(ox, ax, ka),
-            y = LY + lerp(oy, ay, ka);
-          const sc = lerp(0.25 + 0.75 * ke, 0.42, ka) * (1 - 0.7 * kc);
-          mover(f.g, { x, y, s: sc, r: f.rot * (1 - ka) });
-          opacidad(f.g, Math.min(1, ke * 2) * (1 - kc));
-          ver(f.g, ke > 0 && kc < 1);
+        fondo.setAttribute('r', (1500 * S(t, fa - 0.55, 0.6, ease.in)).toFixed(1));
+        if (!xs) medir();
+        const pos = xs ?? aprox;
+        caen.forEach((c, i) => {
+          const k = S(t, sale(i), CAE, ease.in); // caen acelerando, como con peso
+          const x = lerp(pos[c.letra] + c.dx * 3, pos[c.letra], k);
+          const y = lerp(-140, LY - 10, k);
+          // al llegar, entran en la letra (se hacen pequeñas y se funden)
+          const dentro = S(t, llega(i) - 0.18, 0.2);
+          mover(c.g, { x, y, s: lerp(1, 0.28, k) * (1 - 0.6 * dentro), r: c.rot * (1 - k) });
+          opacidad(c.g, 1 - dentro);
+          ver(c.g, t >= sale(i) && dentro < 1);
         });
-        // el nombre, letra a letra (cada una entra fundiendo y subiendo un poco)
+        // cada letra se enciende cuando le cae su primera casilla
         tspans.forEach((ts, i) => {
-          const k = S(t, tNombre + i * 0.11, 0.32);
-          ts.setAttribute('fill-opacity', k.toFixed(3));
+          ts.setAttribute('fill-opacity', S(t, llega(i) - 0.12, 0.3).toFixed(3));
         });
-        mover(logo, {
-          ox: CX,
-          oy: LY,
-          s: 0.94 + 0.06 * S(t, tNombre, 0.9),
-          y: 10 * (1 - S(t, tNombre, 0.6)),
-        });
-        revelar(raya, S(t, tNombre + 0.75, 0.5, ease.inOut));
-        opacidad(sub, S(t, tNombre + 0.95, 0.4));
-        opacidad(pregunta, S(t, tNombre + 1.35, 0.5));
+        revelar(raya, S(t, tUltima + 0.1, 0.5, ease.inOut));
+        opacidad(sub, S(t, tUltima + 0.3, 0.4));
+        opacidad(pregunta, S(t, tUltima + 0.65, 0.5));
+        mover(pregunta, { y: 12 * (1 - S(t, tUltima + 0.65, 0.5)) });
       });
     }
 
@@ -1621,9 +1656,17 @@ export class Pelicula {
         [va + 1.1, { s: 0.86, x: 0, y: 60 }],
         [vb - 0.8, { s: 0.88, x: 0, y: 60 }],
         [vb, { s: 1, x: 0, y: 0 }],
-        [ra, { s: 1, x: 0, y: 0 }],
-        // la cuadrícula entera (5 filas) entre ARRIBA y ABAJO
-        [ra + 1.4, { s: REC_S, x: 0, y: REC_Y }],
+        // la cuadrícula entera (5 filas) entre ARRIBA y ABAJO (con la mesa, ya
+        // encuadrada desde el principio: las fotos llegan volando a ella)
+        ...((usarMesa
+          ? [
+              [ra - 0.001, { s: 1, x: 0, y: 0 }],
+              [ra, { s: REC_S, x: 0, y: REC_Y }],
+            ]
+          : [
+              [ra, { s: 1, x: 0, y: 0 }],
+              [ra + 1.4, { s: REC_S, x: 0, y: REC_Y }],
+            ]) as [number, { s: number; x: number; y: number }][]),
         [rb + 5, { s: REC_S, x: 0, y: REC_Y }],
       ];
       const flashT = P.calendario[0] + FLASH;
@@ -1663,6 +1706,9 @@ export class Pelicula {
         const e = ease.inOut(fr);
         const deriva = 1 + 0.03 * (seg % 2 ? 0.5 - e : e - 0.5);
         const s = k.s * deriva;
+        camEstado.s = s;
+        camEstado.x = k.x;
+        camEstado.y = k.y;
         cam.setAttribute(
           'transform',
           `translate(${CX},${CY}) scale(${s.toFixed(4)}) translate(${(-CX - k.x).toFixed(2)},${(-CY - k.y).toFixed(2)})`,
@@ -1670,28 +1716,41 @@ export class Pelicula {
         base.setAttribute('fill', isDay(t) ? DIA.bg : NOCHE.bg);
         const kf = S(t, flashT, 0.24, ease.in);
         ver(destello, kf > 0 && kf < 1);
-        destello.setAttribute('cx', String(X0 + 124));
-        destello.setAttribute('cy', String(Y0 + 109 + 60));
+        // (con la mesa no hay cámara: el día sale del propio calendario)
+        destello.setAttribute('cx', String(usarMesa ? CX : X0 + 124));
+        destello.setAttribute('cy', String(usarMesa ? CY + 40 : Y0 + 109 + 60));
         destello.setAttribute('r', String(10 + kf * 2200));
         // el texto de los rótulos: crema de noche, tinta de día
         lRot.setAttribute('fill', isDay(t) ? DIA.ink : NOCHE.ink);
       });
     }
     // ── la mesa de los momentos ──
-    if (usarMesa && d.pieces.length)
-      this.paint.push(
-        montarMesa({
-          T,
-          defs,
-          parent: lMesa,
-          d,
-          A: DIA.accent,
-          piezas: P.piezas,
-          fin: P.recuerdos[0],
-          semi,
-          enSemi,
-        }),
-      );
+    if (usarMesa && d.pieces.length) {
+      const m = montarMesa({
+        T,
+        defs,
+        parent: lMesa,
+        d,
+        A: DIA.accent,
+        piezas: P.piezas,
+        fin: P.recuerdos[0],
+        semi,
+        enSemi,
+        aterriza: P.recuerdos[0] + ATERRIZA,
+        // la casilla de su foto, tal como se ve ahora con la cámara de las cifras
+        destino: (id) => {
+          const c = aterrizan.get(id);
+          if (!c) return null;
+          return {
+            x: CX + camEstado.s * (c.cx - CX - camEstado.x),
+            y: CY + camEstado.s * (c.cy - CY - camEstado.y),
+            size: L * camEstado.s,
+          };
+        },
+      });
+      mesa = m;
+      this.paint.push(m.pintar);
+    }
     // ── los subtítulos (dentro del dibujo, encima de todo) ──
     this.paint.push(
       montarSubtitulos({
