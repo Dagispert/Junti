@@ -16,6 +16,7 @@ import { PressScale } from '@/components/motion';
 import { Button, Notice, ProgressButton, Screen, Tag, Title } from '@/components/ui';
 import { Radius, Spacing, useTheme } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
+import { encolar, esErrorDeRed, idParaPublicar, sinConexion } from '@/lib/cola';
 import { dateFromFile, dateFromPickerExif } from '@/lib/exif';
 import type { Place } from '@/lib/geo';
 import { secondsOf, videoLength, videoPoster } from '@/lib/media';
@@ -283,7 +284,8 @@ export default function Publish() {
         router.back();
         return;
       }
-      await addMoment({
+      const input = {
+        id: idParaPublicar(),
         groupId,
         proposalId: proposal?.id,
         media: ready[0],
@@ -293,7 +295,15 @@ export default function Publish() {
         place: place ?? undefined,
         rememberedAt: remembering ? when.getTime() : undefined,
         creditedTo: creditedTo || undefined,
-      });
+      };
+      try {
+        if (sinConexion()) throw new Error('Failed to fetch');
+        await addMoment(input);
+      } catch (error) {
+        // Sin conexión: se guarda en el móvil y se publica solo cuando vuelva.
+        if (!esErrorDeRed(error)) throw error;
+        await encolar('momento', input, groupId);
+      }
       setSent(true);
     } catch (error) {
       setNotice(errorText(error));

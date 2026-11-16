@@ -59,6 +59,8 @@ type Store = {
   joinGroup: (code: string) => Promise<string>;
   createInvite: (groupId: string) => Promise<string>;
   addMoment: (input: {
+    /** Lo pone la cola de envío: si se reintenta, no se publica dos veces. */
+    id?: string;
     groupId: string;
     text?: string;
     imageUri?: string;
@@ -1020,6 +1022,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
 
     addMoment: async ({
+      id,
       groupId,
       text,
       imageUri,
@@ -1032,6 +1035,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       more,
       creditedTo,
     }) => {
+      // Con id (desde la cola de envío): si ya se llegó a publicar, no se repite.
+      if (id) {
+        const ya = await supabase.from('moments').select('id').eq('id', id).maybeSingle();
+        if (ya.data) {
+          await refresh();
+          return;
+        }
+      }
       const visual = media ?? (imageUri ? { uri: imageUri, kind: 'photo' as const } : undefined);
       const stamp = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const put = (uri: string, name: string, mime: string) =>
@@ -1073,6 +1084,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         await supabase
           .from('moments')
           .insert({
+            ...(id && { id }),
             group_id: groupId,
             text: text || null,
             proposal_id: proposalId ?? null,

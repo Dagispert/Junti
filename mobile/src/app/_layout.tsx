@@ -13,6 +13,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
 import { AuthScreen, ProfileSetup } from '@/components/auth-screen';
+import { ColaEnvio } from '@/components/cola-envio';
 import { IntroCinematic } from '@/components/cinematics';
 import { Colors, useTheme } from '@/constants/theme';
 import { aplicarEnLaWeb, useEsquema } from '@/lib/appearance';
@@ -77,6 +78,7 @@ export default function RootLayout() {
       <StoreProvider>
         <Gate />
         <AlDia />
+        <ColaEnvio />
         <StatusBar style={dark ? 'light' : 'dark'} />
       </StoreProvider>
     </ThemeProvider>

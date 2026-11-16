@@ -14,6 +14,7 @@ import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-na
 import { Radius, Spacing, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import type { Moment } from '@/data/types';
+import { encolar, esErrorDeRed, sinConexion } from '@/lib/cola';
 import { type FamilyId } from '@/lib/families';
 import { clockIn, relative } from '@/lib/time';
 
@@ -107,7 +108,18 @@ export function MomentCard({
     const target = replyTo;
     setDraft('');
     setReplyTo(null);
-    addComment(moment.id, text, target?.id).catch(() => {
+    const aLaCola = () =>
+      encolar('comentario', { momentId: moment.id, text, replyTo: target?.id }, moment.groupId);
+    if (sinConexion()) {
+      // sin conexión: se envía solo cuando vuelva
+      aLaCola().catch(() => setDraft(text));
+      return;
+    }
+    addComment(moment.id, text, target?.id).catch((e) => {
+      if (esErrorDeRed(e)) {
+        aLaCola().catch(() => setDraft(text));
+        return;
+      }
       setDraft(text);
       setReplyTo(target);
     });
