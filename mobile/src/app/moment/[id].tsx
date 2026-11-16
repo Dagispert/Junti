@@ -15,6 +15,7 @@ import { SkyBadge } from '@/components/sky-badge';
 import { Photo, Screen } from '@/components/ui';
 import { Hand, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
+import { markRead } from '@/lib/notifications';
 import { clockIn } from '@/lib/time';
 import { ArrowLeft, Check, Flag, Pencil, Plus, Share } from 'lucide-react-native';
 import { useExport } from '@/components/export-sheet';
@@ -23,6 +24,10 @@ import { canExport, renderMomentImage } from '@/lib/export-media';
 /** Un momento a lo grande, como una foto pegada en un álbum. */
 export default function MomentView() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  // abrirla cuenta como vista en las notificaciones
+  useEffect(() => {
+    if (id) markRead(`moment:${id}`);
+  }, [id]);
   const theme = useTheme();
   const { moments, user, proposals, albums, setAlbumMoments, me, reportMoment } = useStore();
   // Denunciar (solo en publicaciones de otros): un toque pregunta, el segundo envía.

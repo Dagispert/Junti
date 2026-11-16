@@ -18,6 +18,7 @@ import {
 import { Radius, Spacing, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import { relative } from '@/lib/time';
+import { NotifBell } from '@/components/notif-bell';
 
 /** Nivel 0: los grupos a los que pertenezco. */
 export default function MyGroups() {
@@ -29,6 +30,8 @@ export default function MyGroups() {
       header={
         <View style={styles.header}>
           <Logo size={30} />
+          <View style={{ flex: 1 }} />
+          <NotifBell />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Tu perfil"

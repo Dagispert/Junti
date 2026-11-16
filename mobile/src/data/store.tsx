@@ -447,7 +447,7 @@ async function load(me: string): Promise<Data> {
       .from('moments')
       .select(
         'id, group_id, author_id, credited_to, text, created_at, shared_at, memory, edited_at, author_tz, proposal_id, place_name, lat, lng, ' +
-          'reactions(emoji, user_id), comments(id, user_id, text, created_at, deleted_at, edited_at, reply_to), ' +
+          'reactions(emoji, user_id, created_at), comments(id, user_id, text, created_at, deleted_at, edited_at, reply_to), ' +
           'memory_additions(id, author_id, text, created_at, edited_at), ' +
           'moment_media(position, addition_id, media_assets(id, storage_path, kind, thumb_path, duration_s, waveform, clip_start, clip_end))',
       )
@@ -710,7 +710,11 @@ async function load(me: string): Promise<Data> {
         row.lat != null && row.lng != null
           ? { name: row.place_name ?? '', lat: row.lat, lng: row.lng }
           : undefined,
-      reactions: (row.reactions ?? []).map((r: any) => ({ emoji: r.emoji, userId: r.user_id })),
+      reactions: (row.reactions ?? []).map((r: any) => ({
+        emoji: r.emoji,
+        userId: r.user_id,
+        at: r.created_at ? Date.parse(r.created_at) : undefined,
+      })),
       comments: (row.comments ?? [])
         .filter((c: any) => !c.deleted_at)
         .map((c: any) => ({

@@ -11,6 +11,7 @@ import { errorText, useStore } from '@/data/store';
 import type { KaraokeGame, Moment } from '@/data/types';
 import { canRecord, mixer, partAt, planMontage, recorderType, trackUrl } from '@/lib/karaoke';
 import { lineAt } from '@/lib/lyrics';
+import { markRead } from '@/lib/notifications';
 import { mmss } from '@/lib/music';
 
 const GOLD = '#F2B33D';
@@ -23,6 +24,9 @@ type Take = { uri: string; mime: string; duration: number; offset: number; poste
  */
 export default function Karaoke() {
   const { id, watch } = useLocalSearchParams<{ id: string; watch?: string }>();
+  useEffect(() => {
+    if (id) markRead(`proposal:${id}`);
+  }, [id]);
   const { proposals, moments, me } = useStore();
   const insets = useSafeAreaInsets();
   const proposal = proposals.find((p) => p.id === id);

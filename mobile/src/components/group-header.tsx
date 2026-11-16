@@ -9,6 +9,7 @@ import type { Group } from '@/data/types';
 import { copyText, inviteLink } from '@/lib/invite';
 
 import { Icon } from './icon';
+import { NotifBell } from './notif-bell';
 import { Button, Notice, Tag, Title } from './ui';
 
 /** Cabecera del grupo: nombre, invitación y la hora local de cada integrante. */
@@ -42,7 +43,8 @@ export function GroupHeader({ group }: { group: Group }) {
             <Text style={{ color: theme.textSecondary, fontSize: 15 }}>Mis grupos</Text>
           </View>
         </Pressable>
-        <View style={{ flexDirection: 'row' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <NotifBell groupId={group.id} />
           <View testID="tour-calendario">
             <Button
               compact

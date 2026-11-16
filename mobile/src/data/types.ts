@@ -137,7 +137,7 @@ export type KaraokeGame = {
   lines?: { t: number; text: string }[];
 };
 
-export type Reaction = { emoji: string; userId: string };
+export type Reaction = { emoji: string; userId: string; /** cuándo */ at?: number };
 export type Comment = {
   id: string;
   userId: string;
