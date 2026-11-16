@@ -9,7 +9,7 @@ import { Icon } from '@/components/icon';
 import { Avatar } from '@/components/ui';
 import { errorText, useStore } from '@/data/store';
 import type { KaraokeGame, Moment } from '@/data/types';
-import { canRecord, mixer, partAt, planMontage, recorderType, trackUrl } from '@/lib/karaoke';
+import { canRecord, partAt, planMontage, recorderType, trackUrl } from '@/lib/karaoke';
 import { lineAt } from '@/lib/lyrics';
 import { markRead } from '@/lib/notifications';
 import { mmss } from '@/lib/music';
@@ -652,8 +652,6 @@ function Montage({
     [duration, takes, seed],
   );
   const videos = useRef(new Map<string, HTMLVideoElement>());
-  const audio = useRef<HTMLAudioElement | null>(null);
-  const mix = useRef<ReturnType<typeof mixer> | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'intro' | 'playing' | 'ended'>(
     'loading',
   );
@@ -661,10 +659,28 @@ function Montage({
   const [progress, setProgress] = useState(0);
   const frame = useRef(0);
 
+  // El sonido va aparte de los vídeos: la canción y la voz de cada uno se
+  // descargan y se mezclan con Web Audio, con un único reloj. Los vídeos van
+  // en silencio y siguen ese reloj. (En el iPhone, varios vídeos con sonido a
+  // la vez se pausan entre sí y todo iba a tropezones.)
+  const bytes = useRef(new Map<string, Promise<ArrayBuffer | null>>());
+  useEffect(() => {
+    const get = (src: string) =>
+      fetch(src)
+        .then((r) => (r.ok ? r.arrayBuffer() : null))
+        .catch(() => null);
+    bytes.current.set('cancion', get(url));
+    for (const m of takes) if (m.videoUri) bytes.current.set(m.id, get(m.videoUri));
+  }, [takes, url]);
+  const ctx = useRef<AudioContext | null>(null);
+  const fuentes = useRef<AudioBufferSourceNode[]>([]);
+  const ganancias = useRef(new Map<string, GainNode>());
+  const sonido = useRef<Promise<Map<string, AudioBuffer>> | null>(null);
+
   // Esperar a que todo pueda empezar (como mucho unos segundos).
   useEffect(() => {
     let alive = true;
-    const els = [audio.current, ...videos.current.values()].filter(Boolean) as HTMLMediaElement[];
+    const els = [...videos.current.values()];
     const ready = (el: HTMLMediaElement) =>
       el.readyState >= 3
         ? Promise.resolve()
@@ -672,99 +688,142 @@ function Montage({
             el.addEventListener('canplay', () => r(), { once: true });
             el.addEventListener('error', () => r(), { once: true });
           });
-    Promise.race([Promise.all(els.map(ready)), new Promise((r) => setTimeout(r, 6000))]).then(
-      () => alive && setState((s) => (s === 'loading' ? 'ready' : s)),
-    );
+    Promise.race([
+      Promise.all([...els.map(ready), bytes.current.get('cancion')]),
+      new Promise((r) => setTimeout(r, 6000)),
+    ]).then(() => alive && setState((s) => (s === 'loading' ? 'ready' : s)));
     return () => {
       alive = false;
     };
   }, [takes, url]);
 
+  const parar = () => {
+    cancelAnimationFrame(frame.current);
+    fuentes.current.forEach((f) => {
+      try {
+        f.stop();
+      } catch {
+        // ya parada
+      }
+    });
+    fuentes.current = [];
+    videos.current.forEach((v) => v.pause());
+  };
   useEffect(
     () => () => {
-      cancelAnimationFrame(frame.current);
-      audio.current?.pause();
-      videos.current.forEach((v) => v.pause());
-      mix.current?.close();
+      parar();
+      ctx.current?.close().catch(() => {});
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 
   const clipOf = (m: Moment) => m.videoClip?.start ?? 0;
 
-  // Al tocar: se «despierta» el audio (en iPhone solo se puede tras un toque),
-  // sale la portada unos segundos y empieza el montaje.
+  // Al tocar: se crea el sonido (en iPhone solo se puede tras un toque), se
+  // «despiertan» los vídeos, sale la portada unos segundos y empieza el montaje.
   const introTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(introTimer.current), []);
   const start = () => {
-    const a = audio.current;
-    if (!a) return;
-    if (!mix.current) {
-      mix.current = mixer();
-      mix.current.add(a, 0.75);
-      videos.current.forEach((v) => mix.current!.add(v, 0));
+    if (!ctx.current) {
+      const Ctx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      ctx.current = new Ctx();
     }
-    mix.current.resume();
-    for (const el of [a, ...videos.current.values()]) {
-      const was = el.muted;
-      el.muted = true;
-      el.play()
-        .then(() => {
-          el.pause();
-          el.muted = was;
-        })
-        .catch(() => {
-          el.muted = was;
-        });
+    const c = ctx.current;
+    c.resume().catch(() => {});
+    // un sonido vacío dentro del toque: así el iPhone deja sonar lo demás
+    const b = c.createBuffer(1, 1, 22050);
+    const s0 = c.createBufferSource();
+    s0.buffer = b;
+    s0.connect(c.destination);
+    s0.start();
+    for (const v of videos.current.values()) {
+      v.muted = true;
+      v.play()
+        .then(() => v.pause())
+        .catch(() => {});
     }
+    // decodificar mientras se ve la portada
+    sonido.current ??= (async () => {
+      const out = new Map<string, AudioBuffer>();
+      for (const [id, p] of bytes.current) {
+        const ab = await p;
+        if (!ab) continue;
+        try {
+          out.set(id, await c.decodeAudioData(ab.slice(0)));
+        } catch {
+          // sin sonido para esa voz: el vídeo sale igual
+        }
+      }
+      return out;
+    })();
     setState('intro');
-    introTimer.current = setTimeout(play, INTRO_MS);
+    const desde = performance.now();
+    introTimer.current = setTimeout(async () => {
+      const buffers = await sonido.current!;
+      // si decodificar tardó más que la portada, se empieza en cuanto esté
+      setTimeout(() => play(buffers), Math.max(0, INTRO_MS - (performance.now() - desde)));
+    }, 0);
   };
 
-  const play = () => {
-    const a = audio.current;
-    if (!a) return;
-    a.currentTime = game.start;
+  const play = (buffers: Map<string, AudioBuffer>) => {
+    const c = ctx.current;
+    if (!c) return;
+    c.resume().catch(() => {});
+    parar();
+    const cuando = c.currentTime + 0.25;
+    const fuente = (buf: AudioBuffer, offset: number, nivel: number, id?: string) => {
+      const src = c.createBufferSource();
+      src.buffer = buf;
+      const g = c.createGain();
+      g.gain.value = nivel;
+      src.connect(g).connect(c.destination);
+      src.start(cuando, Math.max(0, Math.min(offset, buf.duration - 0.05)));
+      fuentes.current.push(src);
+      if (id) ganancias.current.set(id, g);
+    };
+    const cancion = buffers.get('cancion');
+    if (cancion) fuente(cancion, game.start, 0.75);
+    ganancias.current.clear();
     for (const m of takes) {
+      const buf = buffers.get(m.id);
+      if (buf) fuente(buf, clipOf(m), 0, m.id);
       const v = videos.current.get(m.id);
       if (!v) continue;
+      v.muted = true;
       v.currentTime = clipOf(m);
-      v.play().catch(() => {});
     }
-    mix.current?.resume();
-    a.play().catch(() => {});
+    // los vídeos arrancan justo cuando empieza a sonar
+    setTimeout(
+      () => videos.current.forEach((v) => v.play().catch(() => {})),
+      Math.max(0, (cuando - c.currentTime) * 1000),
+    );
     setState('playing');
     let current = '';
     const saltos = new Map<string, number>();
-    // El reloj del montaje es el tiempo real desde que empieza: si la canción se
-    // atasca (en el iPhone pasa), los vídeos siguen igual y la canción se recoloca.
-    const t0 = performance.now();
-    let saltoAudio = 0;
     const loop = () => {
-      const ahora = performance.now();
-      const t = (ahora - t0) / 1000;
-      const ta = a.currentTime - game.start;
-      if (a.paused && !a.ended) a.play().catch(() => {});
-      if (!a.seeking && Math.abs(ta - t) > 0.5 && ahora - saltoAudio > 1500) {
-        saltoAudio = ahora;
-        a.currentTime = game.start + t;
-      }
+      const t = c.currentTime - cuando;
       setProgress(Math.max(0, Math.min(1, t / duration)));
-      const part = partAt(parts, t);
+      const part = partAt(parts, Math.max(0, t));
       const singing = part?.singers ?? [];
       const key = singing.join(',');
       if (key !== current) {
         current = key;
         setActive(singing);
+        // la voz de quien canta sube y las demás bajan (con un fundido corto)
+        for (const [id, g] of ganancias.current)
+          g.gain.setTargetAtTime(singing.includes(id) ? 1 : 0, c.currentTime, 0.04);
       }
+      const ahora = performance.now();
       for (const m of takes) {
         const v = videos.current.get(m.id);
-        if (!v) continue;
+        if (!v || t < 0) continue;
         const want = clipOf(m) + t;
-        // Recolocar solo si se ha ido bastante, sin otro salto a medias y no más de
-        // uno cada segundo y medio: en el iPhone cada salto tarda, y recolocar en
-        // cada fotograma lo dejaba congelado en una imagen.
         if (v.paused && !v.ended && want < (v.duration || 1e9)) v.play().catch(() => {});
+        // Recolocar solo si se ha ido bastante, sin otro salto a medias y no más
+        // de uno cada segundo y medio (en el iPhone cada salto tarda).
         if (
           !v.seeking &&
           Math.abs(v.currentTime - want) > 0.6 &&
@@ -774,11 +833,9 @@ function Montage({
           saltos.set(m.id, ahora);
           v.currentTime = want;
         }
-        mix.current?.set(v, singing.includes(m.id) ? 1 : 0);
       }
       if (t >= duration) {
-        a.pause();
-        videos.current.forEach((v) => v.pause());
+        parar();
         setState('ended');
         return;
       }
@@ -810,9 +867,9 @@ function Montage({
   return (
     <View style={styles.recorder}>
       <View style={styles.frame}>
-        <audio ref={audio} src={url} crossOrigin="anonymous" preload="auto" />
         {takes.map((m) => (
           <video
+            muted
             key={m.id}
             ref={(el) => {
               if (el) videos.current.set(m.id, el);
