@@ -12,7 +12,8 @@ import { Lead, Screen } from '@/components/ui';
 import { Spacing, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import type { Moment } from '@/data/types';
-import { featuredWeek } from '@/lib/recap';
+import { weekStart } from '@/lib/recap';
+import { WeekShelf } from '@/components/week-shelf';
 import { monthOf } from '@/lib/time';
 
 import { Missing } from './index';
@@ -36,11 +37,12 @@ export default function Memory() {
     else months.push({ key, label, items: [moment] });
   }
 
-  const week = all.filter((m) => m.sharedAt > Date.now() - 7 * 86_400_000);
+  // esta semana: de lunes a hoy (la que está en curso)
+  const thisWeek = weekStart(Date.now());
+  const week = all.filter((m) => !m.memory && m.createdAt >= thisWeek);
   const who = [...new Set(week.map((m) => user(m.authorId).name.split(' ')[0]))];
   const whoText =
     who.length > 1 ? `${who.slice(0, -1).join(', ')} y ${who[who.length - 1]}` : who[0];
-  const featured = featuredWeek(all);
   const pile = (week.length >= 3 ? week : all).filter((m) => m.imageUri || m.videoUri).slice(0, 7);
 
   return (
@@ -67,7 +69,11 @@ export default function Memory() {
         </View>
       )}
 
-      {featured != null && <RecapCard groupId={group.id} kind="week" from={featured} />}
+      {/* La semana en curso (se puede ver cómo va) y, debajo, todas las anteriores. */}
+      {week.length > 0 && (
+        <RecapCard groupId={group.id} kind="week" from={thisWeek} hint="Así va vuestra semana" />
+      )}
+      <WeekShelf groupId={group.id} moments={all} />
 
       {/* Vuestra historia, como un diario de recuerdos que se abre y pasa hojas. */}
       <StoryBook groupId={group.id} origins={group.origins} moments={all} />
