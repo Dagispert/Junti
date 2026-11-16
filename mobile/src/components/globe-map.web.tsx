@@ -767,6 +767,7 @@ export function GlobeMap({
   origins = [],
   onCountry,
   dive,
+  llegada,
 }: GlobeMapProps) {
   const countryCb = useRef(onCountry);
   countryCb.current = onCountry;
@@ -776,8 +777,8 @@ export function GlobeMap({
   originsRef.current = origins;
   const daylightRef = useRef(daylight);
   daylightRef.current = daylight;
-  const frameRef = useRef({ distScale, shiftY });
-  frameRef.current = { distScale, shiftY };
+  const frameRef = useRef({ distScale, shiftY, llegada: llegada ?? 0 });
+  frameRef.current = { distScale, shiftY, llegada: llegada ?? 0 };
   const host = useRef<HTMLDivElement>(null);
   const api = useRef<{
     setPeople: (p: GlobePerson[]) => void;
@@ -804,7 +805,11 @@ export function GlobeMap({
     let frame = 0;
 
     // preserveDrawingBuffer: para poder copiar el planeta al grabar vídeos.
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+      preserveDrawingBuffer: true,
+    });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     root.appendChild(renderer.domElement);
@@ -831,6 +836,7 @@ export function GlobeMap({
     let lightMode: boolean | null = null;
     scene.add(sun);
     const sunDir = new THREE.Vector3();
+    const centro = new THREE.Vector3();
     let sunAt = 0;
 
     const world = new THREE.Group();
@@ -878,6 +884,8 @@ export function GlobeMap({
     let tourIdx = -1;
     let tourAt = 0;
     const started = performance.now();
+    let llegadaVista = 0;
+    let quieto = 0; // hasta cuándo se queda quieto tras llegar desde Hoy
 
     function centerOf(list: GlobePerson[]) {
       if (!list.length) return { lat: 25, lng: -20, spread: 0 };
@@ -1359,7 +1367,7 @@ export function GlobeMap({
       });
 
     aimOverview();
-    if (!interactive) {
+    if (!interactive || frameRef.current.llegada) {
       view.yaw = target.yaw;
       view.pitch = target.pitch;
       view.dist = target.dist;
@@ -1403,6 +1411,11 @@ export function GlobeMap({
       setPeople: (list) => {
         setPeople(list);
         if (!focused) aimOverview();
+        // Al llegar desde el planeta de Hoy, se coloca ya mirando igual, sin girar.
+        if (performance.now() < quieto && !focused) {
+          view.yaw = target.yaw;
+          view.pitch = target.pitch;
+        }
       },
       focus: (id) => {
         if (country) {
@@ -1515,6 +1528,20 @@ export function GlobeMap({
       }
       const t = (now - started) / 1000;
       const dragging = pointers.size > 0;
+      if (frameRef.current.llegada !== llegadaVista) {
+        // Se llega desde el planeta de Hoy: la vista de todos, ya colocada.
+        llegadaVista = frameRef.current.llegada;
+        if (llegadaVista && !country) {
+          focused = null;
+          vel.yaw = vel.pitch = 0;
+          lastTouch = -1e9;
+          aimOverview();
+          view.yaw = target.yaw;
+          view.pitch = target.pitch;
+          view.dist = target.dist;
+          quieto = now + 2500;
+        }
+      }
       const idle = now - lastTouch > 3500;
 
       if (!dragging) {
@@ -1580,6 +1607,15 @@ export function GlobeMap({
       clouds.visible = view.dist > 2.25;
       // En vertical el campo de visión horizontal es estrecho: se aleja la cámara para que quepa.
       const fit = Math.max(1, 1.35 / camera.aspect);
+      // Límites de reposo: sin tocarlo (ni nadie destacado ni dentro de un
+      // país), el planeta vuelve a verse entero, con sus nubes, en la pantalla.
+      const mult = (fit > 1 ? 0.62 + fit * 0.38 : 1) * frameRef.current.distScale;
+      if (idle && !dragging && !focused && !country) {
+        const zMin = 1.36 / (Math.tan((16 * Math.PI) / 180) * Math.min(1, camera.aspect));
+        if (target.dist * mult < zMin) target.dist = zMin / mult;
+        // recién llegado desde Hoy: ya en su tamaño de reposo, sin encogerse luego
+        if (now < quieto) view.dist = target.dist;
+      }
       camera.position.set(
         0,
         0,
@@ -1587,6 +1623,13 @@ export function GlobeMap({
       );
       camera.lookAt(0, 0, 0);
       world.updateMatrixWorld();
+      // Dónde se ve el planeta (centro y radio en píxeles): así otra pantalla
+      // puede crecer desde él exactamente.
+      camera.updateMatrixWorld();
+      centro.set(0, 0, 0).project(camera);
+      const zc = camera.position.z;
+      const rad = h / 2 / Math.tan((16 * Math.PI) / 180) / Math.sqrt(Math.max(0.01, zc * zc - 1));
+      root.dataset.globo = `${Math.round(((centro.x + 1) / 2) * w)},${Math.round(((1 - centro.y) / 2) * h)},${Math.round(rad)}`;
 
       // Muy cerca de un país con provincias: se entra en el modo país.
       if (interactive && worldData) {

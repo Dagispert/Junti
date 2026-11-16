@@ -35,6 +35,9 @@ export type GlobeMapProps = {
   transparent?: boolean;
   /** Cuánto más lejos se pone la cámara (1 = lo normal): un planeta más pequeño. */
   distScale?: number;
+  /** Sin la entrada girando desde lejos: el planeta aparece ya en reposo (al venir de Hoy). */
+  /** Cambia cuando se llega desde el planeta de Hoy: se coloca ya en reposo, sin girar ni acercarse. */
+  llegada?: number;
   /** Desplaza el planeta en vertical (fracción del alto; negativo = más arriba). */
   shiftY?: number;
   /** true (por defecto): la luz del sol de verdad, con día y noche. false: todo de día. */

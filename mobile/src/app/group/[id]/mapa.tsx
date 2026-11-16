@@ -1,7 +1,7 @@
-import { router, useLocalSearchParams } from 'expo-router';
-import { useRef, useState } from 'react';
+import { router, useIsFocused, useLocalSearchParams } from 'expo-router';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useGlobePeople } from '@/components/connection-card';
@@ -15,6 +15,8 @@ import { useStore } from '@/data/store';
 import { distanceKm, formatKm } from '@/lib/geo';
 import { clockIn, useMinute } from '@/lib/time';
 import { useWeather } from '@/lib/weather';
+import { planetaEn, tomarOrigen } from '@/lib/transicion';
+import { SPRINGY_CSS } from '@/components/motion';
 
 import { Missing } from './index';
 import { ChevronLeft, MapPin, SunMoon, Users, type LucideIcon } from 'lucide-react-native';
@@ -41,6 +43,52 @@ export default function MapScreen() {
   const people = useGlobePeople(group);
   useMinute(); // las horas de cada uno, al día
   const [focus, setFocus] = useState<string | null>(null);
+  // Si se llega tocando el planeta de Hoy, el mapa crece desde donde estaba.
+  // (La pestaña puede estar ya montada: se mira cada vez que se vuelve a ella.)
+  const enFoco = useIsFocused();
+  const [llegada, setLlegada] = useState(0);
+  const planeta = useRef<unknown>(null);
+  useLayoutEffect(() => {
+    const el = planeta.current as unknown as HTMLElement | null;
+    if (!enFoco || !el || typeof el.animate !== 'function') return;
+    const origen = tomarOrigen();
+    if (!origen) return;
+    setLlegada(Date.now());
+    // la medida vieja no vale: se espera a la del planeta ya recolocado
+    const g = el.querySelector<HTMLElement>('[data-globo]');
+    if (g) delete g.dataset.globo;
+    // Hasta que el planeta grande se dibuja no se enseña; entonces aparece
+    // justo donde estaba el pequeño (y del mismo tamaño) y crece hasta su sitio.
+    el.style.opacity = '0';
+    let raf = 0;
+    let n = 0;
+    let listo = 0;
+    const esperar = () => {
+      const c = planetaEn(el);
+      n++;
+      // dos fotogramas con la medida ya publicada: el lienzo ya pintó
+      if ((!c || (listo ||= n) > n - 2) && n < 120) {
+        raf = requestAnimationFrame(esperar);
+        return;
+      }
+      el.style.opacity = '';
+      if (!c) return;
+      const b = el.getBoundingClientRect();
+      el.style.transformOrigin = `${c.x - b.left}px ${c.y - b.top}px`;
+      el.animate(
+        [
+          { transform: `translate(${origen.x - c.x}px, ${origen.y - c.y}px) scale(${origen.r / c.r})` },
+          { transform: 'translate(0px, 0px) scale(1)' },
+        ],
+        { duration: 750, easing: SPRINGY_CSS },
+      );
+    };
+    raf = requestAnimationFrame(esperar);
+    return () => {
+      cancelAnimationFrame(raf);
+      el.style.opacity = '';
+    };
+  }, [enFoco]);
   // Personas o recuerdos, nunca a la vez: así el planeta no se llena de cosas.
   const [layer, setLayer] = useState<'people' | 'memories'>('people');
   const showPeople = layer === 'people';
@@ -121,35 +169,41 @@ export default function MapScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
       {/* Sin fondo propio: el del planeta se cortaba al llegar a la barra de abajo. */}
-      <GlobeMap
-        transparent
-        daylight={daylight}
-        onCountry={setInCountry}
-        dive={dive}
-        countryMemories={allPlaced}
-        origins={group.origins
-          .filter((o) => o.lat !== undefined && o.lng !== undefined)
-          .map((o) => ({
-            lat: o.lat!,
-            lng: o.lng!,
-            label: `Aquí empezó todo${o.year ? ` · ${o.year}` : ''}`,
-          }))}
-        people={people}
-        focusId={focus}
-        onSelect={(pid) => {
-          setPicked([]);
-          setFocus(pid);
-        }}
-        memories={memories}
-        onMemories={(ids) => {
-          setFocus(null);
-          setPicked(ids);
-        }}
-        focusPoint={pickedPlace ? { lat: pickedPlace.lat, lng: pickedPlace.lng } : null}
-        hidePeople={!showPeople}
-      />
+      <View ref={planeta as never} style={StyleSheet.absoluteFill}>
+        <GlobeMap
+          llegada={llegada}
+          transparent
+          daylight={daylight}
+          onCountry={setInCountry}
+          dive={dive}
+          countryMemories={allPlaced}
+          origins={group.origins
+            .filter((o) => o.lat !== undefined && o.lng !== undefined)
+            .map((o) => ({
+              lat: o.lat!,
+              lng: o.lng!,
+              label: `Aquí empezó todo${o.year ? ` · ${o.year}` : ''}`,
+            }))}
+          people={people}
+          focusId={focus}
+          onSelect={(pid) => {
+            setPicked([]);
+            setFocus(pid);
+          }}
+          memories={memories}
+          onMemories={(ids) => {
+            setFocus(null);
+            setPicked(ids);
+          }}
+          focusPoint={pickedPlace ? { lat: pickedPlace.lat, lng: pickedPlace.lng } : null}
+          hidePeople={!showPeople}
+        />
+      </View>
 
-      <View pointerEvents="box-none" style={[styles.top, { paddingTop: insets.top + 8 }]}>
+      <Animated.View
+        entering={llegada ? FadeIn.delay(350).duration(400) : undefined}
+        pointerEvents="box-none"
+        style={[styles.top, { paddingTop: insets.top + 8 }]}>
         <View style={styles.topRow}>
           <Pressable
             accessibilityRole="button"
@@ -203,9 +257,12 @@ export default function MapScreen() {
             </Text>
           </View>
         )}
-      </View>
+      </Animated.View>
 
-      <View pointerEvents="box-none" style={styles.bottom}>
+      <Animated.View
+        entering={llegada ? FadeIn.delay(450).duration(400) : undefined}
+        pointerEvents="box-none"
+        style={styles.bottom}>
         {pickedMoments.length > 0 && (
           <Animated.View
             entering={FadeInDown.duration(360)}
@@ -295,7 +352,7 @@ export default function MapScreen() {
             )}
           </ScrollView>
         )}
-      </View>
+      </Animated.View>
     </View>
   );
 }
