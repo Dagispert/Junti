@@ -17,13 +17,27 @@ const DURATIONS = [
 
 /** Proponer un reto al grupo: uno propio o una idea de la biblioteca. */
 export default function NewChallenge() {
-  const { groupId } = useLocalSearchParams<{ groupId: string }>();
+  // Puede llegar ya relleno (una idea de la narradora); se puede cambiar todo.
+  const params = useLocalSearchParams<{
+    groupId: string;
+    title?: string;
+    body?: string;
+    days?: string;
+  }>();
+  const { groupId } = params;
   const theme = useTheme();
   const { group: groupById, proposals, addChallenge } = useStore();
   const group = groupById(groupId);
-  const [title, setTitle] = useState('');
-  const [body, setBody] = useState('');
-  const [days, setDays] = useState(7);
+  const [title, setTitle] = useState(params.title ?? '');
+  const [body, setBody] = useState(params.body ?? '');
+  const [days, setDays] = useState(() => {
+    const d = Number(params.days);
+    if (!d) return 7;
+    // la duración disponible más cercana
+    return DURATIONS.filter((x) => x.days).reduce((a, b) =>
+      Math.abs(b.days - d) < Math.abs(a.days - d) ? b : a,
+    ).days;
+  });
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   if (!group) return null;

@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { GroupHeader } from '@/components/group-header';
+import { IdeasNarradora } from '@/components/ideas-retos';
 import { NudgeBell } from '@/components/nudge-bell';
 import { OwnerActions } from '@/components/owner-actions';
 import { QuestionCard } from '@/components/question-card';
@@ -161,6 +162,8 @@ export default function Challenges() {
       {openQuestions.map((q) => (
         <QuestionCard key={q.id} question={q} />
       ))}
+
+      <IdeasNarradora group={group} />
 
       {ideas.length > 0 && (
         <View style={{ gap: Spacing.two }}>

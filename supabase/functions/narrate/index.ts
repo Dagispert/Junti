@@ -327,6 +327,8 @@ Deno.serve(async (req) => {
     const { groupId, kind } = body;
     // «sample»: una frase de muestra con la personalidad (la guardada o la que se está probando).
     if (body.action === 'sample') return reply(200, await sample(me, groupId, body.persona));
+    // «retos»: ideas de retos pensadas para este grupo, a partir de lo que comparte.
+    if (body.action === 'retos') return reply(200, await ideasDeRetos(me, groupId, !!body.force));
     // «Nuestra historia»: todos los recuerdos del grupo, sin periodo.
     const story = kind === 'story';
     const periodStart = story ? STORY_PERIOD : body.periodStart;
@@ -1247,6 +1249,137 @@ async function describePeriod(
 }
 
 /** Pide el texto a Gemini, buscando un modelo «flash» disponible con cupo gratuito. */
+// ── Retos pensados para cada grupo ──────────────────────────────────────────
+const SYSTEM_RETOS = `Eres la narradora de Junti, una app privada en la que un grupo de personas que viven lejos (amigos, familia o pareja) comparte su día a día. Tu tarea ahora: inventar RETOS divertidos para ESTE grupo, inspirados en lo que han ido compartiendo.
+
+Un reto es algo pequeño que cada persona puede hacer en su ciudad y compartir en la app con una foto, un vídeo, una nota de voz o un texto, en uno a siete días. Ejemplos del tono (no los repitas): «Haz una foto de tu desayuno de hoy desde arriba», «Graba 5 segundos del sonido de tu calle», «Encuentra algo de color naranja y fotografíalo».
+
+Reglas:
+- Usa de verdad lo que ha pasado en el grupo: sus bromas, lugares, aficiones, planes, lo que dijeron. Que se note que lo conoces, pero sin desvelar nada privado ni ridiculizar a nadie.
+- Sorprende: mezcla tipos (foto, vídeo corto, voz, dibujo, algo con la distancia que os separa, algo para hacer a la vez). Nada peligroso, caro ni incómodo, nada de alcohol ni retos físicos arriesgados.
+- No repitas retos que el grupo ya hizo (te los paso).
+- Escribe en español de España, cercano y con chispa. Tutea al grupo («haced», «vuestro»).
+- Título: una orden corta (máx. 60 caracteres). Explicación: una o dos frases (máx. 180 caracteres) que digan qué compartir. «porque»: media frase que diga en qué te has inspirado (máx. 90 caracteres), sin nombrar a nadie por sus datos privados.
+
+Responde SOLO con JSON: {"ideas":[{"title":"…","body":"…","days":3,"porque":"…"}]} con exactamente 3 ideas distintas. «days» entre 1 y 7.`;
+
+type IdeaReto = { title: string; body: string; days: number; porque: string };
+
+async function ideasDeRetos(me: string, groupId: string | undefined, otraVez: boolean) {
+  if (!groupId) return { ideas: [], reason: 'bad' };
+  const [{ data: membership }, { data: group }] = await Promise.all([
+    supabase.from('memberships').select('status').match({ group_id: groupId, user_id: me }).maybeSingle(),
+    supabase.from('groups').select('name, description, narrative_enabled').eq('id', groupId).maybeSingle(),
+  ]);
+  if (membership?.status !== 'active' || !group) return { ideas: [], reason: 'forbidden' };
+  // La narradora solo lee lo del grupo si el grupo la ha activado.
+  if (!group.narrative_enabled) return { ideas: [], reason: 'off' };
+
+  const { data: saved } = await supabase
+    .from('reto_ideas')
+    .select('ideas, generated_at, day, generations_today')
+    .eq('group_id', groupId)
+    .maybeSingle();
+  const today = new Date().toISOString().slice(0, 10);
+  const usadasHoy = saved?.day === today ? saved.generations_today : 0;
+  const frescas = saved && Date.now() - Date.parse(saved.generated_at) < 3 * DAY;
+  // Se guardan 3 días; «otras ideas» se puede pedir hasta 5 veces al día por grupo.
+  if (saved && frescas && (!otraVez || usadasHoy >= 5))
+    return { ideas: saved.ideas, generatedAt: saved.generated_at, left: Math.max(0, 5 - usadasHoy) };
+
+  const since = new Date(Date.now() - 45 * DAY).toISOString();
+  const { data: members } = await supabase
+    .from('memberships')
+    .select('user_id, narrative_opt_out, nickname')
+    .eq('group_id', groupId)
+    .eq('status', 'active');
+  const optedOut = new Set((members ?? []).filter((m) => m.narrative_opt_out).map((m) => m.user_id));
+  const ids = (members ?? []).map((m) => m.user_id);
+  const [{ data: people }, { data: moments }, { data: retos }, { data: comments }] = await Promise.all([
+    supabase.from('profiles').select('id, name, home_city, home_country, hometown, bio, interests').in('id', ids),
+    supabase
+      .from('moments')
+      .select('id, author_id, text, place_name, created_at')
+      .eq('group_id', groupId)
+      .is('deleted_at', null)
+      .gte('created_at', since)
+      .order('created_at', { ascending: false })
+      .limit(60),
+    supabase
+      .from('proposals')
+      .select('title')
+      .eq('group_id', groupId)
+      .eq('kind', 'challenge')
+      .order('created_at', { ascending: false })
+      .limit(40),
+    supabase
+      .from('comments')
+      .select('user_id, text, moment_id, created_at')
+      .is('deleted_at', null)
+      .gte('created_at', since)
+      .order('created_at', { ascending: false })
+      .limit(200),
+  ]);
+  const nombre = new Map((people ?? []).map((p) => [p.id, String(p.name ?? '').split(' ')[0]]));
+  const mios = (moments ?? []).filter((m) => !optedOut.has(m.author_id));
+  const enGrupo = new Set(mios.map((m) => m.id));
+  const quien = (p: { id: string; home_city: string | null; home_country: string | null; hometown: string | null; bio: string | null; interests: string[] | null }) =>
+    optedOut.has(p.id)
+      ? `- ${nombre.get(p.id)} (prefiere que no se use lo suyo)`
+      : `- ${nombre.get(p.id)}: vive en ${[p.home_city, p.home_country].filter(Boolean).join(', ') || '¿?'}${p.hometown ? `; es de ${p.hometown}` : ''}${p.bio ? `; «${p.bio}»` : ''}${p.interests?.length ? `; le gusta: ${p.interests.join(', ')}` : ''}`;
+  const prompt = [
+    `Grupo: «${group.name}»${group.description ? ` — ${group.description}` : ''}`,
+    'Personas:',
+    ...(people ?? []).map(quien),
+    '',
+    'Lo que han compartido últimamente (lo más reciente primero):',
+    ...(mios.length
+      ? mios.slice(0, 40).map((m) => `- ${nombre.get(m.author_id)}: ${(m.text ?? '(foto o vídeo sin texto)').slice(0, 220)}${m.place_name ? ` [en ${m.place_name}]` : ''}`)
+      : ['(todavía casi nada: inventa retos para romper el hielo, usando dónde vive cada uno)']),
+    '',
+    'Algunos comentarios:',
+    ...(comments ?? [])
+      .filter((c) => enGrupo.has(c.moment_id) && !optedOut.has(c.user_id))
+      .slice(0, 25)
+      .map((c) => `- ${nombre.get(c.user_id)}: ${String(c.text).slice(0, 140)}`),
+    '',
+    'Retos que ya hicieron (no los repitas):',
+    ...((retos ?? []).map((r) => `- ${r.title}`) || []),
+    ...(otraVez && saved ? ['', 'Ideas que ya les propusiste hace poco (inventa otras distintas):', ...(saved.ideas as IdeaReto[]).map((i) => `- ${i.title}`)] : []),
+  ].join('\n');
+
+  let ideas: IdeaReto[] = [];
+  try {
+    const answer = await gemini(SYSTEM_RETOS, prompt);
+    const json = JSON.parse(answer.text.replace(/^```(?:json)?|```$/g, '').trim()) as { ideas?: unknown[] };
+    ideas = (json.ideas ?? [])
+      .map((x) => x as Partial<IdeaReto>)
+      .filter((x) => typeof x.title === 'string' && x.title.trim())
+      .slice(0, 3)
+      .map((x) => ({
+        title: String(x.title).trim().slice(0, 70),
+        body: String(x.body ?? '').trim().slice(0, 220),
+        days: Math.max(1, Math.min(7, Math.round(Number(x.days) || 3))),
+        porque: String(x.porque ?? '').trim().slice(0, 110),
+      }));
+  } catch (e) {
+    console.error('retos', e);
+  }
+  if (!ideas.length) {
+    // Sin respuesta de la IA: se quedan las de antes (si las había).
+    return { ideas: saved?.ideas ?? [], generatedAt: saved?.generated_at, reason: 'busy', left: Math.max(0, 5 - usadasHoy) };
+  }
+  const generatedAt = new Date().toISOString();
+  await supabase.from('reto_ideas').upsert({
+    group_id: groupId,
+    ideas,
+    generated_at: generatedAt,
+    day: today,
+    generations_today: usadasHoy + 1,
+  });
+  return { ideas, generatedAt, left: Math.max(0, 5 - usadasHoy - 1) };
+}
+
 async function gemini(system: string, prompt: string): Promise<{ text: string; model: string }> {
   const key = Deno.env.get('GEMINI_API_KEY');
   if (!key) throw new Error('Falta la clave GEMINI_API_KEY en los secretos de Supabase');
