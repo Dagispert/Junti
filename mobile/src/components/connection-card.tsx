@@ -1,12 +1,10 @@
 import { router } from 'expo-router';
-import { useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Spacing, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import type { Group } from '@/data/types';
 import { distanceKm, formatKm, utcOffsetMinutes } from '@/lib/geo';
-import { guardarOrigen, planetaEn } from '@/lib/transicion';
 
 import { GlobeMap, type GlobePerson } from './globe-map';
 import type { MapPerson } from './world-map';
@@ -46,7 +44,6 @@ export function ConnectionCard({ group }: { group: Group }) {
   const theme = useTheme();
   const { me, user } = useStore();
   const people = useGlobePeople(group);
-  const cieloRef = useRef<unknown>(null);
 
   let far: { a: MapPerson; b: MapPerson; km: number } | undefined;
   for (let i = 0; i < people.length; i++)
@@ -63,23 +60,12 @@ export function ConnectionCard({ group }: { group: Group }) {
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Abrir el mapa del grupo"
-        onPress={() => {
-          // dónde está el planeta ahora: el mapa crecerá desde aquí
-          const c = planetaEn(cieloRef.current as HTMLElement | null);
-          if (c) guardarOrigen(c);
-          router.navigate(`/group/${group.id}/mapa`);
-        }}>
+        onPress={() => router.navigate(`/group/${group.id}/mapa`)}>
         <View style={styles.globe}>
           {/* Sin recuadro: el planeta flota sobre el fondo de la app (claro u
               oscuro) y tiene sitio de sobra para que no se corten sus nubes. */}
-          <View ref={cieloRef as never} style={styles.cielo} pointerEvents="none">
-            <GlobeMap
-              people={people}
-              height={400}
-              interactive={false}
-              transparent
-              distScale={1.3}
-            />
+          <View style={styles.cielo} pointerEvents="none">
+            <GlobeMap people={people} height={400} interactive={false} transparent distScale={1.3} />
           </View>
           <View style={styles.open}>
             <Text style={styles.openText}>Abrir el mapa</Text>
