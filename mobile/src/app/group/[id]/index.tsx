@@ -189,7 +189,7 @@ export default function Today() {
       )}
       {entries.length === 0 && (
         <Lead strong="Aquí aparecerán los momentos del grupo.">
-          Comparte el primero con el botón «+» e invita a los demás con «Invitar».
+          Comparte el primero con el botón «+» e invita a los demás desde «Ajustes».
         </Lead>
       )}
       {today.map((entry, i) => card(entry, i))}

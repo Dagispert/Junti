@@ -490,14 +490,14 @@ export default function NewGroup() {
                   </Pressable>
                 </View>
                 <Text style={[styles.hint, { color: theme.textSecondary }]}>
-                  El enlace caduca en 14 días. Siempre podrás crear otro desde «Invitar».
+                  El enlace caduca en 14 días. Siempre podrás crear otro desde «Ajustes» del grupo.
                 </Text>
               </>
             ) : (
               <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
                 <Icon icon={Share2} />
                 <Text style={{ color: theme.textSecondary, fontSize: 15, flex: 1 }}>
-                  Podrás invitar desde «Invitar», arriba en el grupo.
+                  Podrás invitar desde «Ajustes», arriba en el grupo.
                 </Text>
               </View>
             )}

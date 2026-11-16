@@ -158,7 +158,7 @@ const STEPS: Step[] = [
     text: 'Y aquí entro yo. Si quien administra me activa en los ajustes, cada semana y cada mes os cuento vuestra historia en voz alta, en el tono que elijáis. Así, lo que comparte cada uno se convierte en la historia de todos. Solo uso lo que compartís, y cada uno puede pedirme que no use lo suyo.',
   },
   {
-    target: 'tour-invitar',
+    target: 'tour-ajustes',
     voice: 'invitar',
     shape: 'rect',
     tab: 'hoy',

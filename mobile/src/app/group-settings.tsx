@@ -7,6 +7,7 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { Icon } from '@/components/icon';
+import { BotonInvitar, EnlaceInvitacion, useInvitar } from '@/components/invitar';
 import { NarratorPersonaEditor, personaSummary } from '@/components/narrator-persona';
 import { OriginsEditor } from '@/components/origins-editor';
 import { Avatar, AvatarRow, Button, Field, Notice, Screen } from '@/components/ui';
@@ -52,6 +53,7 @@ export default function GroupSettings() {
   const [exporting, setExporting] = useState('');
   const [myNick, setMyNick] = useState(group?.nicknames[store.me] ?? '');
   const [open, setOpen] = useState<Section | null>(null);
+  const invitacion = useInvitar(group);
 
   if (!group) return null;
   const { me } = store;
@@ -128,7 +130,12 @@ export default function GroupSettings() {
           {!!group.sticker && <Text style={styles.heroSticker}>{group.sticker}</Text>}
         </View>
         <View style={{ padding: 20, gap: 6 }}>
-          <Text style={[styles.heroName, { color: theme.text }]}>{group.name}</Text>
+          <View style={styles.heroTop}>
+            <Text style={[styles.heroName, { color: theme.text, flex: 1 }]}>{group.name}</Text>
+            <View testID="tour-invitar">
+              <BotonInvitar onPress={invitacion.invitar} />
+            </View>
+          </View>
           {!!group.description && (
             <Text style={{ color: theme.textSecondary, fontSize: 15, lineHeight: 21 }}>
               {group.description}
@@ -148,6 +155,7 @@ export default function GroupSettings() {
               Lo administra {adminNames}.
             </Text>
           )}
+          <EnlaceInvitacion code={invitacion.code} notice={invitacion.notice} />
         </View>
       </View>
 
@@ -765,6 +773,7 @@ const styles = StyleSheet.create({
   heroCover: { height: 120, alignItems: 'flex-end', justifyContent: 'flex-end' },
   heroSticker: { fontSize: 40, margin: 12 },
   heroName: { fontSize: 28, lineHeight: 34, fontWeight: '500', letterSpacing: -0.6 },
+  heroTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   heroMeta: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },
   list: { borderRadius: Radius.inner, overflow: 'hidden' },
   rowWrap: { paddingHorizontal: 16 },
