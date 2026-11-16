@@ -39,7 +39,7 @@ export default function RecapFilm() {
     kind: 'week' | 'month';
     from: string;
   }>();
-  const { moments, user, proposals, songs, group, events, narrate } = useStore();
+  const { moments, user, proposals, songs, questions, group, events, narrate } = useStore();
   const insets = useSafeAreaInsets();
   // El acento de la pantalla: el color del grupo (aclarado sobre el fondo oscuro).
   const accent = accentNight(group(groupId)?.color ?? DEFAULT_ACCENT);
@@ -111,7 +111,17 @@ export default function RecapFilm() {
       );
     }
     fotosEnLinea(
-      [...recap.moments.map((m) => m.imageUri), song?.artwork].filter((u): u is string => !!u),
+      [
+        ...recap.moments.flatMap((m) => [
+          m.imageUri,
+          ...(m.gallery ?? []).map((g) => (g.kind === 'photo' ? g.uri : g.poster)),
+        ]),
+        song?.artwork,
+        // las carátulas de las canciones del periodo (salen en su animación)
+        ...songs
+          .filter((x) => x.groupId === groupId && x.createdAt >= recap.from && x.createdAt < recap.to)
+          .map((x) => x.artwork),
+      ].filter((u): u is string => !!u),
     ).then(
       (p) => alive && setPhotos(p),
     );
@@ -153,6 +163,8 @@ export default function RecapFilm() {
               ? { title: song.title, artist: song.artist, artwork: song.artwork }
               : undefined,
             ritmo,
+            groupId,
+            extras: { questions, proposals, songs, moments },
           })
         : null,
     // Se fija al empezar: la película no cambia mientras se ve.

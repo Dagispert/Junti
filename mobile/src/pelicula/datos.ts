@@ -1,13 +1,21 @@
 // De los datos de la app (el resumen, la crónica de la narradora, las
 // personas) al guion de la película.
 
-import type { Group, Moment, Narration, User } from '@/data/types';
+import type { Group, Moment, Narration, Proposal, Question, Song, User } from '@/data/types';
 import { type buildStory, gapId, parseGap } from '@/lib/story';
 import { localHour } from '@/lib/geo';
 import type { buildRecap } from '@/lib/recap';
 import { clockIn } from '@/lib/time';
 
-import { type DatosPelicula, elegirEscenario, esEscenario, type Pieza, type Voz } from './guion';
+import {
+  type DatosPelicula,
+  elegirEscenario,
+  esEscenario,
+  type ExtraPieza,
+  type Pieza,
+  type TipoPieza,
+  type Voz,
+} from './guion';
 import { tag } from './pelicula';
 
 type Recap = ReturnType<typeof buildRecap>;
@@ -27,6 +35,145 @@ const MESES = [
   'diciembre',
 ];
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+
+/** Lo demás que se añade con el «+» (para las piezas que no son momentos). */
+export type Extras = {
+  questions: Question[];
+  proposals: Proposal[];
+  songs: Song[];
+  moments: Moment[];
+};
+
+const hace = (t: number) => {
+  const años = Math.floor((Date.now() - t) / (365.25 * DAY));
+  if (años >= 1) return años === 1 ? 'hace un año' : `hace ${años} años`;
+  const meses = Math.floor((Date.now() - t) / (30.4 * DAY));
+  return meses >= 1 ? (meses === 1 ? 'hace un mes' : `hace ${meses} meses`) : 'hace poco';
+};
+
+/** Qué es un momento (y lo que necesita su animación). */
+export function tipoDeMomento(
+  m: Moment,
+  proposals: Proposal[],
+  foto: (uri?: string) => string | undefined,
+  first: (id: string) => string,
+  moments: Moment[] = [],
+): { tipo: TipoPieza; extra?: ExtraPieza } {
+  const p = m.proposalId ? proposals.find((x) => x.id === m.proposalId) : undefined;
+  const otras = (m.gallery ?? [])
+    .map((g) => foto(g.kind === 'photo' ? g.uri : g.poster))
+    .filter((u): u is string => !!u)
+    .slice(1, 3);
+  if (p?.game?.type === 'karaoke') return { tipo: 'karaoke', extra: { titulo: p.game.song, artista: p.game.artist } };
+  if (p?.kind === 'challenge') {
+    const quienes = [
+      ...new Set(moments.filter((x) => x.proposalId === p.id).map((x) => first(x.authorId))),
+    ];
+    return { tipo: 'reto', extra: { titulo: p.title, quienes } };
+  }
+  if (p?.kind === 'plan') return { tipo: 'plan', extra: { titulo: p.title } };
+  if (m.memory && m.imageUri) return { tipo: 'recuerdo', extra: { edad: hace(m.createdAt) } };
+  if (otras.length) return { tipo: 'fotos', extra: { fotos: otras } };
+  if (m.videoUri) return { tipo: 'video' };
+  if (m.imageUri) return { tipo: 'foto' };
+  if (m.voice) return { tipo: 'voz' };
+  return { tipo: 'texto' };
+}
+
+/** Una encuesta, quiz, pregunta, reto o canción como pieza de la película. */
+export function piezaExtra(
+  ref: string,
+  ex: Extras,
+  user: (id: string) => User,
+  foto: (uri?: string) => string | undefined,
+): Pieza | null {
+  const first = (id: string) => user(id).name.split(' ')[0];
+  const base = (at: number, by: string | undefined, tz?: string) => {
+    const d = new Date(at);
+    return {
+      id: ref,
+      at,
+      tz: tz ?? user(by ?? '').tz ?? 'UTC',
+      author: by ? first(by) : 'Junti',
+      badge: String(d.getDate()).padStart(2, '0'),
+      when: `${DIAS[d.getDay()]} ${clockIn(tz ?? user(by ?? '').tz ?? 'UTC', at)}`,
+      place: by ? user(by).city : undefined,
+      comments: [],
+      reactions: [],
+    };
+  };
+  if (ref.startsWith('q:')) {
+    const q = ex.questions.find((x) => x.id === ref.slice(2));
+    if (!q) return null;
+    const b = base(q.createdAt, q.createdBy);
+    if (q.kind === 'open')
+      return {
+        ...b,
+        tipo: 'pregunta',
+        extra: {
+          titulo: q.title,
+          respuestas: q.answers
+            .filter((a) => a.text)
+            .slice(0, 3)
+            .map((a) => ({ who: first(a.userId), text: a.text! })),
+        },
+      };
+    const opciones = (q.options ?? []).map((texto, i) => ({
+      texto,
+      votos: q.answers.filter((a) => a.choice === i).length,
+      correcta: q.correct === i,
+    }));
+    return {
+      ...b,
+      tipo: q.kind === 'quiz' ? 'quiz' : 'encuesta',
+      extra: {
+        titulo: q.title,
+        opciones,
+        abierta: q.kind === 'quiz' && (q.correct == null || !q.closesAt || q.closesAt > Date.now()),
+      },
+    };
+  }
+  if (ref.startsWith('reto:')) {
+    const p = ex.proposals.find((x) => x.id === ref.slice(5));
+    if (!p) return null;
+    const quienes = [
+      ...new Set(ex.moments.filter((m) => m.proposalId === p.id).map((m) => first(m.authorId))),
+    ];
+    return {
+      ...base(p.startsAt, p.createdBy),
+      tipo: 'retoNuevo',
+      extra: { titulo: p.game?.type === 'karaoke' ? `Karaoke: ${p.game.song}` : p.title, quienes },
+    };
+  }
+  if (ref.startsWith('song:')) {
+    const x = ex.songs.find((y) => y.id === ref.slice(5));
+    if (!x) return null;
+    return {
+      ...base(x.createdAt, x.addedBy),
+      tipo: 'cancion',
+      text: x.note,
+      extra: { titulo: x.title, artista: x.artist, portada: foto(x.artwork) },
+    };
+  }
+  return null;
+}
+
+/** Las refs de los extras de un periodo (si la narradora no los eligió). */
+export function extrasDelPeriodo(ex: Extras, groupId: string, from: number, to: number) {
+  return [
+    ...ex.questions
+      .filter((q) => q.groupId === groupId && q.createdAt >= from && q.createdAt < to)
+      .map((q) => ({ ref: `q:${q.id}`, at: q.createdAt })),
+    ...ex.proposals
+      .filter(
+        (p) => p.groupId === groupId && p.kind === 'challenge' && p.startsAt >= from && p.startsAt < to,
+      )
+      .map((p) => ({ ref: `reto:${p.id}`, at: p.startsAt })),
+    ...ex.songs
+      .filter((x) => x.groupId === groupId && x.createdAt >= from && x.createdAt < to)
+      .map((x) => ({ ref: `song:${x.id}`, at: x.createdAt })),
+  ].sort((a, b) => a.at - b.at);
+}
 
 function km(a: { lat?: number; lng?: number }, b: { lat?: number; lng?: number }) {
   if (a.lat == null || a.lng == null || b.lat == null || b.lng == null) return 0;
@@ -52,6 +199,9 @@ export function datosPelicula(
     photos?: Record<string, string>;
     song?: { title: string; artist?: string; artwork?: string };
     ritmo?: { periodo: number; desfase: number } | null;
+    /** encuestas, quiz, preguntas, retos y canciones (cada uno con su animación) */
+    extras?: Extras;
+    groupId?: string;
   },
 ): DatosPelicula {
   const { user, narration } = opts;
@@ -61,11 +211,9 @@ export function datosPelicula(
   // Las piezas: los momentos que cuenta la narradora (en su orden) o los elegidos.
   const scenes = narration?.scenes ?? [];
   const byId = new Map(recap.moments.map((m) => [m.id, m]));
-  const told = scenes
-    .map((s) => (s.momentId ? byId.get(s.momentId) : undefined))
-    .filter((m): m is Moment => !!m);
-  const chosen = told.length ? [...new Set(told)] : recap.picks;
-  const pieces: Pieza[] = chosen.slice(0, recap.kind === 'week' ? 10 : 14).map((m) => {
+  const foto = (uri?: string) => (uri ? (opts.photos?.[uri] ?? uri) : undefined);
+  const ex = opts.extras;
+  const momentoAPieza = (m: Moment): Pieza => {
     const d = new Date(m.createdAt);
     return {
       id: m.id,
@@ -76,12 +224,40 @@ export function datosPelicula(
       when: `${DIAS[d.getDay()]} ${clockIn(m.authorTz, m.createdAt)}`,
       place: m.place?.name.split(',')[0] ?? user(m.authorId).city,
       text: m.text,
-      photo: m.imageUri ? (opts.photos?.[m.imageUri] ?? m.imageUri) : undefined,
+      photo: foto(m.imageUri),
       wave: m.voice?.waveform,
       comments: m.comments.map((c) => ({ who: first(c.userId), text: c.text })),
       reactions: m.reactions.map((r) => r.emoji),
+      ...tipoDeMomento(m, ex?.proposals ?? [], foto, first, ex?.moments ?? recap.moments),
     };
-  });
+  };
+  // lo que cuenta la narradora, en su orden: momentos y extras (E1, E2…)
+  const refs: string[] = [];
+  for (const s of scenes) {
+    const id = s.momentId;
+    if (!id || refs.includes(id)) continue;
+    if (byId.has(id) || /^(q|reto|song):/.test(id)) refs.push(id);
+  }
+  const max = recap.kind === 'week' ? 15 : 18;
+  let pieces: Pieza[];
+  if (refs.length) {
+    pieces = refs
+      .map((id) => (byId.has(id) ? momentoAPieza(byId.get(id)!) : ex ? piezaExtra(id, ex, user, foto) : null))
+      .filter((p): p is Pieza => !!p)
+      .slice(0, max);
+  } else {
+    // sin narradora: los momentos elegidos y lo demás del periodo, en orden
+    const extras =
+      ex && opts.groupId
+        ? extrasDelPeriodo(ex, opts.groupId, recap.from, recap.to)
+            .map((x) => piezaExtra(x.ref, ex, user, foto))
+            .filter((p): p is Pieza => !!p)
+            .slice(0, 4)
+        : [];
+    pieces = [...recap.picks.map(momentoAPieza), ...extras]
+      .sort((a, b) => a.at - b.at)
+      .slice(0, max);
+  }
 
   // Las voces: cada escena de la crónica va con su tramo de película. Las
   // escenas generales se suman a la anterior (o a la apertura).
@@ -318,6 +494,14 @@ export function datosHistoria(
           ...memory.comments.map((c) => ({ who: first(c.userId), text: c.text })),
         ],
         reactions: memory.reactions.map((r) => r.emoji),
+        // (en la historia, cada recuerdo según lo que lleva: foto que se revela,
+        // varias fotos, vídeo, voz o texto)
+        ...tipoDeMomento(
+          memory,
+          [],
+          (uri) => (uri ? (opts.photos?.[uri] ?? uri) : undefined),
+          first,
+        ),
       });
       target = memory.id;
     } else if (gap) {

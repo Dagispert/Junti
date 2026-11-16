@@ -120,8 +120,10 @@ export function montarMesa(o: {
     pegatinas: { g: SVGGElement; rayos: Element }[];
     notas: { g: SVGGElement; x: number; y: number; r: number }[];
     ondas: Element[];
+    anims: ((u: number) => void)[];
   };
   const cartas: Carta[] = d.pieces.map((p, i) => {
+    const pz0 = piezas[i]?.a ?? 0;
     const col = i % 2;
     const x = (col ? 1 : -1) * 330 + ((i * 53) % 40) - 20;
     const y = Math.floor(i / 2) * 1240 + col * 360;
@@ -164,7 +166,29 @@ export function montarMesa(o: {
       el('filter', { id: fid, x: '-40%', y: '-40%', width: '180%', height: '180%' }, defs),
     );
     let altoTarjeta: number;
-    if (p.photo) {
+    // lo que se mueve en cada tipo (con el tiempo de la carta, «u»)
+    const anims: ((u: number) => void)[] = [];
+    const tipo = p.tipo ?? (p.photo ? 'foto' : p.wave?.length ? 'voz' : 'texto');
+    const ex = p.extra ?? {};
+    const IMG = { top: y0 + WC * 0.06, bottom: y0 + WC * 0.94, cy: y0 + WC / 2 };
+    const sello = (parent: Element, cx: number, cy: number, txt: string, giro: number) => {
+      const gS = el('g', {}, parent);
+      const w = Math.max(150, txt.length * 17 + 40);
+      T.tinta(gS, roundRect(cx - w / 2, cy - 30, w, 60, 10), { color: A, width: 3.4 });
+      texto(gS, txt, { x: cx, y: cy + 12, size: 34, color: A, hand: false, weight: 700 });
+      gS.setAttribute('data-c', `${cx},${cy},${giro}`);
+      return gS;
+    };
+    const estampar = (gS: Element, u: number, t0: number) => {
+      const [cx, cy, giro] = (gS.getAttribute('data-c') ?? '0,0,0').split(',').map(Number);
+      const k = S(u, t0, 0.4, ease.back);
+      mover(gS, { ox: cx, oy: cy, s: lerp(1.9, 1, k), r: giro });
+      opacidad(gS, Math.min(1, k * 3) * 0.92);
+    };
+    if (
+      p.photo &&
+      ['foto', 'fotos', 'video', 'recuerdo', 'reto', 'karaoke', 'plan'].includes(tipo)
+    ) {
       // la instantánea
       // con frase, el margen de abajo de la instantánea es más alto: ahí va
       // escrita, en un recuadro fijo del que nunca se sale
@@ -172,7 +196,213 @@ export function montarMesa(o: {
       const hFoto = WC * (1 + PIE);
       foto = el('g', {}, card);
       foto.setAttribute('transform', `translate(0,${y0 + hFoto / 2})`);
+      // ── varias fotos: dos más debajo, que se abren en abanico al posarse
+      if (tipo === 'fotos')
+        (ex.fotos ?? []).slice(0, 2).forEach((f, k) => {
+          const atras = instantanea(foto!, f, WC * 0.9, 0.16);
+          const lado = k ? 1 : -1;
+          anims.push((u) => {
+            const kk = S(u, 1.05 + k * 0.18, 0.7, ease.back);
+            mover(atras, { x: lado * 105 * kk, y: -18 * kk, r: lado * 12 * kk });
+          });
+        });
       instantanea(foto, p.photo, WC, PIE);
+      const L0 = -hFoto / 2; // (arriba de la instantánea, en su grupo)
+      const m = WC * 0.06;
+      // ── vídeo: perforaciones de película a los lados, un «play» que se dibuja
+      //    y la barra de reproducción que avanza
+      if (tipo === 'video') {
+        for (const sx of [-1, 1]) {
+          const bx = sx < 0 ? -WC / 2 + m : WC / 2 - m - 30;
+          el(
+            'rect',
+            { x: bx, y: L0 + m, width: 30, height: WC - 2 * m, fill: 'rgba(20,20,22,0.82)' },
+            foto,
+          );
+          for (let yy = L0 + m + 14; yy < L0 + WC - m - 20; yy += 34)
+            el('rect', { x: bx + 8, y: yy, width: 14, height: 18, rx: 3, fill: '#F4F1EA' }, foto);
+        }
+        const play = el('g', {}, foto);
+        el('circle', { cx: 0, cy: L0 + WC / 2, r: 62, fill: 'rgba(255,255,255,0.85)' }, play);
+        const tri = T.tinta(
+          play,
+          `M-18,${L0 + WC / 2 - 30} L32,${L0 + WC / 2} L-18,${L0 + WC / 2 + 30} Z`,
+          {
+            color: TINTA,
+            width: 3,
+            fill: TINTA,
+          },
+        );
+        const barra = el(
+          'rect',
+          { x: -WC / 2 + m + 40, y: L0 + WC - m - 26, width: 0, height: 8, rx: 4, fill: A },
+          foto,
+        );
+        el(
+          'rect',
+          {
+            x: -WC / 2 + m + 40,
+            y: L0 + WC - m - 26,
+            width: WC - 2 * m - 80,
+            height: 8,
+            rx: 4,
+            fill: 'rgba(255,255,255,0.45)',
+          },
+          foto,
+        ).after(barra);
+        anims.push((u) => {
+          revelar(tri, S(u, 1.1, 0.45));
+          const ko = S(u, 2.0, 0.4);
+          opacidad(play, (1 - ko) * S(u, 1.05, 0.3));
+          mover(play, { ox: 0, oy: L0 + WC / 2, s: 1 + 0.3 * ko });
+          barra.setAttribute('width', String((WC - 2 * m - 80) * S(u, 2.1, 2.2, ease.linear)));
+        });
+      }
+      // ── recuerdo: la foto se revela (blanco → sepia → color), esquinas de
+      //    álbum y un sello con «hace X años»
+      if (tipo === 'recuerdo') {
+        const sepia = el(
+          'rect',
+          { x: -WC / 2 + m, y: L0 + m, width: WC - 2 * m, height: WC - 2 * m, fill: '#B88A4E' },
+          foto,
+        );
+        const blanco = el(
+          'rect',
+          { x: -WC / 2 + m, y: L0 + m, width: WC - 2 * m, height: WC - 2 * m, fill: '#FBF8F1' },
+          foto,
+        );
+        const esquinas = el('g', {}, foto);
+        for (const [sx, sy] of [
+          [-1, -1],
+          [1, -1],
+          [-1, 1],
+          [1, 1],
+        ]) {
+          const cx = sx * (WC / 2 - m),
+            cy = L0 + WC / 2 + sy * (WC / 2 - m);
+          T.tinta(esquinas, `M${cx},${cy} l${-sx * 46},0 l${sx * 46},${-sy * 46} Z`, {
+            color: TINTA,
+            width: 1.6,
+            fill: '#3B3530',
+          });
+        }
+        const gS = sello(foto, WC / 2 - 130, L0 + m + 70, ex.edad ?? 'recuerdo', 8);
+        anims.push((u) => {
+          opacidad(blanco, 1 - S(u, 1.05, 0.7));
+          opacidad(sepia, 0.85 * (1 - S(u, 1.7, 1.3, ease.inOut)));
+          opacidad(esquinas, S(u, 1.0, 0.4));
+          estampar(gS, u, 2.6);
+        });
+      }
+      // ── respuesta a un reto: una banderola con el reto que se despliega y un ✓
+      if (tipo === 'reto' || tipo === 'karaoke' || tipo === 'plan') {
+        const titulo = ajustar(
+          (tipo === 'karaoke' ? '♪ ' : tipo === 'plan' ? '' : 'reto: ') + (ex.titulo ?? ''),
+          WC - 120,
+          [30, 26],
+          1,
+        );
+        const banda = el('g', {}, foto);
+        const by = L0 + m + 26;
+        T.tinta(
+          banda,
+          `M${-WC / 2 + 10},${by - 28} L${WC / 2 - 10},${by - 28} L${WC / 2 - 34},${by} L${WC / 2 - 10},${by + 28} L${-WC / 2 + 10},${by + 28} L${-WC / 2 + 34},${by} Z`,
+          { color: TINTA, width: 2.4, fill: tipo === 'plan' ? '#FFFFFF' : A },
+        );
+        texto(banda, titulo.lines[0] ?? '', {
+          x: 0,
+          y: by + 10,
+          size: titulo.size,
+          color: tipo === 'plan' ? TINTA : '#FFFFFF',
+        });
+        const idB = uid('bd');
+        const clipB = el(
+          'rect',
+          { x: -WC / 2, y: by - 40, width: 0, height: 80 },
+          el('clipPath', { id: idB }, defs),
+        );
+        banda.setAttribute('clip-path', `url(#${idB})`);
+        anims.push((u) => clipB.setAttribute('width', String(WC * S(u, 1.1, 0.6, ease.inOut))));
+        if (tipo === 'reto') {
+          const ok = el('g', {}, foto);
+          const cx = WC / 2 - m - 70,
+            cy = L0 + WC - m - 70;
+          el('circle', { cx, cy, r: 46, fill: '#FFFFFF', stroke: A, 'stroke-width': 4 }, ok);
+          const v = T.tinta(
+            ok,
+            `M${cx - 22},${cy + 2} L${cx - 6},${cy + 20} L${cx + 24},${cy - 18}`,
+            { color: A, width: 7 },
+          );
+          anims.push((u) => {
+            const k = S(u, 1.9, 0.4, ease.back);
+            mover(ok, { ox: cx, oy: cy, s: lerp(1.8, 1, k) });
+            opacidad(ok, Math.min(1, k * 3));
+            revelar(v, S(u, 2.1, 0.35));
+          });
+        }
+        // ── karaoke: un micrófono del que salen notas
+        if (tipo === 'karaoke') {
+          const mic = el('g', {}, foto);
+          const mx = WC / 2 - m - 70,
+            my = L0 + WC - m - 110;
+          T.tinta(
+            mic,
+            `M${mx - 8},${my + 30} L${mx - 14},${my + 110} L${mx + 14},${my + 110} L${mx + 8},${my + 30} Z`,
+            { color: TINTA, width: 2.4, fill: '#2B2E33' },
+          );
+          T.tinta(mic, ellipse(mx, my, 34), { color: TINTA, width: 2.4, fill: '#C8C9CC' });
+          for (let k = -2; k <= 2; k++)
+            T.tinta(mic, `M${mx - 30},${my + k * 10} L${mx + 30},${my + k * 10}`, {
+              color: '#8E9094',
+              width: 1.4,
+            });
+          const notas = [0, 1, 2].map((k) => {
+            const n = el('g', {}, foto);
+            T.tinta(
+              n,
+              'M0,0 m-10,0 a10,8 0 1,0 20,0 a10,8 0 1,0 -20,0 M10,0 L10,-36 C22,-30 28,-22 26,-12',
+              {
+                color: k % 2 ? A : TINTA,
+                width: 3,
+                fill: k % 2 ? A : TINTA,
+              },
+            );
+            return n;
+          });
+          anims.push((u) => {
+            const k = S(u, 1.3, 0.5, ease.back);
+            mover(mic, { ox: mx, oy: my + 60, s: k, r: -14 });
+            opacidad(mic, Math.min(1, k * 2));
+            notas.forEach((n, j) => {
+              const f = ((((u - 1.6) * 0.55 + j / 3) % 1) + 1) % 1;
+              const on = u > 1.6;
+              mover(n, { x: mx - 30 - 60 * f + j * 10, y: my - 30 - 190 * f, r: -10 + 20 * f });
+              opacidad(n, on ? Math.sin(Math.PI * f) : 0);
+            });
+          });
+        }
+        // ── plan: una chincheta que cae y se clava arriba
+        if (tipo === 'plan') {
+          const pin = el('g', {}, foto);
+          const px = -WC / 2 + 70,
+            py = L0 + 10;
+          T.tinta(
+            pin,
+            `M${px},${py + 46} C${px - 30},${py + 6} ${px - 30},${py - 30} ${px},${py - 30} C${px + 30},${py - 30} ${px + 30},${py + 6} ${px},${py + 46} Z`,
+            {
+              color: TINTA,
+              width: 2.4,
+              fill: A,
+            },
+          );
+          el('circle', { cx: px, cy: py - 4, r: 11, fill: '#FFFFFF' }, pin);
+          anims.push((u) => {
+            const k = S(u, 1.5, 0.5, ease.back);
+            mover(pin, { y: lerp(-320, 0, k) });
+            opacidad(pin, k > 0 ? 1 : 0);
+          });
+        }
+      }
       if (p.text) {
         const arriba = -hFoto / 2 + WC * 0.94 + 6,
           abajo = hFoto / 2 - 10;
@@ -214,23 +444,61 @@ export function montarMesa(o: {
         });
       }
       altoTarjeta = hFoto;
-    } else if (p.wave?.length) {
-      // una nota de voz: barras que crecen
-      altoTarjeta = 300;
-      T.tinta(card, roundRect(-WC / 2, y0, WC, altoTarjeta, 18), {
+    } else if (tipo === 'voz') {
+      // ── nota de voz: un casete con las bobinas girando y la onda que crece
+      altoTarjeta = 420;
+      T.tinta(card, roundRect(-WC / 2, y0, WC, 250, 22), {
         color: TINTA,
-        width: 2.4,
-        fill: '#FFFFFF',
+        width: 2.6,
+        fill: '#2B2E33',
       });
+      T.tinta(card, roundRect(-WC / 2 + 30, y0 + 24, WC - 60, 70, 10), {
+        color: TINTA,
+        width: 2,
+        fill: '#FFF6C8',
+      });
+      texto(card, `nota de voz · ${p.author}`, { x: 0, y: y0 + 70, size: 32, color: TINTA });
+      T.tinta(card, roundRect(-130, y0 + 112, 260, 96, 40), {
+        color: '#F4F1EA',
+        width: 2,
+        fill: '#3C4046',
+      });
+      const bobinas = [-80, 80].map((bx) => {
+        const b = el('g', {}, card);
+        el('circle', { cx: bx, cy: y0 + 160, r: 38, fill: '#F4F1EA' }, b);
+        for (let k = 0; k < 6; k++) {
+          const an = (k / 6) * Math.PI * 2;
+          el(
+            'rect',
+            {
+              x: bx - 4,
+              y: y0 + 160 - 30,
+              width: 8,
+              height: 16,
+              rx: 3,
+              fill: '#2B2E33',
+              transform: `rotate(${(an * 180) / Math.PI} ${bx} ${y0 + 160})`,
+            },
+            b,
+          );
+        }
+        el('circle', { cx: bx, cy: y0 + 160, r: 10, fill: '#2B2E33' }, b);
+        return { b, bx };
+      });
+      anims.push((u) =>
+        bobinas.forEach((x) =>
+          mover(x.b, { ox: x.bx, oy: y0 + 160, r: Math.max(0, u - 1.1) * 160 }),
+        ),
+      );
       const nb = 22;
       for (let k = 0; k < nb; k++) {
-        const v = p.wave[Math.floor((k / nb) * p.wave.length)] ?? 30;
-        const hb = 30 + (v / 100) * 170;
+        const v = p.wave?.[Math.floor((k / nb) * (p.wave?.length ?? 1))] ?? 30;
+        const hb = 20 + (v / 100) * 120;
         const r = el(
           'rect',
           {
             x: -WC / 2 + 50 + k * 20.5,
-            y: y0 + 150 - hb / 2,
+            y: y0 + 340 - hb / 2,
             width: 10,
             height: hb,
             rx: 5,
@@ -240,9 +508,355 @@ export function montarMesa(o: {
         );
         ondas.push(r);
       }
-      texto(card, 'nota de voz', { x: 0, y: y0 + 275, size: 30, color: GRIS });
+    } else if (tipo === 'encuesta') {
+      // ── encuesta: las barras se llenan con los votos y la ganadora se rodea
+      const tit = ajustar(ex.titulo ?? '', WC - 60, [40, 36, 32], 3);
+      const opts = (ex.opciones ?? []).slice(0, 4);
+      const total = Math.max(
+        1,
+        opts.reduce((a, o) => a + o.votos, 0),
+      );
+      const top = Math.max(...opts.map((o) => o.votos), 0);
+      const hTit = tit.lines.length * tit.size * 1.18 + 40;
+      altoTarjeta = hTit + opts.length * 96 + 40;
+      T.tinta(card, roundRect(-WC / 2, y0, WC, altoTarjeta, 18), {
+        color: TINTA,
+        width: 2.4,
+        fill: '#FFFFFF',
+      });
+      texto(card, 'encuesta', {
+        x: -WC / 2 + 30,
+        y: y0 + 34,
+        size: 24,
+        color: A,
+        hand: false,
+        weight: 700,
+        anchor: 'start',
+        spacing: 2,
+      });
+      tit.lines.forEach((ln, k) =>
+        texto(card, ln, {
+          x: 0,
+          y: y0 + 34 + (k + 1) * tit.size * 1.18,
+          size: tit.size,
+          color: TINTA,
+        }),
+      );
+      opts.forEach((o, k) => {
+        const ry = y0 + hTit + 20 + k * 96;
+        const fila = el('g', {}, card);
+        const lab = ajustar(o.texto, WC - 160, [30, 26], 1);
+        texto(fila, lab.lines[0] ?? '', {
+          x: -WC / 2 + 34,
+          y: ry + 26,
+          size: lab.size,
+          color: TINTA,
+          anchor: 'start',
+        });
+        T.tinta(fila, roundRect(-WC / 2 + 30, ry + 40, WC - 140, 26, 13), {
+          color: TINTA,
+          width: 2,
+        });
+        const barra = el(
+          'rect',
+          {
+            x: -WC / 2 + 32,
+            y: ry + 42,
+            width: 0,
+            height: 22,
+            rx: 11,
+            fill: o.votos === top && top > 0 ? A : '#C9C4B8',
+          },
+          fila,
+        );
+        const num = texto(fila, '0', { x: WC / 2 - 50, y: ry + 64, size: 36, color: TINTA });
+        const gana =
+          o.votos === top && top > 0
+            ? T.tinta(
+                fila,
+                ellipse(
+                  -WC / 2 + 34 + (lab.lines[0]?.length ?? 5) * lab.size * 0.24,
+                  ry + 16,
+                  (lab.lines[0]?.length ?? 5) * lab.size * 0.27 + 26,
+                  30,
+                ),
+                { color: A, width: 3 },
+              )
+            : null;
+        anims.push((u) => {
+          const t0 = enSemi(pz0 + 1.0) - pz0 + k * semi * 2;
+          const ka = S(u, t0, 0.4, ease.back);
+          mover(fila, { y: 20 * (1 - ka) });
+          opacidad(fila, Math.min(1, ka * 2));
+          const kb = S(u, t0 + 0.3, 0.8);
+          barra.setAttribute('width', String(((WC - 144) * o.votos * kb) / total));
+          num.textContent = String(Math.round(o.votos * kb));
+          if (gana) revelar(gana, S(u, t0 + 1.4, 0.5, ease.inOut));
+        });
+      });
+    } else if (tipo === 'quiz') {
+      // ── quiz: la tarjeta se da la vuelta y enseña la respuesta (si ya se puede)
+      const tit = ajustar(ex.titulo ?? '', WC - 80, [40, 36, 32], 4);
+      altoTarjeta = Math.max(380, tit.lines.length * tit.size * 1.18 + 230);
+      const frente = el('g', {}, card);
+      const dorso = el('g', {}, card);
+      T.tinta(frente, roundRect(-WC / 2, y0, WC, altoTarjeta, 22), {
+        color: TINTA,
+        width: 2.6,
+        fill: A,
+      });
+      texto(frente, '?', {
+        x: 0,
+        y: y0 + altoTarjeta / 2 + 20,
+        size: 200,
+        color: '#FFFFFF',
+        hand: false,
+        weight: 800,
+      });
+      texto(frente, 'quiz', {
+        x: 0,
+        y: y0 + 50,
+        size: 30,
+        color: '#FFFFFF',
+        hand: false,
+        weight: 700,
+        spacing: 4,
+      });
+      T.tinta(dorso, roundRect(-WC / 2, y0, WC, altoTarjeta, 22), {
+        color: TINTA,
+        width: 2.6,
+        fill: '#FFFFFF',
+      });
+      tit.lines.forEach((ln, k) =>
+        texto(dorso, ln, { x: 0, y: y0 + 60 + k * tit.size * 1.18, size: tit.size, color: TINTA }),
+      );
+      const ok = (ex.opciones ?? []).find((o) => o.correcta);
+      const acertaron = ok?.votos ?? 0;
+      const total = (ex.opciones ?? []).reduce((a, o) => a + o.votos, 0);
+      const ry = y0 + 60 + tit.lines.length * tit.size * 1.18 + 30;
+      const resp = ex.abierta || !ok ? '¿lo sabéis?' : ok.texto;
+      const fr = ajustar(resp, WC - 140, [40, 34, 30], 1);
+      T.tinta(dorso, roundRect(-WC / 2 + 40, ry, WC - 80, 80, 40), {
+        color: A,
+        width: 3,
+        fill: '#FBE3EC',
+      });
+      texto(dorso, fr.lines[0] ?? '', { x: 0, y: ry + 52, size: fr.size, color: TINTA });
+      texto(
+        dorso,
+        ex.abierta ? `${total} lo han contestado` : `acertaron ${acertaron} de ${total}`,
+        { x: 0, y: ry + 130, size: 30, color: GRIS },
+      );
+      anims.push((u) => {
+        const kf = S(u, 1.9, 0.6, ease.inOut);
+        const sx = Math.cos(Math.PI * kf);
+        ver(frente, sx > 0);
+        ver(dorso, sx <= 0);
+        mover(frente, { sx: Math.max(0.001, sx), ox: 0 });
+        mover(dorso, { sx: Math.max(0.001, -sx), ox: 0 });
+      });
+    } else if (tipo === 'pregunta') {
+      // ── pregunta: la pregunta en un bocadillo y las respuestas que van saliendo
+      const tit = ajustar(ex.titulo ?? '', WC - 80, [40, 36, 32], 3);
+      const hQ = tit.lines.length * tit.size * 1.18 + 40;
+      let yy = y0;
+      const bq = el('g', {}, card);
+      T.tinta(
+        bq,
+        `${roundRect(-WC / 2, yy, WC, hQ, 26)} M${-WC / 2 + 60},${yy + hQ - 2} l-10,40 l50,-40`,
+        { color: TINTA, width: 2.6, fill: A },
+      );
+      tit.lines.forEach((ln, k) =>
+        texto(bq, ln, {
+          x: 0,
+          y: yy + 22 + (k + 1) * tit.size * 1.1,
+          size: tit.size,
+          color: '#FFFFFF',
+        }),
+      );
+      yy += hQ + 60;
+      const resps = (ex.respuestas ?? []).slice(0, 3);
+      resps.forEach((r, k) => {
+        const f = ajustar(`${r.who}: ${r.text}`, WC - 170, [32, 28], 3);
+        const h = f.lines.length * f.size * 1.2 + 34;
+        const lado = k % 2 ? 1 : -1;
+        const bx = lado * 50;
+        const b = el('g', {}, card);
+        const w = WC - 110;
+        T.tinta(
+          b,
+          `${roundRect(bx - w / 2, yy, w, h, 22)} M${bx + lado * (w / 2 - 50)},${yy + h - 2} l${lado * 10},34 l${-lado * 44},-34`,
+          {
+            color: TINTA,
+            width: 2.2,
+            fill: k % 2 ? '#FFF6C8' : '#FFFFFF',
+          },
+        );
+        f.lines.forEach((ln, q) =>
+          texto(b, ln, {
+            x: bx - w / 2 + 22,
+            y: yy + 16 + f.size + q * f.size * 1.2,
+            size: f.size,
+            color: TINTA,
+            anchor: 'start',
+          }),
+        );
+        const cy = yy + h / 2;
+        anims.push((u) => {
+          const kk = S(u, 1.5 + k * 0.6, 0.45, ease.back);
+          mover(b, { ox: bx + lado * (w / 2 - 40), oy: cy + h / 2, s: kk });
+          opacidad(b, Math.min(1, kk * 2));
+        });
+        yy += h + 50;
+      });
+      if (!resps.length)
+        texto(card, 'aún sin respuestas', { x: 0, y: yy + 10, size: 32, color: GRIS });
+      altoTarjeta = yy - y0 + (resps.length ? 0 : 40);
+      anims.push((u) => {
+        const k = S(u, 1.05, 0.45, ease.back);
+        mover(bq, { ox: -WC / 2 + 60, oy: y0 + hQ, s: lerp(0.6, 1, k) });
+      });
+    } else if (tipo === 'cancion') {
+      // ── canción: el disco sale de su funda, gira y baja el brazo
+      altoTarjeta = 470;
+      const FS = 330;
+      const fx = -WC / 2 + FS / 2 + 10,
+        fy = y0 + FS / 2 + 10;
+      const disco = el('g', {}, card);
+      el('circle', { cx: 0, cy: 0, r: FS / 2 - 8, fill: '#16171A' }, disco);
+      for (const r of [140, 120, 100, 80])
+        el(
+          'circle',
+          { cx: 0, cy: 0, r, fill: 'none', stroke: '#2E3036', 'stroke-width': 2 },
+          disco,
+        );
+      el('circle', { cx: 0, cy: 0, r: 48, fill: A }, disco);
+      el('circle', { cx: 0, cy: 0, r: 6, fill: '#F4F1EA' }, disco);
+      const brillo = el(
+        'path',
+        {
+          d: `M0,0 L${-FS / 2 + 14},-40 A${FS / 2 - 14},${FS / 2 - 14} 0 0,1 -40,${-FS / 2 + 14} Z`,
+          fill: 'rgba(255,255,255,0.07)',
+        },
+        disco,
+      );
+      const funda = el('g', {}, card);
+      el(
+        'rect',
+        { x: fx - FS / 2, y: fy - FS / 2, width: FS, height: FS, rx: 8, fill: '#FFFFFF' },
+        funda,
+      );
+      if (ex.portada)
+        el(
+          'image',
+          {
+            href: ex.portada,
+            x: fx - FS / 2 + 8,
+            y: fy - FS / 2 + 8,
+            width: FS - 16,
+            height: FS - 16,
+            preserveAspectRatio: 'xMidYMid slice',
+          },
+          funda,
+        );
+      else texto(funda, '♪', { x: fx, y: fy + 50, size: 160, color: A });
+      T.tinta(funda, roundRect(fx - FS / 2, fy - FS / 2, FS, FS, 8), { color: TINTA, width: 2.2 });
+      const brazo = el('g', {}, card);
+      const ax = WC / 2 - 40,
+        ay = y0 + 30;
+      T.tinta(brazo, `M${ax},${ay} L${ax - 70},${ay + 220} L${ax - 98},${ay + 240}`, {
+        color: TINTA,
+        width: 6,
+      });
+      el(
+        'circle',
+        { cx: ax, cy: ay, r: 16, fill: '#C8C9CC', stroke: TINTA, 'stroke-width': 2 },
+        brazo,
+      );
+      const tit = ajustar(ex.titulo ?? '', WC - 40, [42, 36, 32], 1);
+      texto(card, tit.lines[0] ?? '', { x: 0, y: y0 + FS + 70, size: tit.size, color: TINTA });
+      texto(card, ex.artista ?? '', { x: 0, y: y0 + FS + 110, size: 30, color: GRIS });
+      anims.push((u) => {
+        const ks = S(u, 1.2, 0.7, ease.inOut);
+        mover(disco, { x: fx + 175 * ks, y: fy, r: Math.max(0, u - 1.6) * 200 });
+        void brillo;
+        mover(brazo, { ox: ax, oy: ay, r: lerp(-28, 0, S(u, 2.0, 0.5, ease.back)) });
+        opacidad(brazo, S(u, 1.8, 0.3));
+      });
+    } else if (tipo === 'retoNuevo') {
+      // ── reto lanzado: se clava una bandera con el reto y salen los que se animaron
+      const tit = ajustar(ex.titulo ?? '', WC - 220, [38, 34, 30], 3);
+      const hB = Math.max(150, tit.lines.length * tit.size * 1.18 + 50);
+      const quienes = (ex.quienes ?? []).slice(0, 6);
+      altoTarjeta = hB + 260 + (quienes.length ? 110 : 40);
+      const px = -WC / 2 + 70;
+      const suelo = T.tinta(
+        card,
+        `M${-WC / 2 + 10},${y0 + hB + 200} C${-80},${y0 + hB + 186} ${80},${y0 + hB + 214} ${WC / 2 - 10},${y0 + hB + 198}`,
+        { color: TINTA, width: 3 },
+      );
+      const palo = T.tinta(card, `M${px},${y0 + hB + 200} L${px},${y0 + 10}`, {
+        color: TINTA,
+        width: 6,
+      });
+      const bandera = el('g', {}, card);
+      T.tinta(
+        bandera,
+        `M${px},${y0 + 14} C${px + 140},${y0 - 6} ${WC / 2 - 120},${y0 + 34} ${WC / 2 - 20},${y0 + 14} L${WC / 2 - 20},${y0 + hB} C${WC / 2 - 120},${y0 + hB + 20} ${px + 140},${y0 + hB - 20} ${px},${y0 + hB} Z`,
+        {
+          color: TINTA,
+          width: 2.4,
+          fill: A,
+        },
+      );
+      texto(bandera, 'reto', {
+        x: px + 30,
+        y: y0 + 50,
+        size: 24,
+        color: '#FFFFFF',
+        hand: false,
+        weight: 700,
+        anchor: 'start',
+        spacing: 3,
+      });
+      tit.lines.forEach((ln, k) =>
+        texto(bandera, ln, {
+          x: px + 30,
+          y: y0 + 60 + (k + 1) * tit.size * 1.12,
+          size: tit.size,
+          color: '#FFFFFF',
+          anchor: 'start',
+        }),
+      );
+      const caras = quienes.map((q, k) => {
+        const c = el('g', {}, card);
+        const cx = -((quienes.length - 1) * 90) / 2 + k * 90,
+          cy = y0 + hB + 290;
+        T.tinta(c, ellipse(cx, cy, 36), {
+          color: TINTA,
+          width: 2.4,
+          fill: k % 2 ? '#FBE3EC' : '#FFFFFF',
+        });
+        texto(c, q[0]?.toUpperCase() ?? '?', { x: cx, y: cy + 12, size: 36, color: TINTA });
+        texto(c, q, { x: cx, y: cy + 68, size: 24, color: GRIS });
+        return { c, cx, cy };
+      });
+      const nadie = quienes.length
+        ? null
+        : texto(card, '¿quién se anima?', { x: 0, y: y0 + hB + 260, size: 34, color: GRIS });
+      anims.push((u) => {
+        revelar(suelo, S(u, 1.0, 0.4));
+        revelar(palo, S(u, 1.15, 0.45));
+        const kb = S(u, 1.5, 0.6, ease.back);
+        mover(bandera, { ox: px, oy: y0 + hB / 2, sx: Math.max(0.001, kb) });
+        caras.forEach((c, k) => {
+          const kc = S(u, enSemi(pz0 + 2.0) - pz0 + k * semi * 2, 0.4, ease.back);
+          mover(c.c, { ox: c.cx, oy: c.cy, s: kc });
+        });
+        if (nadie) opacidad(nadie, S(u, 2.0, 0.4));
+      });
     } else {
-      // sin foto: el texto en una hoja rayada, del tamaño del texto
+      // ── texto: una hoja rayada (del tamaño del texto) que se escribe a pluma
       const f = ajustar(p.text ?? '', WC - 90, [48, 42, 36, 32], 7);
       altoTarjeta = Math.round(f.lines.length * f.size * 1.2 + 110);
       T.tinta(card, roundRect(-WC / 2, y0, WC, altoTarjeta, 16), {
@@ -272,6 +886,33 @@ export function montarMesa(o: {
         });
         n.setAttribute('clip-path', `url(#${id})`);
         lineasTxt.push({ n, clip, w: WC });
+      });
+      // la pluma que lo va escribiendo
+      const pluma = el('g', {}, card);
+      T.tinta(pluma, 'M0,0 L-10,-44 L-3,-110 L10,-110 L13,-44 Z', {
+        color: TINTA,
+        width: 2,
+        fill: '#FFFFFF',
+      });
+      T.tinta(pluma, 'M0,0 L-4,-18 L6,-18 Z', { color: TINTA, width: 1.4, fill: TINTA });
+      const nL = f.lines.length;
+      anims.push((u) => {
+        let li = -1,
+          kk = 0;
+        for (let k = 0; k < nL; k++) {
+          const v = S(u, 1.2 + k * 0.42, 0.55, ease.linear);
+          if (v > 0 && v < 1) {
+            li = k;
+            kk = v;
+          }
+        }
+        ver(pluma, li >= 0);
+        if (li >= 0)
+          mover(pluma, {
+            x: -WC / 2 + 50 + f.lines[li].length * f.size * 0.44 * kk,
+            y: y0 + 72 + li * f.size * 1.2 + 4,
+            r: 28,
+          });
       });
     }
     y0 += altoTarjeta + 22;
@@ -371,6 +1012,7 @@ export function montarMesa(o: {
       pegatinas,
       notas,
       ondas,
+      anims,
     };
   });
 
@@ -537,7 +1179,10 @@ export function montarMesa(o: {
       // las barras de la nota de voz
       c.ondas.forEach((o, j) => {
         const k = S(u, 1.0 + j * 0.03, 0.4, ease.back);
-        mover(o, { sy: k, oy: 290 });
+        mover(o, {
+            sy: k,
+            oy: Number(o.getAttribute('y')) + Number(o.getAttribute('height')) / 2,
+          });
       });
       // pegatinas: caen con un golpe de tinta
       c.pegatinas.forEach((pg, j) => {
@@ -560,6 +1205,8 @@ export function montarMesa(o: {
         });
         opacidad(n.g, Math.min(1, k * 2));
       });
+      // lo propio de cada tipo
+      c.anims.forEach((f) => f(u));
       // las cartas que ya pasaron se quedan, algo apagadas
       const sig = piezas[i + 1];
       opacidad(c.g, sig ? 1 - 0.35 * S(t, sig.a, 0.8) : 1);

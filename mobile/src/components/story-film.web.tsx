@@ -101,7 +101,13 @@ export default function StoryFilm() {
   const [photos, setPhotos] = useState<Record<string, string> | null>(null);
   useEffect(() => {
     fotosEnLinea(
-      [...story.memories.map((m) => m.imageUri), song?.artwork].filter((u): u is string => !!u),
+      [
+        ...story.memories.flatMap((m) => [
+          m.imageUri,
+          ...(m.gallery ?? []).map((g) => (g.kind === 'photo' ? g.uri : g.poster)),
+        ]),
+        song?.artwork,
+      ].filter((u): u is string => !!u),
     ).then(setPhotos);
     prepareRecording().catch(() => {});
   }, [story]);

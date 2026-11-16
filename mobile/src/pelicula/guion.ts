@@ -108,8 +108,47 @@ export type Persona = {
   tz?: string;
 };
 
+/** Qué es cada pieza: cada cosa que se añade con el «+» tiene su animación. */
+export type TipoPieza =
+  | 'foto'
+  | 'fotos'
+  | 'video'
+  | 'voz'
+  | 'texto'
+  | 'recuerdo'
+  | 'reto'
+  | 'karaoke'
+  | 'plan'
+  | 'encuesta'
+  | 'quiz'
+  | 'pregunta'
+  | 'cancion'
+  | 'retoNuevo';
+
+/** Lo que necesita la animación de cada tipo. */
+export type ExtraPieza = {
+  titulo?: string;
+  /** encuesta y quiz: las opciones y sus votos */
+  opciones?: { texto: string; votos: number; correcta?: boolean }[];
+  /** quiz abierto: no se dice la respuesta */
+  abierta?: boolean;
+  /** pregunta abierta: lo que contestó cada uno */
+  respuestas?: { who: string; text: string }[];
+  /** varias fotos: las demás (la primera va en «photo») */
+  fotos?: string[];
+  /** canción */
+  artista?: string;
+  portada?: string;
+  /** reto: quién se animó */
+  quienes?: string[];
+  /** recuerdo: «hace 3 años» */
+  edad?: string;
+};
+
 export type Pieza = {
   id: string;
+  tipo?: TipoPieza;
+  extra?: ExtraPieza;
   at: number;
   tz: string;
   author: string;
@@ -228,7 +267,7 @@ export function planificar(d: DatosPelicula): Plan {
   // 4. El calendario y la cámara; la primera frase empieza ya durante el flash.
   let tv = V.route ? routeStart + durVoz(V.route) : introEnd; // donde acaba la última frase
   // (en la semana y el mes, un poco más: el calendario vuela hasta la mesa)
-  let t = c0 + (d.kind === 'story' ? 2.0 : 2.6);
+  let t = c0 + 2.6;
   const piezas = d.pieces.map((p, i) => {
     const v = d.voices.pieces[p.id];
     const a = t;

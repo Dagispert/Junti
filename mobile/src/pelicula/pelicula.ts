@@ -286,7 +286,8 @@ export class Pelicula {
     const lRec = capa('recuerdos');
     const lRot = capa('rotulos');
     // la mesa de los momentos (semana y mes): fuera de la cámara general
-    const usarMesa = d.kind !== 'story';
+    // (también en la historia: cada recuerdo con la animación de lo que es)
+    const usarMesa = true;
     const lMesa = el('g', {}, svg);
     const lFin = el('g', {}, svg);
 
