@@ -1,5 +1,11 @@
 import { useLocalSearchParams } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { History } from 'lucide-react-native';
+import { useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+
+import { Icon } from '@/components/icon';
+import { useSmoothHeight } from '@/components/motion';
 
 import { AlbumShelf } from '@/components/album-shelf';
 import { FilmRoll3D, FilmRollGrid } from '@/components/film-roll-3d';
@@ -24,7 +30,23 @@ export default function Memory() {
   const theme = useTheme();
   const { group: groupById, moments, user } = useStore();
   const group = groupById(id);
+  // las semanas anteriores, plegadas hasta que se pidan
+  const [verSemanas, setVerSemanas] = useState(false);
+  const estanteRef = useSmoothHeight([verSemanas]);
   if (!group) return <Missing />;
+  const botonSemanas = (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={
+        verSemanas ? 'Ocultar las semanas anteriores' : 'Ver las semanas anteriores'
+      }
+      aria-expanded={verSemanas}
+      hitSlop={8}
+      onPress={() => setVerSemanas((v) => !v)}
+      style={[styles.boton, { backgroundColor: verSemanas ? theme.text : theme.soft }]}>
+      <Icon icon={History} size={18} color={verSemanas ? theme.background : theme.text} />
+    </Pressable>
+  );
 
   // Por fecha de lo que pasó (los recuerdos, en la suya).
   const all = moments.filter((m) => m.groupId === id).sort((a, b) => b.createdAt - a.createdAt);
@@ -39,6 +61,7 @@ export default function Memory() {
 
   // esta semana: de lunes a hoy (la que está en curso)
   const thisWeek = weekStart(Date.now());
+  const hayAnteriores = all.some((m) => !m.memory && m.createdAt < thisWeek);
   const week = all.filter((m) => !m.memory && m.createdAt >= thisWeek);
   const who = [...new Set(week.map((m) => user(m.authorId).name.split(' ')[0]))];
   const whoText =
@@ -70,10 +93,30 @@ export default function Memory() {
       )}
 
       {/* La semana en curso (se puede ver cómo va) y, debajo, todas las anteriores. */}
-      {week.length > 0 && (
-        <RecapCard groupId={group.id} kind="week" from={thisWeek} hint="Así va vuestra semana" />
+      {week.length > 0 ? (
+        <RecapCard
+          groupId={group.id}
+          kind="week"
+          from={thisWeek}
+          hint="Así va vuestra semana"
+          accessory={hayAnteriores ? botonSemanas : null}
+        />
+      ) : (
+        hayAnteriores && (
+          <View style={styles.soloBoton}>
+            <Text style={{ color: theme.textSecondary, fontSize: 15 }}>Semanas anteriores</Text>
+            {botonSemanas}
+          </View>
+        )
       )}
-      <WeekShelf groupId={group.id} moments={all} />
+      {/* Las semanas anteriores, plegadas: se despliegan con el icono. */}
+      <View ref={estanteRef as never} style={{ overflow: 'hidden' }}>
+        {verSemanas && (
+          <Animated.View entering={FadeInDown.duration(320)}>
+            <WeekShelf groupId={group.id} moments={all} />
+          </Animated.View>
+        )}
+      </View>
 
       {/* Vuestra historia, como un diario de recuerdos que se abre y pasa hojas. */}
       <StoryBook groupId={group.id} origins={group.origins} moments={all} />
@@ -100,5 +143,18 @@ export default function Memory() {
 
 const styles = StyleSheet.create({
   hero: { alignItems: 'center', gap: Spacing.two, paddingVertical: Spacing.three },
+  boton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  soloBoton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
   heroText: { fontSize: 24, letterSpacing: -0.4, textAlign: 'center' },
 });

@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { useEffect } from 'react';
+import { type ReactNode, useEffect } from 'react';
 import { router } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -21,11 +21,14 @@ export function RecapCard({
   kind,
   from,
   hint,
+  accessory,
 }: {
   groupId: string;
   kind: 'week' | 'month';
   from: number;
   hint?: string;
+  /** Un botón junto al título (p. ej. para ver las semanas anteriores). */
+  accessory?: ReactNode;
 }) {
   const theme = useTheme();
   const { moments, user, proposals, songs, group, narrate } = useStore();
@@ -114,7 +117,10 @@ export function RecapCard({
         </View>
       </View>
       <View style={{ alignItems: 'center', gap: 2, marginTop: 8 }}>
-        <Text style={[styles.title, { color: theme.text }]}>{recap.title}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <Text style={[styles.title, { color: theme.text }]}>{recap.title}</Text>
+          {accessory}
+        </View>
         <Text style={{ color: theme.textSecondary, fontSize: 15 }}>
           {recap.range}
           {recap.ongoing ? ' · hasta hoy' : ''}
