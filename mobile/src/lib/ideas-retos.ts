@@ -24,6 +24,8 @@ export type RespuestaIdeas = {
   left?: number;
   /** off: la narradora está desactivada · busy: la IA no ha respondido */
   reason?: 'off' | 'busy' | 'forbidden' | 'bad';
+  /** por qué no hubo ideas (para el registro de errores) */
+  detalle?: string;
 };
 
 export async function pedirIdeasRetos(groupId: string, otras = false): Promise<RespuestaIdeas> {

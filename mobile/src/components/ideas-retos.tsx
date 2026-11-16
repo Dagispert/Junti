@@ -6,6 +6,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { Hand, Spacing, useTheme } from '@/constants/theme';
 import type { Group } from '@/data/types';
+import { apuntarError } from '@/lib/errores';
 import type { FamilyId } from '@/lib/families';
 import {
   type IdeaReto,
@@ -44,8 +45,16 @@ export function IdeasNarradora({ group }: { group: Group }) {
     setPensando(true);
     setFallo(false);
     pedirIdeasRetos(group.id, otras)
-      .then(setRes)
-      .catch(() => setFallo(true))
+      .then((r) => {
+        setRes(r);
+        // si la IA no respondió, se apunta (para verlo en «Errores recientes»)
+        if (r.reason === 'busy' && !r.ideas.length)
+          apuntarError(new Error(`Ideas de la narradora: ${r.detalle ?? 'sin respuesta'}`), 'aviso');
+      })
+      .catch((e) => {
+        setFallo(true);
+        apuntarError(e, 'aviso');
+      })
       .finally(() => setPensando(false));
   };
   useEffect(() => {

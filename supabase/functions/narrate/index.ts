@@ -1373,6 +1373,7 @@ async function ideasDeRetos(me: string, groupId: string | undefined, otraVez: bo
   ].join('\n');
 
   let ideas: IdeaReto[] = [];
+  let detalle = '';
   try {
     const answer = await gemini(SYSTEM_RETOS, prompt);
     const json = JSON.parse(answer.text.replace(/^```(?:json)?|```$/g, '').trim()) as { ideas?: unknown[] };
@@ -1403,10 +1404,17 @@ async function ideasDeRetos(me: string, groupId: string | undefined, otraVez: bo
       .slice(0, 4);
   } catch (e) {
     console.error('retos', e);
+    detalle = e instanceof Error ? e.message : String(e);
   }
   if (!ideas.length) {
     // Sin respuesta de la IA: se quedan las de antes (si las había).
-    return { ideas: saved?.ideas ?? [], generatedAt: saved?.generated_at, reason: 'busy', left: Math.max(0, 5 - usadasHoy) };
+    return {
+      ideas: saved?.ideas ?? [],
+      generatedAt: saved?.generated_at,
+      reason: 'busy',
+      detalle: detalle.slice(0, 300) || 'sin ideas válidas',
+      left: Math.max(0, 5 - usadasHoy),
+    };
   }
   const generatedAt = new Date().toISOString();
   await supabase.from('reto_ideas').upsert({
