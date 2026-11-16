@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { Hand } from '@/constants/theme';
+import { Hand, HandBold } from '@/constants/theme';
+import { accentDay, accentNight, DEFAULT_ACCENT } from '@/lib/accent';
 import type { DatosPelicula, Plan } from '@/pelicula/guion';
 import { FLASH, Pelicula } from '@/pelicula/pelicula';
 
@@ -142,21 +143,47 @@ export function FilmPlayer({
     if (voice) voice.muted = !!muted;
   }, [voice, muted]);
 
-  // Subtítulo: la frase en curso, palabra a palabra según avanza la voz.
+  // Subtítulo: la frase en curso, palabra a palabra según avanza la voz. Cada
+  // palabra entra fundiendo; los nombres y las cifras, en el color del grupo;
+  // sin el punto final (en pantalla no hace falta).
+  const nombres = useMemo(
+    () => new Set(data.people.map((p) => norm(p.name.split(' ')[0])).filter(Boolean)),
+    [data],
+  );
   const shown = useMemo(() => {
     if (!sub) return null;
     const sentences = sub.text.match(/[^.?!…]+[.?!…»]*/g) ?? [sub.text];
-    const at = Math.floor(sub.text.length * Math.min(1, sub.k * 1.04));
+    const at = sub.text.length * Math.min(1, sub.k * 1.04);
     let pos = 0;
+    let cur = sentences[sentences.length - 1],
+      start = sub.text.length - cur.length;
     for (const s of sentences) {
       if (at <= pos + s.length) {
-        const said = Math.max(1, at - pos);
-        return { said: s.slice(0, said).trimStart(), rest: s.slice(said) };
+        cur = s;
+        start = pos;
+        break;
       }
       pos += s.length;
     }
-    return { said: sentences[sentences.length - 1].trim(), rest: '' };
-  }, [sub]);
+    const words: { text: string; o: number; hi: boolean }[] = [];
+    for (const m of cur.matchAll(/\S+/g)) {
+      const ws = start + m.index!;
+      const raw = m[0];
+      const text = raw.replace(/\.$/, '').replace(/^\.+$/, '');
+      if (!text) continue;
+      const bare = norm(text.replace(/[^\p{L}\p{N}]/gu, ''));
+      words.push({
+        text,
+        // entra en lo que se tarda en decir unas 5 letras (≈ 0,35 s)
+        o: Math.max(0, Math.min(1, (at - ws) / 5)),
+        hi: /\d/.test(text) || nombres.has(bare),
+      });
+    }
+    return words;
+  }, [sub, nombres]);
+  const acento = sub?.day
+    ? accentDay(data.accent ?? DEFAULT_ACCENT)
+    : accentNight(data.accent ?? DEFAULT_ACCENT);
 
   return (
     <div
@@ -200,12 +227,28 @@ export function FilmPlayer({
               colorScheme: 'only light',
               pointerEvents: 'none',
             }}>
-            {/* Solo la letra, sin fondo. */}
-            <span>{shown.said}</span>
-            <span style={{ color: 'transparent' }}>{shown.rest}</span>
+            {/* Solo la letra, sin fondo: cada palabra aparece al decirla. */}
+            {shown.map((w, i) => (
+              <span
+                key={i}
+                style={{
+                  opacity: w.o,
+                  color: w.hi ? acento : undefined,
+                  fontFamily: w.hi ? HandBold : undefined,
+                }}>
+                {w.text}
+                {i < shown.length - 1 ? ' ' : ''}
+              </span>
+            ))}
           </div>
         )}
       </div>
     </div>
   );
 }
+
+const norm = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');

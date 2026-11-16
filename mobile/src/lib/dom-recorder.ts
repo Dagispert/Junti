@@ -617,8 +617,8 @@ export function recordScreen(
   const type = tested ?? VIDEO_TYPES.find((t) => MediaRecorder.isTypeSupported(t)) ?? '';
   const recorder = new MediaRecorder(stream, {
     ...(type ? { mimeType: type } : {}),
-    // lo que recomienda Instagram para 1080×1920 (más llena la memoria del móvil)
-    videoBitsPerSecond: 3_500_000,
+    // (con mucho movimiento, menos deja bloques grises; más llena la memoria del móvil)
+    videoBitsPerSecond: 6_000_000,
     audioBitsPerSecond: 128_000,
   });
   const chunks: Blob[] = [];

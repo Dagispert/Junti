@@ -246,14 +246,9 @@ export class Pelicula {
     const defs = el('defs', {}, svg);
     const dayAt = P.calendario[0] + FLASH + 0.2;
     const isDay = (t: number) => t >= dayAt && t < P.final[0];
-    // El pulso de la música: «golpe» vale 1 justo en cada golpe y se apaga
-    // enseguida; las semicorcheas (un cuarto de golpe) marcan los cambios rápidos.
+    // El pulso de la música: las semicorcheas (un cuarto de golpe) marcan los
+    // cambios rápidos (fotos que entran o pasan), nunca un latido.
     const R = d.ritmo;
-    const golpe = (t: number) => {
-      if (!R) return 0;
-      const ph = ((((t - R.desfase) % R.periodo) + R.periodo) % R.periodo) / R.periodo;
-      return Math.exp(-ph * 7);
-    };
     const semi = R ? R.periodo / 4 : 0.12;
     /** La primera semicorchea a partir de «t0». */
     const enSemi = (t0: number) =>
@@ -1149,6 +1144,37 @@ export class Pelicula {
         },
         loved?.id,
       );
+      // En la casilla del centro, las fotos pasan una por semicorchea hasta
+      // pararse en la que más os llegó; encima, una etiqueta negra va pasando
+      // los nombres hasta el de quien la compartió.
+      const rodar = d.pieces.filter((p) => p.photo && p !== loved);
+      const rodillo = el('g', {}, cells[0].g);
+      const idRo = uid('ro');
+      el('path', { d: tile(10) }, el('clipPath', { id: idRo }, defs));
+      const vistas = rodar.slice(0, 10).map((p) => {
+        const im = el(
+          'image',
+          {
+            href: p.photo!,
+            x: X0 + 10,
+            y: Y0 + 10,
+            width: L - 20,
+            height: L - 20,
+            preserveAspectRatio: 'xMidYMid slice',
+            'clip-path': `url(#${idRo})`,
+          },
+          rodillo,
+        );
+        return { im, author: p.author };
+      });
+      const chip = el('g', {}, cells[0].g);
+      el('rect', { x: CX - 120, y: Y0 - 34, width: 240, height: 56, rx: 28, fill: DIA.ink }, chip);
+      const chipTxt = texto(chip, loved?.author ?? '', {
+        x: CX,
+        y: Y0 + 4,
+        size: 34,
+        color: '#FFFFFF',
+      });
       const numero = (
         g: SVGGElement,
         x: number,
@@ -1328,6 +1354,7 @@ export class Pelicula {
           otras[k]?.id,
         ),
       );
+      const finRodillo = enSemi(ra + 0.3) + Math.max(8, vistas.length * 2) * semi;
       // el orden en que aparecen (de dentro afuera), una por semicorchea
       [...cells]
         .filter((c) => c.dist > 0)
@@ -1355,6 +1382,15 @@ export class Pelicula {
       this.paint.push((t) => {
         ver(lRec, t >= ra && t < rb + 0.1);
         if (t < ra || t > rb + 0.1) return;
+        // el rodillo del centro (si la última foto no aterriza justo ahí)
+        const rueda = vistas.length > 0 && cells[0].g !== celdaUltima;
+        const t1 = enSemi(ra + 0.3);
+        const corriendo = rueda && t >= t1 && t < finRodillo;
+        const n = corriendo ? Math.floor((t - t1) / semi + 1e-6) : -1;
+        vistas.forEach((v, i) => ver(v.im, corriendo && n % vistas.length === i));
+        opacidad(rodillo, rueda ? 1 - S(t, finRodillo, 0.3) : 0);
+        chipTxt.textContent = corriendo ? vistas[n % vistas.length].author : (loved?.author ?? '');
+        opacidad(chip, rueda ? S(t, t1, 0.3) * (1 - S(t, rb - 1.2, 0.4)) : 0);
         // al final, todas se recogen hacia el centro (de fuera adentro) y llega el final
         const t0 = enSemi(ra + 0.25);
         cells.forEach((c) => {
@@ -1375,7 +1411,7 @@ export class Pelicula {
           mover(c.g, {
             ox: c.cx,
             oy: c.cy,
-            s: s0 * (1 - 0.85 * kc) * (1 + 0.03 * golpe(t) * (1 - kc)),
+            s: s0 * (1 - 0.85 * kc),
             x: (CX - c.cx) * kc,
             y: (CY - c.cy) * kc,
           });
@@ -1406,13 +1442,76 @@ export class Pelicula {
         { x: -2000, y: -2000, width: 5000, height: 5000, fill: '#0E0F11' },
         lFin,
       );
-      const logo = texto(lFin, 'junti', {
-        x: CX,
-        y: CY - 20,
-        size: 120,
-        hand: false,
-        weight: 700,
-        color: '#F3F1E7',
+      // Las fotos del periodo estallan desde el centro, flotan y vuelven a
+      // juntarse en un anillo que se cierra sobre el nombre, que se escribe
+      // letra a letra.
+      const fotos = [
+        ...new Set([...d.pieces.map((p) => p.photo), d.song?.artwork].filter(Boolean)),
+      ] as string[];
+      const N = fotos.length ? Math.min(28, Math.max(14, fotos.length * 4)) : 0;
+      const idR = uid('fr');
+      const clipR = el('clipPath', { id: idR, clipPathUnits: 'objectBoundingBox' }, defs);
+      el('rect', { width: 1, height: 1, rx: 0.14 }, clipR);
+      const LY = CY - 40; // el centro del nombre
+      const rafaga = Array.from({ length: N }, (_, i) => {
+        const g = el('g', {}, lFin);
+        const S0 = 118;
+        el(
+          'rect',
+          {
+            x: -S0 / 2 - 6,
+            y: -S0 / 2 - 6,
+            width: S0 + 12,
+            height: S0 + 12,
+            rx: 18,
+            fill: '#F3F1E7',
+          },
+          g,
+        );
+        el(
+          'image',
+          {
+            href: fotos[i % fotos.length],
+            x: -S0 / 2,
+            y: -S0 / 2,
+            width: S0,
+            height: S0,
+            preserveAspectRatio: 'xMidYMid slice',
+            'clip-path': `url(#${idR})`,
+          },
+          g,
+        );
+        // a dónde sale: en espiral (ángulo áureo), a distintas distancias
+        const ang = i * 2.39996 + 0.3;
+        const r = 330 + ((i * 97) % 5) * 70;
+        return {
+          g,
+          ang,
+          r,
+          rot: ((i * 53) % 31) - 15,
+          // en el anillo, todas repartidas
+          ringAng: (i / Math.max(1, N)) * Math.PI * 2 - Math.PI / 2,
+          salida: (i % 8) * semi * 0.5,
+        };
+      });
+      const letras = 'junti'.split('');
+      const logo = el(
+        'text',
+        {
+          x: CX,
+          y: LY + 40,
+          'font-size': 120,
+          'font-family': 'system-ui, -apple-system, sans-serif',
+          'font-weight': 700,
+          fill: '#F3F1E7',
+          'text-anchor': 'middle',
+        },
+        lFin,
+      );
+      const tspans = letras.map((ch) => {
+        const ts = el('tspan', {}, logo);
+        ts.textContent = ch;
+        return ts;
       });
       const sub = texto(lFin, d.range, { x: CX, y: CY + 50, size: 40, color: '#A9A79C' });
       const pregunta = texto(lFin, d.closing, {
@@ -1426,16 +1525,48 @@ export class Pelicula {
         `M${CX - 120},${CY + 10} C${CX - 40},${CY + 22} ${CX + 40},${CY + 4} ${CX + 120},${CY + 14}`,
         { color: NOCHE.accent, width: 4 },
       );
+      const tEst = fa - 0.25; // estallan
+      const tAnillo = fa + 1.7; // vuelven al anillo
+      const tCierre = fa + 2.55; // el anillo se cierra sobre el nombre
+      const tNombre = fa + 2.6; // el nombre se escribe
       this.paint.push((t) => {
         // (entra fundiendo mientras las casillas se recogen: sin cortes)
         ver(lFin, t >= fa - 0.55);
         if (t < fa - 0.55) return;
         opacidad(fondo, S(t, fa - 0.55, 0.55));
-        opacidad(logo, S(t, fa + 0.2, 0.5));
-        mover(logo, { ox: CX, oy: CY - 40, s: 0.9 + 0.1 * S(t, fa + 0.2, 0.6) });
-        revelar(raya, S(t, fa + 0.6, 0.5, ease.inOut));
-        opacidad(sub, S(t, fa + 0.8, 0.4));
-        opacidad(pregunta, S(t, fa + 1.4, 0.5));
+        rafaga.forEach((f) => {
+          const ke = S(t, tEst + f.salida, 1.1, ease.out);
+          const ka = S(t, tAnillo, 0.85, ease.inOut);
+          const kc = S(t, tCierre, 0.55, ease.in);
+          // fuera: flotan alejándose despacio
+          const deriva = 1 + 0.06 * Math.max(0, t - tEst - f.salida);
+          const ox = Math.cos(f.ang) * f.r * ke * deriva,
+            oy = Math.sin(f.ang) * f.r * ke * deriva;
+          // el anillo, alrededor del nombre
+          const rr = 250 * (1 - kc);
+          const ax = Math.cos(f.ringAng + 0.6 * ka) * rr,
+            ay = Math.sin(f.ringAng + 0.6 * ka) * rr * 0.62;
+          const x = CX + lerp(ox, ax, ka),
+            y = LY + lerp(oy, ay, ka);
+          const sc = lerp(0.25 + 0.75 * ke, 0.42, ka) * (1 - 0.7 * kc);
+          mover(f.g, { x, y, s: sc, r: f.rot * (1 - ka) });
+          opacidad(f.g, Math.min(1, ke * 2) * (1 - kc));
+          ver(f.g, ke > 0 && kc < 1);
+        });
+        // el nombre, letra a letra (cada una entra fundiendo y subiendo un poco)
+        tspans.forEach((ts, i) => {
+          const k = S(t, tNombre + i * 0.11, 0.32);
+          ts.setAttribute('fill-opacity', k.toFixed(3));
+        });
+        mover(logo, {
+          ox: CX,
+          oy: LY,
+          s: 0.94 + 0.06 * S(t, tNombre, 0.9),
+          y: 10 * (1 - S(t, tNombre, 0.6)),
+        });
+        revelar(raya, S(t, tNombre + 0.75, 0.5, ease.inOut));
+        opacidad(sub, S(t, tNombre + 0.95, 0.4));
+        opacidad(pregunta, S(t, tNombre + 1.35, 0.5));
       });
     }
 
@@ -1513,7 +1644,7 @@ export class Pelicula {
           }
         // La cámara nunca se queda quieta: en cada escena se acerca o se aleja un
         // poco (alternando, para que al cambiar de escena siga donde iba) y
-        // respira con los golpes de la música.
+        // sigue así de una escena a la siguiente (sin latidos).
         let seg = 0;
         while (seg < cortes.length - 2 && t >= cortes[seg + 1]) seg++;
         const fr = Math.max(
@@ -1522,7 +1653,7 @@ export class Pelicula {
         );
         const e = ease.inOut(fr);
         const deriva = 1 + 0.03 * (seg % 2 ? 0.5 - e : e - 0.5);
-        const s = k.s * deriva * (1 + 0.006 * golpe(t));
+        const s = k.s * deriva;
         cam.setAttribute(
           'transform',
           `translate(${CX},${CY}) scale(${s.toFixed(4)}) translate(${(-CX - k.x).toFixed(2)},${(-CY - k.y).toFixed(2)})`,

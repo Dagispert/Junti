@@ -242,7 +242,8 @@ export function planificar(d: DatosPelicula): Plan {
   // 5. Las cifras y la despedida.
   const recuerdos: Tramo = [t, t + Math.max(5.5, durVoz(V.stats))];
   say(t, V.stats);
-  const final: Tramo = [recuerdos[1], recuerdos[1] + Math.max(4, durVoz(V.end) + 0.8)];
+  // (el final: estallido, anillo, el nombre escribiéndose y dos segundos quieto)
+  const final: Tramo = [recuerdos[1], recuerdos[1] + Math.max(6.6, durVoz(V.end) + 0.8)];
   say(final[0], V.end);
   return {
     reloj,
