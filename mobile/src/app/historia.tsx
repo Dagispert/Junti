@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
-import { MapPin, Plus, Share, Volume2, VolumeX, X } from 'lucide-react-native';
+import { MapPin, Music, Plus, Share, Volume2, VolumeX, X } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
@@ -21,12 +21,14 @@ import { useStore } from '@/data/store';
 import type { GroupOrigin, Moment, Narration } from '@/data/types';
 import { useClock } from '@/lib/clock';
 import {
+  mixStreams,
   canRecordScreen,
   NO_REC,
   prepareRecording,
   preloadImages,
   recordScreen,
 } from '@/lib/dom-recorder';
+import { usePreview } from '@/lib/music';
 import { narratorAudio, narratorStream, stopNarrator } from '@/lib/narrator';
 import { gapDoodle, yearDoodle } from '@/lib/doodles';
 import { buildStory, type Gap, gapLabel, parseGap, templateScenes } from '@/lib/story';
@@ -54,7 +56,7 @@ export default function StoryScreen() {
 
 function StoryGlobe() {
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
-  const { group: groupById, moments, narrate } = useStore();
+  const { group: groupById, moments, narrate, songs } = useStore();
   const group = groupById(groupId);
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
@@ -198,6 +200,23 @@ function StoryGlobe() {
     if (player) player.muted = !voiceOn;
   }, [player, voiceOn]);
 
+  // La banda sonora del grupo, de fondo: baja casi del todo mientras habla la narradora.
+  const soundtrack = useMemo(() => songs.filter((x) => x.groupId === groupId), [songs, groupId]);
+  const song = soundtrack.find((x) => x.preview);
+  const music = usePreview(song?.preview, true);
+  const [musicOn, setMusicOn] = useState(true);
+  useEffect(() => {
+    music.volume(voiced && voiceOn && !paused ? 0.02 : 0.6);
+  });
+  const musicStarted = useRef(false);
+  useEffect(() => {
+    if (!music.available || !musicOn) return;
+    if (!musicStarted.current) {
+      musicStarted.current = true;
+      music.toggle();
+    }
+  });
+
   const text = scene?.text ?? '';
   const duration = (text.length / 14) * 1000 + 2000;
   const now = voiced ? player!.currentTime : 0;
@@ -233,7 +252,13 @@ function StoryGlobe() {
   const exportVideo = async () => {
     const root = rootRef.current as unknown as HTMLElement | null;
     if (!root) return;
-    const audio = voice ? narratorStream() : null; // dentro del toque
+    // la voz y la música, juntas en una sola pista (dentro del toque)
+    const musicTrack = musicOn ? music.stream() : null;
+    if (musicTrack) {
+      music.restart();
+      if (!music.playing) music.toggle();
+    }
+    const audio = mixStreams([voice ? narratorStream() : null, musicTrack]);
     finishing.current = false;
     restarted.current = false;
     setPaused(true);
@@ -403,6 +428,18 @@ function StoryGlobe() {
               <Icon icon={voiceOn ? Volume2 : VolumeX} color={INK} />
             </Pressable>
           )}
+          {music.available && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={music.playing ? 'Silenciar la música' : 'Poner la música'}
+              onPress={() => {
+                setMusicOn(!music.playing);
+                music.toggle();
+              }}
+              style={[styles.round, !music.playing && { opacity: 0.55 }]}>
+              <Icon icon={Music} color={INK} />
+            </Pressable>
+          )}
           {canRecordScreen() && !exporter.live && (
             <Pressable
               accessibilityRole="button"
@@ -527,6 +564,41 @@ function StoryGlobe() {
                   paused={paused}
                 />
               </View>
+            )}
+            {/* Al final, la banda sonora: sus carátulas. */}
+            {scene?.type === 'end' && soundtrack.some((x) => x.artwork) && (
+              <Animated.View
+                key={`s-${index}`}
+                entering={FadeIn.delay(500).duration(700)}
+                pointerEvents="none"
+                style={styles.endSongs}>
+                <Text style={styles.endSongsKicker}>Vuestra banda sonora</Text>
+                <View style={styles.endCovers}>
+                  {soundtrack
+                    .filter((x) => x.artwork)
+                    .slice(0, 5)
+                    .map((x, i, all) => (
+                      <Image
+                        key={x.id}
+                        source={{ uri: x.artwork }}
+                        contentFit="cover"
+                        style={[
+                          styles.endCover,
+                          {
+                            marginLeft: i ? -18 : 0,
+                            zIndex: all.length - i,
+                            transform: [{ rotate: `${(i - (all.length - 1) / 2) * 6}deg` }],
+                          },
+                        ]}
+                      />
+                    ))}
+                </View>
+                {!!song && (
+                  <Text numberOfLines={1} style={styles.endSongName}>
+                    ♪ {song.title} — {song.artist}
+                  </Text>
+                )}
+              </Animated.View>
             )}
             {(scene?.type === 'gap' || scene?.type === 'end') && (
               <Animated.View key={`c-${index}`} entering={popIn()}>
@@ -714,17 +786,25 @@ const styles = StyleSheet.create({
     boxShadow: '0 10px 30px rgba(20,40,60,0.25)',
   },
   askText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
+  endSongs: { alignItems: 'center', gap: 8, marginBottom: 18 },
+  endSongsKicker: { color: '#C2477A', fontSize: 12, fontWeight: '700', letterSpacing: 1.2 },
+  endCovers: { flexDirection: 'row', alignItems: 'center' },
+  endCover: {
+    width: 74,
+    height: 74,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    boxShadow: '0 12px 26px rgba(20,30,50,0.28)',
+  } as never,
+  endSongName: { color: INK, fontSize: 14, fontWeight: '600', maxWidth: 280 },
   subtitle: {
     position: 'absolute',
     left: 16,
     right: 16,
     alignSelf: 'center',
     maxWidth: 560,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.8)',
-    boxShadow: '0 10px 30px rgba(20,40,60,0.12)',
+    paddingHorizontal: 8,
   },
   subtitleText: {
     fontFamily: Hand,

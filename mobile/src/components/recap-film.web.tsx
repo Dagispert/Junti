@@ -13,7 +13,13 @@ import { accentNight, DEFAULT_ACCENT } from '@/lib/accent';
 import { Hand } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import type { Narration } from '@/data/types';
-import { canRecordScreen, NO_REC, prepareRecording, recordScreen } from '@/lib/dom-recorder';
+import {
+  canRecordScreen,
+  mixStreams,
+  NO_REC,
+  prepareRecording,
+  recordScreen,
+} from '@/lib/dom-recorder';
 import { whereOf } from '@/lib/film';
 import { usePreview } from '@/lib/music';
 import { narratorAudio, narratorStream, primeNarrator, stopNarrator } from '@/lib/narrator';
@@ -104,7 +110,9 @@ export default function RecapFilm() {
         (x) => alive && x && setWeather((all) => ({ ...all, [m.id]: x })),
       );
     }
-    fotosEnLinea(recap.moments.map((m) => m.imageUri).filter((u): u is string => !!u)).then(
+    fotosEnLinea(
+      [...recap.moments.map((m) => m.imageUri), song?.artwork].filter((u): u is string => !!u),
+    ).then(
       (p) => alive && setPhotos(p),
     );
     prepareRecording().catch(() => {});
@@ -123,6 +131,9 @@ export default function RecapFilm() {
   const ready = !!photos && (!narrating || waited || (!writing && !voicing));
 
   const [started, setStarted] = useState(false);
+  // la banda sonora: una canción del periodo o, si no, la última del grupo
+  const song =
+    recap.songs.find((s) => s.preview) ?? songs.find((s) => s.groupId === groupId && s.preview);
   const data = useMemo(
     () =>
       started
@@ -133,6 +144,9 @@ export default function RecapFilm() {
             narration,
             weather,
             photos: photos ?? {},
+            song: song
+              ? { title: song.title, artist: song.artist, artwork: song.artwork }
+              : undefined,
           })
         : null,
     // Se fija al empezar: la película no cambia mientras se ve.
@@ -150,8 +164,6 @@ export default function RecapFilm() {
   }, [player, voice?.audioUrl]);
   useEffect(() => () => stopNarrator(), []);
   const [voiceOn, setVoiceOn] = useState(true);
-  const song =
-    recap.songs.find((s) => s.preview) ?? songs.find((s) => s.groupId === groupId && s.preview);
   const audio = usePreview(song?.preview, true);
   const [paused, setPaused] = useState(false);
   const [time, setTime] = useState({ t: 0, total: 1 });
@@ -200,7 +212,13 @@ export default function RecapFilm() {
   const exportVideo = () => {
     const root = rootRef.current as unknown as HTMLElement | null;
     if (!root) return;
-    const track = voice ? narratorStream() : null;
+    // la voz y la música en una sola pista (el grabador solo graba una)
+    const music = audio.available ? audio.stream() : null;
+    if (music) {
+      audio.restart();
+      if (!audio.playing) audio.toggle();
+    }
+    const track = mixStreams([voice ? narratorStream() : null, music]);
     control.current?.seek(0);
     setPaused(false);
     setEnded(false);

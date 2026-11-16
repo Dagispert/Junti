@@ -61,6 +61,7 @@ export function usePreview(url?: string, loop = false) {
   const gain = useRef<GainNode | null>(null);
   const context = useRef<AudioContext | null>(null);
   const level = useRef(1);
+  const dest = useRef<MediaStreamAudioDestinationNode | null>(null);
 
   useEffect(() => {
     if (!available) return;
@@ -112,6 +113,7 @@ export function usePreview(url?: string, loop = false) {
       }
       context.current?.close().catch(() => {});
       context.current = null;
+      dest.current = null;
       gain.current = null;
       a.pause();
       a.src = '';
@@ -151,6 +153,22 @@ export function usePreview(url?: string, loop = false) {
     restart: () => {
       const a = audio.current;
       if (a) a.currentTime = 0;
+    },
+    /** La música (con su volumen) como pista de audio, para grabarla en un vídeo. */
+    stream: (): MediaStream | null => {
+      const node = gain.current;
+      const ctx = context.current;
+      if (!node || !ctx) return null;
+      try {
+        if (!dest.current) {
+          dest.current = ctx.createMediaStreamDestination();
+          node.connect(dest.current);
+        }
+        if (ctx.state !== 'running') ctx.resume().catch(() => {});
+        return dest.current.stream;
+      } catch {
+        return null;
+      }
     },
   };
 }

@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { Pause, Play, Plus, Share, Volume2, VolumeX, X } from 'lucide-react-native';
+import { Music, Pause, Play, Plus, Share, Volume2, VolumeX, X } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,7 +13,14 @@ import { accentNight, DEFAULT_ACCENT } from '@/lib/accent';
 import { Hand } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import type { Narration } from '@/data/types';
-import { canRecordScreen, NO_REC, prepareRecording, recordScreen } from '@/lib/dom-recorder';
+import {
+  canRecordScreen,
+  mixStreams,
+  NO_REC,
+  prepareRecording,
+  recordScreen,
+} from '@/lib/dom-recorder';
+import { usePreview } from '@/lib/music';
 import { narratorAudio, narratorStream, primeNarrator, stopNarrator } from '@/lib/narrator';
 import { buildStory, parseGap, templateScenes } from '@/lib/story';
 import { datosHistoria, fotosEnLinea } from '@/pelicula/datos';
@@ -27,7 +34,7 @@ const INK = '#1D1F22';
 
 export default function StoryFilm() {
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
-  const { group: groupById, moments, narrate, user } = useStore();
+  const { group: groupById, moments, narrate, user, songs } = useStore();
   const group = groupById(groupId);
   const insets = useSafeAreaInsets();
   // El acento de la pantalla: el color del grupo (aclarado sobre el fondo oscuro).
@@ -87,11 +94,14 @@ export default function StoryFilm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupId, narrating, attempt]);
 
+  // La banda sonora del grupo: la última canción con fragmento.
+  const soundtrack = useMemo(() => songs.filter((x) => x.groupId === groupId), [songs, groupId]);
+  const song = soundtrack.find((x) => x.preview);
   const [photos, setPhotos] = useState<Record<string, string> | null>(null);
   useEffect(() => {
-    fotosEnLinea(story.memories.map((m) => m.imageUri).filter((u): u is string => !!u)).then(
-      setPhotos,
-    );
+    fotosEnLinea(
+      [...story.memories.map((m) => m.imageUri), song?.artwork].filter((u): u is string => !!u),
+    ).then(setPhotos);
     prepareRecording().catch(() => {});
   }, [story]);
   const [waited, setWaited] = useState(false);
@@ -112,6 +122,7 @@ export default function StoryFilm() {
       narration,
       title: narration?.title || 'Nuestra historia',
       photos: photos ?? {},
+      song: song ? { title: song.title, artist: song.artist, artwork: song.artwork } : undefined,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [started]);
@@ -126,6 +137,36 @@ export default function StoryFilm() {
   }, [player, voice?.audioUrl]);
   useEffect(() => () => stopNarrator(), []);
   const [voiceOn, setVoiceOn] = useState(true);
+  // La música: entera hasta que habla la narradora; mientras habla, al 2 %.
+  const audio = usePreview(song?.preview, true);
+  const [speaking, setSpeaking] = useState(false);
+  useEffect(() => {
+    if (!player) return;
+    let quiet: ReturnType<typeof setTimeout> | undefined;
+    const on = () => {
+      clearTimeout(quiet);
+      setSpeaking(true);
+    };
+    const off = () => {
+      clearTimeout(quiet);
+      quiet = setTimeout(() => setSpeaking(false), 1500);
+    };
+    player.addEventListener('playing', on);
+    player.addEventListener('pause', off);
+    player.addEventListener('ended', off);
+    return () => {
+      clearTimeout(quiet);
+      player.removeEventListener('playing', on);
+      player.removeEventListener('pause', off);
+      player.removeEventListener('ended', off);
+    };
+  }, [player]);
+  useEffect(() => {
+    audio.volume(voiceOn && voice && speaking ? 0.02 : 0.8);
+  });
+  const startMusic = () => {
+    if (audio.available && !audio.playing) audio.toggle();
+  };
   const [paused, setPaused] = useState(false);
   const [time, setTime] = useState({ t: 0, total: 1 });
   const [ended, setEnded] = useState(false);
@@ -137,7 +178,13 @@ export default function StoryFilm() {
   const exportVideo = () => {
     const root = rootRef.current as unknown as HTMLElement | null;
     if (!root) return;
-    const track = voice ? narratorStream() : null;
+    // la voz y la música en una sola pista (el grabador solo graba una)
+    const music = audio.available ? audio.stream() : null;
+    if (music) {
+      audio.restart();
+      if (!audio.playing) audio.toggle();
+    }
+    const track = mixStreams([voice ? narratorStream() : null, music]);
     control.current?.seek(0);
     setPaused(false);
     setEnded(false);
@@ -209,6 +256,7 @@ export default function StoryFilm() {
               kind="historia"
               onWatch={() => {
                 primeNarrator();
+                startMusic();
                 setStarted(true);
               }}
               onRetry={() => setAttempt((a) => a + 1)}
@@ -219,6 +267,7 @@ export default function StoryFilm() {
               accessibilityRole="button"
               onPress={() => {
                 primeNarrator();
+                startMusic();
                 setStarted(true);
               }}
               style={styles.play}>
@@ -277,6 +326,15 @@ export default function StoryFilm() {
               onPress={() => setVoiceOn((v) => !v)}
               style={styles.round}>
               <Icon icon={voiceOn ? Volume2 : VolumeX} color={INK} />
+            </Pressable>
+          )}
+          {audio.available && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={audio.playing ? 'Silenciar música' : 'Poner música'}
+              onPress={() => audio.toggle()}
+              style={[styles.round, !audio.playing && { opacity: 0.6 }]}>
+              <Icon icon={Music} color={INK} />
             </Pressable>
           )}
           {!!data && canRecordScreen() && !exporter.live && (

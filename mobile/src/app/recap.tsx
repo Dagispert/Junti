@@ -1,3 +1,4 @@
+import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
@@ -48,6 +49,7 @@ import { fetchWeatherAt, type PastWeather } from '@/lib/weather';
 import { Music, Share, Volume2, VolumeX, X } from 'lucide-react-native';
 import { useExport } from '@/components/export-sheet';
 import {
+  mixStreams,
   canRecordScreen,
   NO_REC,
   prepareRecording,
@@ -295,7 +297,14 @@ function RecapSlides() {
   const exportVideo = async () => {
     const root = rootRef.current as unknown as HTMLElement | null;
     if (!root) return;
-    const voiceTrack = voice ? narratorStream() : null; // dentro del toque
+    // la voz y la música, juntas en una sola pista (dentro del toque)
+    const voiceTrack = voice ? narratorStream() : null;
+    const musicTrack = !muted ? audio.stream() : null;
+    if (musicTrack) {
+      audio.restart();
+      if (!audio.playing) audio.toggle();
+    }
+    const soundTrack = mixStreams([voiceTrack, musicTrack]);
     finishing.current = false;
     restarted.current = false;
     setPaused(true);
@@ -306,7 +315,7 @@ function RecapSlides() {
     setPaused(false);
     setIndex(0);
     elapsed.current = 0;
-    recorder.current = recordScreen(root, { audio: voiceTrack });
+    recorder.current = recordScreen(root, { audio: soundTrack });
     exporter.recording(() => {
       recorder.current?.cancel();
       recorder.current = null;
@@ -626,6 +635,29 @@ function RecapSlides() {
         ]}
         leaving={leaving}
         layout={layout}>
+        {/* La banda sonora: su carátula, para despedirse con ella sonando. */}
+        {!!song && (
+          <Move from={{ y: 20, scale: 0.9 }} delay={700} style={styles.endSong}>
+            {!!song.artwork && (
+              <Image source={{ uri: song.artwork }} style={styles.endArt} contentFit="cover" />
+            )}
+            <View style={{ flexShrink: 1 }}>
+              <Text style={[styles.endSongKicker, { color: lk.dark ? '#F2B33D' : '#C2477A' }]}>
+                Vuestra canción
+              </Text>
+              <Text
+                numberOfLines={2}
+                style={[styles.endSongTitle, { color: lk.dark ? '#FFFFFF' : INK }]}>
+                {song.title}
+              </Text>
+              <Text
+                numberOfLines={1}
+                style={{ color: lk.dark ? 'rgba(255,255,255,0.7)' : '#5A6168', fontSize: 14 }}>
+                {song.artist}
+              </Text>
+            </View>
+          </Move>
+        )}
         {!leaving && (
           <Move from={{ y: 16 }} delay={1300} style={{ alignItems: 'center', gap: 6 }}>
             <View {...NO_REC} style={{ alignItems: 'center', gap: 6 }}>
@@ -827,6 +859,22 @@ const styles = StyleSheet.create({
   roundText: { color: INK, fontSize: 15, fontWeight: '500' },
   musicOff: { width: 'auto', paddingHorizontal: 12 },
   voice: { position: 'absolute', left: 20, right: 20 },
+  endSong: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    alignSelf: 'center',
+    maxWidth: 320,
+    marginVertical: 10,
+  },
+  endArt: {
+    width: 76,
+    height: 76,
+    borderRadius: 10,
+    boxShadow: '0 14px 30px rgba(0,0,0,0.35)',
+  } as never,
+  endSongKicker: { fontSize: 12, fontWeight: '700', letterSpacing: 1.2 },
+  endSongTitle: { fontSize: 18, fontWeight: '700', lineHeight: 22 },
   cta: {
     marginTop: 8,
     backgroundColor: '#FFFFFF',

@@ -376,7 +376,5 @@ const styles = StyleSheet.create({
     lineHeight: 33,
     textAlign: 'center',
     maxWidth: 520,
-    textShadowColor: 'rgba(255,255,255,0.95)',
-    textShadowRadius: 12,
   },
 });

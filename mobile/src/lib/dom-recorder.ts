@@ -499,14 +499,45 @@ export const canRecordScreen = () =>
  * Empieza a grabar «root» tal como se ve, con el sonido de «audio» si se da.
  * Devuelve cómo pararlo (y quedarse con el vídeo) o cancelarlo.
  */
+/**
+ * Junta varias pistas de sonido (la voz de la narradora y la música) en una
+ * sola: el grabador solo graba la primera pista de audio que se le da.
+ */
+export function mixStreams(streams: (MediaStream | null | undefined)[]): MediaStream | null {
+  const live = streams.filter((s): s is MediaStream => !!s && s.getAudioTracks().length > 0);
+  if (live.length <= 1) return live[0] ?? null;
+  try {
+    const AC = window.AudioContext ?? (window as any).webkitAudioContext;
+    const ctx: AudioContext = new AC();
+    const dest = ctx.createMediaStreamDestination();
+    for (const s of live) ctx.createMediaStreamSource(s).connect(dest);
+    ctx.resume().catch(() => {});
+    return dest.stream;
+  } catch {
+    return live[0];
+  }
+}
+
+/**
+ * Empieza a grabar «root» tal como se ve, con el sonido de «audio» si se da.
+ * El vídeo sale en vertical 9:16 (1080×1920, el de Instagram, TikTok y los
+ * estados): la pantalla se encaja entera y lo que sobra se rellena con su fondo.
+ * Devuelve cómo pararlo (y quedarse con el vídeo) o cancelarlo.
+ */
 export function recordScreen(
   root: HTMLElement,
-  { width = 1080, audio }: { width?: number; audio?: MediaStream | null } = {},
+  {
+    width = 1080,
+    height = 1920,
+    audio,
+  }: { width?: number; height?: number; audio?: MediaStream | null } = {},
 ) {
   const rect = root.getBoundingClientRect();
-  const scale = width / rect.width;
-  const W = Math.round(rect.width * scale);
-  const H = Math.round((rect.height * scale) / 2) * 2;
+  const W = width;
+  const H = height;
+  const scale = Math.min(W / rect.width, H / rect.height);
+  const dx = Math.round((W - rect.width * scale) / 2);
+  const dy = Math.round((H - rect.height * scale) / 2);
   recScale = scale;
   const canvas = document.createElement('canvas');
   canvas.width = W;
@@ -517,8 +548,9 @@ export function recordScreen(
   const type = tested ?? VIDEO_TYPES.find((t) => MediaRecorder.isTypeSupported(t)) ?? '';
   const recorder = new MediaRecorder(stream, {
     ...(type ? { mimeType: type } : {}),
-    // (más bitrate llena la memoria del móvil en vídeos largos)
-    videoBitsPerSecond: 5_000_000,
+    // lo que recomienda Instagram para 1080×1920 (más llena la memoria del móvil)
+    videoBitsPerSecond: 3_500_000,
+    audioBitsPerSecond: 128_000,
   });
   const chunks: Blob[] = [];
   recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
@@ -531,6 +563,7 @@ export function recordScreen(
     ctx.globalAlpha = 1;
     ctx.fillStyle = getComputedStyle(root).backgroundColor || '#FFFFFF';
     ctx.fillRect(0, 0, W, H);
+    ctx.translate(dx, dy);
     ctx.scale(scale, scale);
     try {
       drawNode(ctx, root, 1);

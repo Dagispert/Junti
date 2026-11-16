@@ -50,6 +50,7 @@ export function datosPelicula(
     weather?: Record<string, { code: number; temp: number }>;
     /** Fotos ya copiadas en la página (para poder exportar el vídeo). */
     photos?: Record<string, string>;
+    song?: { title: string; artist?: string; artwork?: string };
   },
 ): DatosPelicula {
   const { user, narration } = opts;
@@ -167,6 +168,14 @@ export function datosPelicula(
       : recap.kind === 'week'
         ? '¿qué pasará la semana que viene?'
         : '¿qué pasará el mes que viene?',
+    song: opts.song
+      ? {
+          ...opts.song,
+          artwork: opts.song.artwork
+            ? (opts.photos?.[opts.song.artwork] ?? opts.song.artwork)
+            : undefined,
+        }
+      : undefined,
     tags: {
       reloj:
         recap.kind === 'week'
@@ -251,6 +260,7 @@ export function datosHistoria(
     narration?: Narration | null;
     title: string;
     photos?: Record<string, string>;
+    song?: { title: string; artist?: string; artwork?: string };
   },
 ): DatosPelicula {
   const { user, scenes, narration } = opts;
@@ -389,6 +399,14 @@ export function datosHistoria(
     clock,
     header: 'AÑO',
     closing: 'y la historia sigue…',
+    song: opts.song
+      ? {
+          ...opts.song,
+          artwork: opts.song.artwork
+            ? (opts.photos?.[opts.song.artwork] ?? opts.song.artwork)
+            : undefined,
+        }
+      : undefined,
     tags: { reloj: `#desde${startYear}`, ventanilla: tag(opts.title), libreta: '#dondeempezótodo' },
     scenario: elegirEscenario(texts, [], 6, {
       travel: points.length > 2,
