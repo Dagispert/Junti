@@ -113,7 +113,13 @@ export default function Karaoke() {
         />
       )}
       {mode === 'watch' && url && (
-        <Montage game={game} url={url} takes={takes} seed={proposal.id} onBack={() => setMode('home')} />
+        <Montage
+          game={game}
+          url={url}
+          takes={takes}
+          seed={proposal.id}
+          onBack={() => setMode('home')}
+        />
       )}
       {mode !== 'home' && !url && <ActivityIndicator color="#FFFFFF" style={{ marginTop: 80 }} />}
     </View>
@@ -144,7 +150,11 @@ function Home({
     <View style={styles.home}>
       <View style={styles.cover}>
         {game.artwork ? (
-          <Image source={{ uri: game.artwork }} style={StyleSheet.absoluteFill} contentFit="cover" />
+          <Image
+            source={{ uri: game.artwork }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+          />
         ) : (
           <Icon icon={Mic} size={56} color="rgba(255,255,255,0.8)" />
         )}
@@ -199,7 +209,7 @@ function Home({
 
 /* ───────────── Letra que va pasando ───────────── */
 
-function Lyrics({ game, progress }: { game: KaraokeGame; progress: number }) {
+function Lyrics({ game, time }: { game: KaraokeGame; time: number }) {
   const plain = useMemo(
     () =>
       (game.lyrics ?? '')
@@ -212,12 +222,26 @@ function Lyrics({ game, progress }: { game: KaraokeGame; progress: number }) {
   const lines = timed ? timed.map((l) => l.text) : plain;
   if (!lines.length) return null;
   // Con ritmo, la línea que toca en este segundo; sin él, cada línea dura lo mismo.
-  const time = game.start + progress * (game.end - game.start);
+  const progress = Math.max(0, Math.min(1, (time - game.start) / (game.end - game.start)));
   const current = timed
     ? lineAt(timed, time + 0.05)
-    : Math.min(lines.length - 1, Math.floor(progress * lines.length));
-  // antes de la primera línea: se enseña cuál viene, con una cuenta de puntos
-  const waiting = timed && current < 0 ? Math.max(0, timed[0].t - time) : 0;
+    : time < game.start
+      ? -1
+      : Math.min(lines.length - 1, Math.floor(progress * lines.length));
+  // Antes de la primera línea: se ve cuál viene, con una cuenta atrás de puntos.
+  if (current < 0) {
+    const waiting = timed ? timed[0].t - time : game.start - time;
+    return (
+      <View pointerEvents="none" style={styles.lyrics}>
+        <Text style={styles.lyricDots}>
+          {waiting > 0.2 && waiting < 3.5 ? '● '.repeat(Math.ceil(waiting)).trim() : ' '}
+        </Text>
+        <Text style={styles.lyricUpcoming}>{lines[0]}</Text>
+        {!!lines[1] && <Text style={styles.lyricNext}>{lines[1]}</Text>}
+        {!!lines[2] && <Text style={styles.lyricNext}>{lines[2]}</Text>}
+      </View>
+    );
+  }
   return (
     <View pointerEvents="none" style={styles.lyrics}>
       {[-1, 0, 1, 2].map((d) => {
@@ -231,9 +255,6 @@ function Lyrics({ game, progress }: { game: KaraokeGame; progress: number }) {
           </Text>
         );
       })}
-      {waiting > 0.3 && waiting < 4 && (
-        <Text style={styles.lyricNow}>{'● '.repeat(Math.ceil(waiting)).trim()}</Text>
-      )}
     </View>
   );
 }
@@ -266,6 +287,9 @@ function Recorder({
   );
   const [count, setCount] = useState(3);
   const [progress, setProgress] = useState(0);
+  // el segundo de la canción (antes de empezar, un poco antes del trozo)
+  const preroll = Math.min(3, game.start);
+  const [time, setTime] = useState(game.start - preroll);
   const [error, setError] = useState('');
   const [take, setTake] = useState<Take | null>(null);
   const stopRef = useRef<() => void>(() => {});
@@ -315,11 +339,12 @@ function Recorder({
       .then(() => {
         a.pause();
         a.muted = false;
-        a.currentTime = game.start;
+        a.currentTime = game.start - preroll;
       })
       .catch(() => {
         a.muted = false;
       });
+    setTime(game.start - preroll);
     setTake(null);
     setPhase('count');
     setCount(3);
@@ -358,7 +383,8 @@ function Recorder({
     recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
     recorder.onstart = () => {
       recStart = performance.now();
-      a.currentTime = game.start;
+      // unos segundos de canción antes del trozo, para ver venir la primera línea
+      a.currentTime = game.start - preroll;
       a.play().catch(() => {});
     };
     a.onplaying = () => {
@@ -383,6 +409,7 @@ function Recorder({
     const loop = () => {
       const t = a.currentTime - game.start;
       setProgress(Math.max(0, Math.min(1, t / duration)));
+      setTime(a.currentTime);
       // La portada: un fotograma a los dos segundos.
       if (!poster && t > 2 && preview.current?.videoWidth) {
         const v = preview.current;
@@ -400,6 +427,7 @@ function Recorder({
     recorder.start(1000);
     setPhase('singing');
     setProgress(0);
+    setTime(game.start - preroll);
     frame = requestAnimationFrame(loop);
   };
 
@@ -489,6 +517,9 @@ function Recorder({
             <Text style={styles.count}>{count}</Text>
           </View>
         )}
+        {/* La letra se ve desde antes de empezar: así se sabe qué viene. */}
+        {(phase === 'camera' || phase === 'count' || phase === 'singing') &&
+          (!!game.lyrics || !!game.lines?.length) && <Lyrics game={game} time={time} />}
         {phase === 'singing' && (
           <>
             <View style={styles.progress}>
@@ -496,9 +527,10 @@ function Recorder({
             </View>
             <View style={styles.rec}>
               <View style={styles.recDot} />
-              <Text style={styles.recText}>{mmss(progress * duration)}</Text>
+              <Text style={styles.recText}>
+                {time < game.start ? 'Prepárate…' : mmss(progress * duration)}
+              </Text>
             </View>
-            {(!!game.lyrics || !!game.lines?.length) && <Lyrics game={game} progress={progress} />}
           </>
         )}
         {phase === 'review' && !reviewing && (
@@ -618,7 +650,9 @@ function Montage({
   const videos = useRef(new Map<string, HTMLVideoElement>());
   const audio = useRef<HTMLAudioElement | null>(null);
   const mix = useRef<ReturnType<typeof mixer> | null>(null);
-  const [state, setState] = useState<'loading' | 'ready' | 'playing' | 'ended'>('loading');
+  const [state, setState] = useState<'loading' | 'ready' | 'intro' | 'playing' | 'ended'>(
+    'loading',
+  );
   const [active, setActive] = useState<string[]>([]);
   const [progress, setProgress] = useState(0);
   const frame = useRef(0);
@@ -654,7 +688,11 @@ function Montage({
 
   const clipOf = (m: Moment) => m.videoClip?.start ?? 0;
 
-  const play = () => {
+  // Al tocar: se «despierta» el audio (en iPhone solo se puede tras un toque),
+  // sale la portada unos segundos y empieza el montaje.
+  const introTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(introTimer.current), []);
+  const start = () => {
     const a = audio.current;
     if (!a) return;
     if (!mix.current) {
@@ -663,6 +701,25 @@ function Montage({
       videos.current.forEach((v) => mix.current!.add(v, 0));
     }
     mix.current.resume();
+    for (const el of [a, ...videos.current.values()]) {
+      const was = el.muted;
+      el.muted = true;
+      el.play()
+        .then(() => {
+          el.pause();
+          el.muted = was;
+        })
+        .catch(() => {
+          el.muted = was;
+        });
+    }
+    setState('intro');
+    introTimer.current = setTimeout(play, INTRO_MS);
+  };
+
+  const play = () => {
+    const a = audio.current;
+    if (!a) return;
     a.currentTime = game.start;
     for (const m of takes) {
       const v = videos.current.get(m.id);
@@ -745,8 +802,14 @@ function Montage({
               transition:
                 'left .45s cubic-bezier(.2,.85,.25,1), top .45s cubic-bezier(.2,.85,.25,1), width .45s cubic-bezier(.2,.85,.25,1), height .45s cubic-bezier(.2,.85,.25,1), opacity .35s ease',
               background: '#111',
-              ...(state === 'ready' || state === 'loading'
-                ? { left: 0, top: 0, width: '100%', height: '100%', opacity: m === takes[0] ? 1 : 0 }
+              ...(state === 'ready' || state === 'loading' || state === 'intro'
+                ? {
+                    left: 0,
+                    top: 0,
+                    width: '100%',
+                    height: '100%',
+                    opacity: m === takes[0] ? 1 : 0,
+                  }
                 : place(m.id)),
             }}
           />
@@ -765,35 +828,16 @@ function Montage({
                     : ''}
               </Text>
             </View>
-            {(!!game.lyrics || !!game.lines?.length) && <Lyrics game={game} progress={progress} />}
           </>
         )}
         {state !== 'playing' && (
-          <Pressable
-            accessibilityLabel={state === 'ended' ? 'Ver otra vez' : 'Ver el karaoke'}
-            disabled={state === 'loading'}
-            onPress={play}
-            style={[StyleSheet.absoluteFill, styles.center, styles.dim]}>
-            {state === 'loading' ? (
-              <>
-                <ActivityIndicator color="#FFFFFF" />
-                <Text style={[styles.tipText, { marginTop: 12 }]}>Preparando las voces…</Text>
-              </>
-            ) : (
-              <>
-                <View style={styles.playBig}>
-                  <Icon icon={state === 'ended' ? RotateCcw : Play} size={30} color="#1D1F22" />
-                </View>
-                <Text style={[styles.tipText, { marginTop: 12 }]}>
-                  {state === 'ended'
-                    ? 'Otra vez'
-                    : takes.length > 1
-                      ? `${takes.length} voces, por turnos y al final todos`
-                      : 'De momento, una voz'}
-                </Text>
-              </>
-            )}
-          </Pressable>
+          <TitleCard
+            game={game}
+            names={takes.map((m) => user(m.authorId).name.split(' ')[0])}
+            singers={takes.map((m) => m.authorId)}
+            state={state}
+            onPlay={start}
+          />
         )}
       </View>
       <View style={styles.controls}>
@@ -802,6 +846,181 @@ function Montage({
         </Pressable>
       </View>
     </View>
+  );
+}
+
+/** Lo que dura la portada antes de que empiece el montaje. */
+const INTRO_MS = 3200;
+
+/**
+ * La portada del karaoke: la carátula, la canción y quién canta. Se ve antes
+ * de empezar (con el botón), como entrada animada y otra vez al final.
+ */
+function TitleCard({
+  game,
+  names,
+  singers,
+  state,
+  onPlay,
+}: {
+  game: KaraokeGame;
+  names: string[];
+  singers: string[];
+  state: 'loading' | 'ready' | 'intro' | 'ended';
+  onPlay: () => void;
+}) {
+  const intro = state === 'intro';
+  const list =
+    names.length > 1 ? `${names.slice(0, -1).join(', ')} y ${names[names.length - 1]}` : names[0];
+  const anim = (name: string, delay: number, ms = 700) =>
+    intro ? { animation: `${name} ${ms}ms cubic-bezier(.2,.85,.25,1) ${delay}ms both` } : {};
+  return (
+    <div
+      role={intro ? undefined : 'button'}
+      aria-label={state === 'ended' ? 'Ver otra vez' : 'Ver el karaoke'}
+      onClick={state === 'ready' || state === 'ended' ? onPlay : undefined}
+      style={{
+        position: 'absolute',
+        inset: 0,
+        overflow: 'hidden',
+        background: '#16171B',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 14,
+        padding: 24,
+        textAlign: 'center',
+        fontFamily:
+          "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+        cursor: state === 'loading' || intro ? 'default' : 'pointer',
+        zIndex: 5,
+        ...(intro ? { animation: `kOut 600ms ease ${INTRO_MS - 600}ms both` } : {}),
+      }}>
+      <style>{`
+        @keyframes kCover { from { opacity: 0; transform: scale(.55) rotate(-8deg) } to { opacity: 1; transform: none } }
+        @keyframes kUp { from { opacity: 0; transform: translateY(18px) } to { opacity: 1; transform: none } }
+        @keyframes kBg { from { transform: scale(1.35) } to { transform: scale(1.1) } }
+        @keyframes kOut { to { opacity: 0; transform: scale(1.06) } }
+        @keyframes kSpin { to { transform: rotate(360deg) } }
+      `}</style>
+      {/* la carátula, enorme y difuminada, de fondo */}
+      {!!game.artwork && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: -40,
+            background: `url("${game.artwork}") center / cover`,
+            filter: 'blur(38px) saturate(1.3)',
+            opacity: 0.55,
+            transform: 'scale(1.1)',
+            ...anim('kBg', 0, INTRO_MS),
+          }}
+        />
+      )}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'radial-gradient(circle at 50% 40%, rgba(0,0,0,0) 0%, rgba(0,0,0,.55) 75%)',
+        }}
+      />
+      <div
+        style={{
+          position: 'relative',
+          fontSize: 13,
+          letterSpacing: 3,
+          color: GOLD,
+          fontWeight: 800,
+          ...anim('kUp', 100),
+        }}>
+        KARAOKE
+      </div>
+      {/* la carátula (o un disco, si es una pista subida sin carátula) */}
+      <div
+        style={{
+          position: 'relative',
+          width: 'min(62%, 240px)',
+          aspectRatio: '1',
+          borderRadius: game.artwork ? 16 : '50%',
+          overflow: 'hidden',
+          boxShadow: '0 28px 70px rgba(0,0,0,.6)',
+          background: game.artwork
+            ? `url("${game.artwork}") center / cover`
+            : `radial-gradient(circle, ${GOLD} 0 16%, #111 17% 19%, #2a2b30 20% 100%)`,
+          ...anim('kCover', 250, 900),
+        }}>
+        {!game.artwork && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              borderRadius: '50%',
+              background:
+                'repeating-radial-gradient(circle, rgba(255,255,255,.05) 0 2px, transparent 2px 5px)',
+              animation: intro ? 'kSpin 2.4s linear infinite' : undefined,
+            }}
+          />
+        )}
+      </div>
+      <div style={{ position: 'relative', ...anim('kUp', 650) }}>
+        <div style={{ color: '#fff', fontSize: 26, fontWeight: 800, lineHeight: 1.15 }}>
+          {game.song}
+        </div>
+        {!!game.artist && (
+          <div style={{ color: 'rgba(255,255,255,.75)', fontSize: 16, marginTop: 4 }}>
+            {game.artist}
+          </div>
+        )}
+      </div>
+      {names.length > 0 && (
+        <div
+          style={{
+            position: 'relative',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 8,
+            ...anim('kUp', 1100),
+          }}>
+          <View style={{ flexDirection: 'row', gap: 4 }}>
+            {singers.slice(0, 8).map((id) => (
+              <Avatar key={id} userId={id} size={30} />
+            ))}
+          </View>
+          <div style={{ color: 'rgba(255,255,255,.85)', fontSize: 15 }}>
+            {names.length > 1 ? `Cantan ${list}` : `Canta ${list}`}
+          </div>
+        </div>
+      )}
+      {state === 'loading' && (
+        <div style={{ position: 'relative', color: 'rgba(255,255,255,.75)', fontSize: 14 }}>
+          Preparando las voces…
+        </div>
+      )}
+      {(state === 'ready' || state === 'ended') && (
+        <div
+          style={{
+            position: 'relative',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 8,
+            marginTop: 6,
+          }}>
+          <View style={styles.playBig}>
+            <Icon icon={state === 'ended' ? RotateCcw : Play} size={30} color="#1D1F22" />
+          </View>
+          <div style={{ color: 'rgba(255,255,255,.75)', fontSize: 14 }}>
+            {state === 'ended'
+              ? 'Otra vez'
+              : names.length > 1
+                ? 'Por turnos y al final, todos'
+                : ''}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -945,6 +1164,16 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.6)',
     textShadowRadius: 6,
   },
+  lyricUpcoming: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: '800',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowRadius: 6,
+  },
+  lyricDots: { color: GOLD, fontSize: 18, letterSpacing: 4, textAlign: 'center' },
   lyricPast: { color: 'rgba(255,255,255,0.45)', fontSize: 16, textAlign: 'center' },
   lyricNext: { color: 'rgba(255,255,255,0.85)', fontSize: 17, textAlign: 'center' },
   lyricFar: { fontSize: 16 },

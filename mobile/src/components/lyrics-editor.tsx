@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 import { useTheme } from '@/constants/theme';
 import { findLyrics, lineAt, type LyricLine } from '@/lib/lyrics';
@@ -48,6 +56,8 @@ export function LyricsEditor({
   const [raw, setRaw] = useState<LyricLine[]>([]);
   const [shift, setShift] = useState(0);
   const [aligned, setAligned] = useState(false);
+  // para situarla en el fragmento: la línea elegida con la que empieza
+  const [pick, setPick] = useState<number | null>(null);
   const [text, setText] = useState('');
   const [mark, setMark] = useState<{ lines: string[]; done: LyricLine[] }>({ lines: [], done: [] });
 
@@ -57,25 +67,28 @@ export function LyricsEditor({
     const abort = new AbortController();
     setState('searching');
     const wait = setTimeout(() => {
-      findLyrics(song.trim(), artist?.trim() || undefined, preview ? undefined : duration, abort.signal).then(
-        (r) => {
-          if (abort.signal.aborted) return;
-          if (r?.lines) {
-            setRaw(r.lines);
-            setShift(0);
-            // con una pista entera, la letra ya cuadra; con el fragmento, hay que situarla
-            setAligned(!preview);
-            setFound('lrclib');
-            setText(r.plain ?? '');
-            setState('synced');
-          } else {
-            setRaw([]);
-            setFound(r?.plain ? 'plain' : 'none');
-            setText(r?.plain ?? '');
-            setState('text');
-          }
-        },
-      );
+      findLyrics(
+        song.trim(),
+        artist?.trim() || undefined,
+        preview ? undefined : duration,
+        abort.signal,
+      ).then((r) => {
+        if (abort.signal.aborted) return;
+        if (r?.lines) {
+          setRaw(r.lines);
+          setShift(0);
+          // con una pista entera, la letra ya cuadra; con el fragmento, hay que situarla
+          setAligned(!preview);
+          setFound('lrclib');
+          setText(r.plain ?? '');
+          setState('synced');
+        } else {
+          setRaw([]);
+          setFound(r?.plain ? 'plain' : 'none');
+          setText(r?.plain ?? '');
+          setState('text');
+        }
+      });
     }, 600);
     return () => {
       clearTimeout(wait);
@@ -95,13 +108,12 @@ export function LyricsEditor({
         lines: inside.map((l) => ({ t: Math.round(l.t * 100) / 100, text: l.text })),
         lyrics: inside.map((l) => l.text).join('\n') || undefined,
       });
-    } else if (state === 'text' || state === 'synced') latest.current({ lyrics: text.trim() || undefined });
+    } else if (state === 'text' || state === 'synced')
+      latest.current({ lyrics: text.trim() || undefined });
   }, [state, aligned, lines, clip.start, clip.end, text]);
 
   const current = lineAt(lines, at + 0.05);
-  const list = useRef<{ scrollTo: (o: { y: number; animated?: boolean }) => void } | null>(
-    null,
-  );
+  const list = useRef<{ scrollTo: (o: { y: number; animated?: boolean }) => void } | null>(null);
   const rows = useRef(new Map<number, number>());
   useEffect(() => {
     if (!playing || current < 0) return;
@@ -111,6 +123,11 @@ export function LyricsEditor({
 
   // Tocar la línea que suena: así se sitúa la letra sobre el fragmento.
   const tapLine = (i: number) => {
+    // sin situar aún: primero se elige la línea con la que empieza el trozo
+    if (!aligned) {
+      setPick(i);
+      return;
+    }
     const a = audio();
     if (!a || !playing) {
       playClip();
@@ -118,6 +135,14 @@ export function LyricsEditor({
     }
     setShift(a.currentTime - REACTION - raw[i].t);
     setAligned(true);
+  };
+  // «Ahora»: la línea elegida empieza en este segundo
+  const placeNow = () => {
+    const a = audio();
+    if (!a || pick == null || !playing) return;
+    setShift(a.currentTime - REACTION - raw[pick].t);
+    setAligned(true);
+    setPick(null);
   };
 
   // Marcar el ritmo a mano: se toca al empezar cada línea.
@@ -134,7 +159,10 @@ export function LyricsEditor({
   const tapNow = () => {
     const a = audio();
     if (!a) return;
-    const done = [...mark.done, { t: Math.max(0, a.currentTime - REACTION), text: mark.lines[mark.done.length] }];
+    const done = [
+      ...mark.done,
+      { t: Math.max(0, a.currentTime - REACTION), text: mark.lines[mark.done.length] },
+    ];
     if (done.length >= mark.lines.length) finishMarking(done);
     else setMark({ ...mark, done });
   };
@@ -181,16 +209,51 @@ export function LyricsEditor({
               ? 'Con el ritmo que has marcado.'
               : 'Encontrada y sincronizada (de LRCLIB): irá pasando al ritmo de la canción.'}
           </Text>
-          {!aligned && (
+          {!aligned && pick == null && (
             <View style={[styles.hint, { backgroundColor: theme.soft }]}>
               <Text style={{ color: theme.text, fontSize: 15, lineHeight: 21 }}>
-                Apple no dice de qué parte de la canción son sus 30 segundos.{' '}
-                <Text style={{ fontWeight: '700' }}>Dale a escuchar y toca la línea que está sonando</Text>: el
-                resto se coloca solo.
+                Apple no dice de qué parte de la canción son sus 30 segundos. Escucha el trozo y{' '}
+                <Text style={{ fontWeight: '700' }}>toca abajo la primera línea que se oye</Text>.
               </Text>
             </View>
           )}
-          <View style={[styles.box, { backgroundColor: theme.card }]}>
+          {!aligned && pick != null && (
+            <View style={[styles.marking, { backgroundColor: theme.card }]}>
+              <Text style={small}>
+                {playing
+                  ? 'Toca «Ahora» justo cuando empiece a cantarse:'
+                  : 'Dale a empezar y toca «Ahora» justo cuando empiece a cantarse:'}
+              </Text>
+              <Text
+                style={{ color: theme.text, fontSize: 20, fontWeight: '700', textAlign: 'center' }}>
+                {raw[pick]?.text}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={playing ? 'Ahora' : 'Empezar'}
+                onPress={playing ? placeNow : playClip}
+                style={[styles.now, { backgroundColor: playing ? GOLD : theme.text }]}>
+                <Text
+                  style={{
+                    color: playing ? '#1D1F22' : theme.background,
+                    fontSize: 20,
+                    fontWeight: '800',
+                  }}>
+                  {playing ? 'Ahora' : 'Empezar'}
+                </Text>
+              </Pressable>
+              {link('Elegir otra línea', () => {
+                audio()?.pause();
+                setPick(null);
+              })}
+            </View>
+          )}
+          <View
+            style={[
+              styles.box,
+              { backgroundColor: theme.card },
+              !aligned && pick != null && { display: 'none' },
+            ]}>
             <ScrollView ref={list as never} style={{ maxHeight: 240 }} nestedScrollEnabled>
               {lines.map((l, i) => {
                 const inClip = aligned && l.t >= clip.start - 0.5 && l.t < clip.end;
@@ -235,7 +298,12 @@ export function LyricsEditor({
             </View>
           )}
           <View style={[styles.row, { flexWrap: 'wrap' }]}>
-            {aligned && preview && link('Volver a situarla', () => setAligned(false))}
+            {aligned &&
+              preview &&
+              link('Volver a situarla', () => {
+                setAligned(false);
+                setPick(null);
+              })}
             {link('Editar el texto y marcar el ritmo yo', () => setState('text'))}
           </View>
         </>
@@ -281,7 +349,8 @@ export function LyricsEditor({
       {state === 'marking' && (
         <View style={[styles.marking, { backgroundColor: theme.card }]}>
           <Text style={small}>
-            Toca «Ahora» justo cuando empiece cada línea ({mark.done.length + 1} de {mark.lines.length})
+            Toca «Ahora» justo cuando empiece cada línea ({mark.done.length + 1} de{' '}
+            {mark.lines.length})
           </Text>
           <Text style={{ color: theme.textSecondary, fontSize: 15, textAlign: 'center' }}>
             {mark.lines[mark.done.length - 1] ?? ' '}
