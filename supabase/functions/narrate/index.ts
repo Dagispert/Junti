@@ -1027,6 +1027,12 @@ async function describePeriod(
     supabase.from('moment_media').select('moment_id, media_assets(kind)').in('moment_id', ids),
     supabase.from('reactions').select('moment_id, emoji').in('moment_id', ids),
     supabase
+      .from('questions')
+      .select('title')
+      .eq('group_id', groupId)
+      .order('created_at', { ascending: false })
+      .limit(30),
+    supabase
       .from('comments')
       .select('moment_id, user_id, text, created_at')
       .in('moment_id', ids)
@@ -1250,20 +1256,35 @@ async function describePeriod(
 
 /** Pide el texto a Gemini, buscando un modelo «flash» disponible con cupo gratuito. */
 // ── Retos pensados para cada grupo ──────────────────────────────────────────
-const SYSTEM_RETOS = `Eres la narradora de Junti, una app privada en la que un grupo de personas que viven lejos (amigos, familia o pareja) comparte su día a día. Tu tarea ahora: inventar RETOS divertidos para ESTE grupo, inspirados en lo que han ido compartiendo.
+const SYSTEM_RETOS = `Eres la narradora de Junti, una app privada en la que un grupo de personas que viven lejos (amigos, familia o pareja) comparte su día a día. Tu tarea ahora: proponer cosas divertidas e inesperadas para que ESTE grupo haga en la app, inspiradas en lo que han ido compartiendo.
 
-Un reto es algo pequeño que cada persona puede hacer en su ciudad y compartir en la app con una foto, un vídeo, una nota de voz o un texto, en uno a siete días. Ejemplos del tono (no los repitas): «Haz una foto de tu desayuno de hoy desde arriba», «Graba 5 segundos del sonido de tu calle», «Encuentra algo de color naranja y fotografíalo».
+Puedes proponer cualquiera de estos tipos (campo «tipo»):
+- "reto": algo pequeño que cada uno hace en su ciudad y comparte con foto, vídeo corto, nota de voz o texto, en 1 a 7 días. Ej.: «Foto de vuestro desayuno desde arriba», «5 segundos del sonido de tu calle».
+- "karaoke": que todos canten la misma canción. Elige una canción REAL y conocida que encaje con el grupo (algo que hayan mencionado, de su país, de una época compartida…). Rellena «cancion» con {"titulo","artista"}.
+- "encuesta": una pregunta para votar con 2 a 4 «opciones» cortas (máx. 40 caracteres cada una).
+- "quiz": «¿Quién de nosotros…?» para adivinar. Las «opciones» son los nombres de pila de las personas del grupo (2 a 4). Quien lo cree marcará la respuesta correcta.
+- "pregunta": una pregunta abierta que cada uno responde con sus palabras.
+- "recuerdo": invitar a compartir una foto o historia de antes («¿Quién tiene una foto de…?»), relacionada con lo que han contado.
 
 Reglas:
-- Usa de verdad lo que ha pasado en el grupo: sus bromas, lugares, aficiones, planes, lo que dijeron. Que se note que lo conoces, pero sin desvelar nada privado ni ridiculizar a nadie.
-- Sorprende: mezcla tipos (foto, vídeo corto, voz, dibujo, algo con la distancia que os separa, algo para hacer a la vez). Nada peligroso, caro ni incómodo, nada de alcohol ni retos físicos arriesgados.
-- No repitas retos que el grupo ya hizo (te los paso).
-- Escribe en español de España, cercano y con chispa. Tutea al grupo («haced», «vuestro»).
-- Título: una orden corta (máx. 60 caracteres). Explicación: una o dos frases (máx. 180 caracteres) que digan qué compartir. «porque»: media frase que diga en qué te has inspirado (máx. 90 caracteres), sin nombrar a nadie por sus datos privados.
+- Usa de verdad lo que ha pasado en el grupo: sus bromas, lugares, aficiones, planes, lo que dijeron. Que se note que los conoces, sin desvelar nada privado ni ridiculizar a nadie.
+- Sorprende y varía: las 4 propuestas deben ser de al menos 3 tipos distintos. Nada peligroso, caro ni incómodo; nada de alcohol ni retos físicos arriesgados.
+- No repitas lo que el grupo ya hizo o ya preguntó (te lo paso).
+- Español de España, cercano y con chispa. Tutea al grupo («haced», «vuestro»).
+- «title»: corto (máx. 70 caracteres); en encuesta, quiz y pregunta es la pregunta misma. «body»: una frase que lo explique (máx. 180; puede ir vacío en encuesta, quiz y pregunta). «porque»: media frase sobre en qué te inspiraste (máx. 90). «days»: 1 a 7 (para reto, karaoke, encuesta y quiz).
 
-Responde SOLO con JSON: {"ideas":[{"title":"…","body":"…","days":3,"porque":"…"}]} con exactamente 3 ideas distintas. «days» entre 1 y 7.`;
+Responde SOLO con JSON: {"ideas":[{"tipo":"reto","title":"…","body":"…","days":3,"porque":"…","opciones":["…"],"cancion":{"titulo":"…","artista":"…"}}]} con exactamente 4 ideas (omite «opciones» y «cancion» cuando no apliquen).`;
 
-type IdeaReto = { title: string; body: string; days: number; porque: string };
+const TIPOS_IDEA = ['reto', 'karaoke', 'encuesta', 'quiz', 'pregunta', 'recuerdo'] as const;
+type IdeaReto = {
+  tipo: (typeof TIPOS_IDEA)[number];
+  title: string;
+  body: string;
+  days: number;
+  porque: string;
+  opciones?: string[];
+  cancion?: { titulo: string; artista: string };
+};
 
 async function ideasDeRetos(me: string, groupId: string | undefined, otraVez: boolean) {
   if (!groupId) return { ideas: [], reason: 'bad' };
@@ -1295,7 +1316,7 @@ async function ideasDeRetos(me: string, groupId: string | undefined, otraVez: bo
     .eq('status', 'active');
   const optedOut = new Set((members ?? []).filter((m) => m.narrative_opt_out).map((m) => m.user_id));
   const ids = (members ?? []).map((m) => m.user_id);
-  const [{ data: people }, { data: moments }, { data: retos }, { data: comments }] = await Promise.all([
+  const [{ data: people }, { data: moments }, { data: retos }, { data: preguntas }, { data: comments }] = await Promise.all([
     supabase.from('profiles').select('id, name, home_city, home_country, hometown, bio, interests').in('id', ids),
     supabase
       .from('moments')
@@ -1343,9 +1364,12 @@ async function ideasDeRetos(me: string, groupId: string | undefined, otraVez: bo
       .slice(0, 25)
       .map((c) => `- ${nombre.get(c.user_id)}: ${String(c.text).slice(0, 140)}`),
     '',
-    'Retos que ya hicieron (no los repitas):',
-    ...((retos ?? []).map((r) => `- ${r.title}`) || []),
-    ...(otraVez && saved ? ['', 'Ideas que ya les propusiste hace poco (inventa otras distintas):', ...(saved.ideas as IdeaReto[]).map((i) => `- ${i.title}`)] : []),
+    'Retos y karaokes que ya hicieron (no los repitas):',
+    ...(retos ?? []).map((r) => `- ${r.title}`),
+    '',
+    'Encuestas, quizzes y preguntas que ya se hicieron:',
+    ...(preguntas ?? []).map((q) => `- ${q.title}`),
+    ...(otraVez && saved ? ['', 'Ideas que ya les propusiste hace poco (inventa otras distintas):', ...(saved.ideas as IdeaReto[]).map((i) => `- [${i.tipo ?? 'reto'}] ${i.title}`)] : []),
   ].join('\n');
 
   let ideas: IdeaReto[] = [];
@@ -1355,13 +1379,28 @@ async function ideasDeRetos(me: string, groupId: string | undefined, otraVez: bo
     ideas = (json.ideas ?? [])
       .map((x) => x as Partial<IdeaReto>)
       .filter((x) => typeof x.title === 'string' && x.title.trim())
-      .slice(0, 3)
-      .map((x) => ({
-        title: String(x.title).trim().slice(0, 70),
-        body: String(x.body ?? '').trim().slice(0, 220),
-        days: Math.max(1, Math.min(7, Math.round(Number(x.days) || 3))),
-        porque: String(x.porque ?? '').trim().slice(0, 110),
-      }));
+      .map((x): IdeaReto | null => {
+        const tipo = (TIPOS_IDEA as readonly string[]).includes(String(x.tipo)) ? x.tipo! : 'reto';
+        const opciones = Array.isArray(x.opciones)
+          ? x.opciones.map((o) => String(o).trim().slice(0, 40)).filter(Boolean).slice(0, 4)
+          : undefined;
+        if ((tipo === 'encuesta' || tipo === 'quiz') && (!opciones || opciones.length < 2)) return null;
+        const c = x.cancion as { titulo?: unknown; artista?: unknown } | undefined;
+        if (tipo === 'karaoke' && !c?.titulo) return null;
+        return {
+          tipo,
+          title: String(x.title).trim().slice(0, 80),
+          body: String(x.body ?? '').trim().slice(0, 220),
+          days: Math.max(1, Math.min(7, Math.round(Number(x.days) || 3))),
+          porque: String(x.porque ?? '').trim().slice(0, 110),
+          ...(opciones && (tipo === 'encuesta' || tipo === 'quiz') ? { opciones } : {}),
+          ...(tipo === 'karaoke'
+            ? { cancion: { titulo: String(c!.titulo).slice(0, 80), artista: String(c!.artista ?? '').slice(0, 60) } }
+            : {}),
+        };
+      })
+      .filter((x): x is IdeaReto => !!x)
+      .slice(0, 4);
   } catch (e) {
     console.error('retos', e);
   }

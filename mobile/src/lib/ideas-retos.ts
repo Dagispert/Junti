@@ -1,9 +1,22 @@
-// Retos pensados para cada grupo: la narradora (IA) los inventa a partir de lo
+// Ideas pensadas para cada grupo (retos, karaokes, encuestas, quizzes,
+// preguntas y recuerdos): la narradora (IA) las inventa a partir de lo
 // que el grupo va compartiendo. Solo si el grupo tiene la narradora activada.
 
 import { supabase } from './supabase';
 
-export type IdeaReto = { title: string; body: string; days: number; porque: string };
+export type TipoIdea = 'reto' | 'karaoke' | 'encuesta' | 'quiz' | 'pregunta' | 'recuerdo';
+export type IdeaReto = {
+  /** qué es (lo mismo que se puede crear con el «+»); sin él, un reto */
+  tipo?: TipoIdea;
+  title: string;
+  body: string;
+  days: number;
+  porque: string;
+  /** encuesta y quiz */
+  opciones?: string[];
+  /** karaoke */
+  cancion?: { titulo: string; artista: string };
+};
 export type RespuestaIdeas = {
   ideas: IdeaReto[];
   generatedAt?: string;

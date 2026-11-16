@@ -36,12 +36,14 @@ type Chosen = {
  * de karaoke subida), el trozo que se canta y, si se quiere, la letra.
  */
 export default function NewKaraoke() {
-  const { groupId } = useLocalSearchParams<{ groupId: string }>();
+  // Puede llegar con una canción propuesta por la narradora (se busca sola).
+  const params = useLocalSearchParams<{ groupId: string; q?: string; days?: string }>();
+  const { groupId } = params;
   const theme = useTheme();
   const { group: groupById, addKaraoke } = useStore();
   const group = groupById(groupId);
   const [source, setSource] = useState<'search' | 'upload'>('search');
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(params.q ?? '');
   const [results, setResults] = useState<FoundSong[]>([]);
   const [searching, setSearching] = useState(false);
   const [chosen, setChosen] = useState<Chosen | null>(null);
@@ -49,7 +51,14 @@ export default function NewKaraoke() {
   const [clip, setClip] = useState({ start: 0, end: 0 });
   const [bars, setBars] = useState<number[]>([]);
   const [lyrics, setLyrics] = useState<LyricsValue>({});
-  const [days, setDays] = useState(7);
+  const [days, setDays] = useState(() => {
+    const d = Number(params.days);
+    if (!(d > 0)) return 7;
+    // la duración disponible más cercana
+    return DURATIONS.filter((x) => x.days).reduce((a, b) =>
+      Math.abs(b.days - d) < Math.abs(a.days - d) ? b : a,
+    ).days;
+  });
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
 
@@ -285,7 +294,9 @@ export default function NewKaraoke() {
               </>
             ) : (
               <>
-                <Text numberOfLines={1} style={{ color: theme.text, fontSize: 17, fontWeight: '600' }}>
+                <Text
+                  numberOfLines={1}
+                  style={{ color: theme.text, fontSize: 17, fontWeight: '600' }}>
                   {chosen.song}
                 </Text>
                 <Text numberOfLines={1} style={{ color: theme.textSecondary, fontSize: 15 }}>
@@ -324,10 +335,14 @@ export default function NewKaraoke() {
               }
               style={[styles.result, { backgroundColor: theme.card }]}>
               <View style={[styles.artSmall, { backgroundColor: theme.soft }]}>
-                {!!s.artwork && <Image source={{ uri: s.artwork }} style={StyleSheet.absoluteFill} />}
+                {!!s.artwork && (
+                  <Image source={{ uri: s.artwork }} style={StyleSheet.absoluteFill} />
+                )}
               </View>
               <View style={{ flex: 1 }}>
-                <Text numberOfLines={1} style={{ color: theme.text, fontSize: 16, fontWeight: '500' }}>
+                <Text
+                  numberOfLines={1}
+                  style={{ color: theme.text, fontSize: 16, fontWeight: '500' }}>
                   {s.title}
                 </Text>
                 <Text numberOfLines={1} style={{ color: theme.textSecondary, fontSize: 14 }}>
@@ -422,7 +437,9 @@ export default function NewKaraoke() {
       )}
 
       <View style={{ gap: 8 }}>
-        <Text style={{ color: theme.textSecondary, fontSize: 13 }}>Cuánto tiempo hay para cantar</Text>
+        <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
+          Cuánto tiempo hay para cantar
+        </Text>
         <View style={styles.chips}>
           {DURATIONS.map((d) => {
             const on = d.days === days;

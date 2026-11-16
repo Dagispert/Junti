@@ -27,15 +27,39 @@ const DURATIONS = [
 
 /** Hacer una pregunta al grupo: encuesta, quiz o pregunta abierta. */
 export default function Ask() {
-  const { groupId, kind: rawKind } = useLocalSearchParams<{ groupId: string; kind: string }>();
+  // Puede llegar ya rellena (una idea de la narradora); se puede cambiar todo.
+  const params = useLocalSearchParams<{
+    groupId: string;
+    kind: string;
+    title?: string;
+    options?: string;
+    days?: string;
+  }>();
+  const { groupId, kind: rawKind } = params;
   const kind: QuestionKind = rawKind === 'quiz' || rawKind === 'open' ? rawKind : 'poll';
   const theme = useTheme();
   const { group: groupById, user, askQuestion } = useStore();
   const group = groupById(groupId);
-  const [title, setTitle] = useState('');
-  const [options, setOptions] = useState<string[]>(['', '']);
+  const [title, setTitle] = useState(params.title ?? '');
+  const [options, setOptions] = useState<string[]>(() => {
+    try {
+      const o = JSON.parse(params.options ?? '[]') as unknown;
+      if (Array.isArray(o) && o.length >= 2) return o.map(String).slice(0, 6);
+    } catch {
+      // sin opciones válidas: las dos vacías de siempre
+    }
+    return ['', ''];
+  });
   const [correct, setCorrect] = useState<number>();
-  const [days, setDays] = useState(kind === 'open' ? 0 : 3);
+  const [days, setDays] = useState(() => {
+    const d = Number(params.days);
+    if (kind === 'open') return 0;
+    if (!(d > 0)) return 3;
+    // la duración disponible más cercana
+    return DURATIONS.filter((x) => x.days).reduce((a, b) =>
+      Math.abs(b.days - d) < Math.abs(a.days - d) ? b : a,
+    ).days;
+  });
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   if (!group) return null;

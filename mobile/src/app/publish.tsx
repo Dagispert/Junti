@@ -45,8 +45,10 @@ type Media = {
  * recuerdo de antes que se guarda en su fecha.
  */
 export default function Publish() {
-  const { groupId, proposalId, memory, year, addTo, creditedTo } = useLocalSearchParams<{
+  const { groupId, proposalId, memory, year, addTo, creditedTo, pista } = useLocalSearchParams<{
     groupId: string;
+    /** Lo que propuso la narradora («¿Quién tiene una foto de…?»), como título. */
+    pista?: string;
     /** A nombre de quién sale (lo compartido desde WhatsApp por otra persona). */
     creditedTo?: string;
     proposalId?: string;
@@ -356,9 +358,11 @@ export default function Publish() {
             ? 'Tu versión'
             : proposal
               ? proposal.title
-              : remembering
-                ? 'Un recuerdo'
-                : 'Comparte un momento'}
+              : pista
+                ? pista
+                : remembering
+                  ? 'Un recuerdo'
+                  : 'Comparte un momento'}
         </Title>
         {adding && (
           <Text style={{ color: theme.textSecondary, fontSize: 15, lineHeight: 21 }}>
