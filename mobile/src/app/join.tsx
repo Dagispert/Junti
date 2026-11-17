@@ -20,7 +20,11 @@ export default function Join() {
   const submit = async () => {
     setBusy(true);
     try {
-      const id = await joinGroup(code.trim());
+      // también vale pegar el enlace entero de la invitación
+      let c = code.trim();
+      const m = c.match(/[?&]code=([^&#\s]+)/);
+      if (m) c = decodeURIComponent(m[1]);
+      const id = await joinGroup(c);
       router.replace({ pathname: '/group/[id]', params: { id } });
     } catch (error) {
       setNotice(errorText(error));
@@ -47,7 +51,7 @@ export default function Join() {
         <Lead strong="Escribe el código">que te ha pasado alguien del grupo.</Lead>
       )}
       <Field
-        label="Código de invitación"
+        label="Código o enlace de invitación"
         value={code}
         onChangeText={setCode}
         autoCapitalize="none"

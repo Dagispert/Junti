@@ -14,6 +14,7 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
 import { AuthScreen, ProfileSetup } from '@/components/auth-screen';
 import { ColaEnvio } from '@/components/cola-envio';
+import { GuiaInstalar } from '@/components/guia-instalar';
 import { IntroCinematic } from '@/components/cinematics';
 import { useTheme } from '@/constants/theme';
 import { aplicarEnLaWeb, useEsquema } from '@/lib/appearance';
@@ -21,6 +22,7 @@ import { StoreProvider, useStore } from '@/data/store';
 import { AlDia } from '@/lib/al-dia';
 import { apuntarError, instalarErrores } from '@/lib/errores';
 import { arrancar as arrancarInclinacion } from '@/lib/inclinacion';
+import { mostrarGuia } from '@/lib/instalar';
 import { rememberInvite, takeInvite } from '@/lib/invite';
 import { setupInstallable } from '@/lib/push';
 import { markIntroDone } from '@/lib/tour';
@@ -115,6 +117,9 @@ function Gate() {
     markIntroDone();
   }, []);
   const theme = useTheme();
+  // PROVISIONAL (hasta la app de verdad): desde el navegador del móvil, lo
+  // primero es la guía para instalarla.
+  const [guia, setGuia] = useState(mostrarGuia);
   // Una invitación que llegó por enlace antes de entrar: se abre al estar dentro.
   useEffect(() => {
     if (status !== 'ready') return;
@@ -123,6 +128,7 @@ function Gate() {
       router.push({ pathname: '/join', params: { code } });
     }
   }, [status]);
+  if (guia) return <GuiaInstalar onSeguir={() => setGuia(false)} />;
   if (status === 'loading') {
     return (
       <View style={{ flex: 1, justifyContent: 'center', backgroundColor: theme.background }}>

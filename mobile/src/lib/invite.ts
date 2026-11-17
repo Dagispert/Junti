@@ -57,3 +57,13 @@ export async function copyText(text: string): Promise<boolean> {
     return false;
   }
 }
+
+/** La invitación pendiente, sin olvidarla (para enseñar el código). */
+export function peekInvite(): string | null {
+  if (!web) return null;
+  try {
+    return localStorage.getItem(KEY);
+  } catch {
+    return null;
+  }
+}
