@@ -954,26 +954,39 @@ function Montage({
       for (const [id, p] of bytes.current) {
         const ab = await p;
         if (!ab) continue;
+        // como mucho unos segundos por archivo: si no, se empieza sin esa voz
+        const conTiempo = <T,>(pr: Promise<T>, ms: number) =>
+          Promise.race([pr, new Promise<null>((r) => setTimeout(() => r(null), ms))]);
+        let buf: AudioBuffer | null = null;
+        let fallo: unknown = null;
         try {
-          // como mucho unos segundos por archivo: si no, se empieza sin esa voz
-          const buf = await Promise.race([
-            c.decodeAudioData(ab.slice(0)),
-            new Promise<null>((r) => setTimeout(() => r(null), 8000)),
-          ]);
-          if (buf) {
-            out.set(id, buf);
-            // una toma antigua en Opus: este móvil sí la entiende, así que deja
-            // su voz en WAV para los iPhone
-            if (id !== 'cancion' && !deWav.current.has(id) && tieneOpus(ab))
-              guardarVozToma(groupId, me, id, buf).catch((e) => apuntarError(e, 'aviso'));
-          } else apuntarError(new Error(`Karaoke: tarda en preparar el sonido (${id})`), 'aviso');
+          buf = await conTiempo(c.decodeAudioData(ab.slice(0)), 8000);
         } catch (e) {
-          // sin sonido para esa voz: el vídeo sale igual (pero no se guarda el montaje)
+          fallo = e;
+        }
+        const opus = id !== 'cancion' && tieneOpus(ab);
+        if (!buf && opus) {
+          // el iPhone no sabe leer Opus por sí mismo: se decodifica aparte
+          try {
+            const { decodificarOpus } = await import('@/lib/opus');
+            buf = await conTiempo(decodificarOpus(ab, c), 15000);
+          } catch (e) {
+            fallo = e;
+          }
+        }
+        if (buf) {
+          out.set(id, buf);
+          // una toma en Opus sin su WAV: se deja guardado para que los demás
+          // no tengan que decodificarla otra vez
+          if (opus && !deWav.current.has(id))
+            guardarVozToma(groupId, me, id, buf).catch((e) => apuntarError(e, 'aviso'));
+        } else
           apuntarError(
-            new Error(`Karaoke: no se pudo leer la voz (${id}): ${(e as Error)?.message ?? e}`),
+            new Error(
+              `Karaoke: no se pudo leer la voz (${id}): ${fallo ? ((fallo as Error)?.message ?? fallo) : 'tarda demasiado'}`,
+            ),
             'aviso',
           );
-        }
       }
       return out;
     })();
@@ -1559,10 +1572,8 @@ function Montage({
       </View>
       {mudos.length > 0 && (
         <Text style={styles.guardado}>
-          En este móvil no se oye la voz de{' '}
-          {mudos.map((u) => user(u).name.split(' ')[0]).join(' y ')}: se grabó en Android. Se
-          arreglará sola en cuanto alguien con Android o un ordenador abra este karaoke; hasta
-          entonces el vídeo con todas las voces no se guarda.
+          No se ha podido leer la voz de {mudos.map((u) => user(u).name.split(' ')[0]).join(' y ')}
+          . El vídeo con todas las voces no se guarda así; vuelve a intentarlo en un rato.
         </Text>
       )}
       {!!guardado && (

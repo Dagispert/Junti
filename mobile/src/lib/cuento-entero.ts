@@ -2,6 +2,7 @@
 // seguidos (sin huecos ni silencios en los extremos) y ella pone el final.
 // Lo usan la pantalla del cuento y su tarjeta en «Hoy».
 
+import { tieneOpus } from './karaoke';
 import { useEffect, useRef, useState } from 'react';
 
 import type { Moment } from '@/data/types';
@@ -210,7 +211,14 @@ export function useCuentoEntero({
       if (!src) return null;
       try {
         const ab = await (await fetch(src)).arrayBuffer();
-        return await c.decodeAudioData(ab);
+        try {
+          return await c.decodeAudioData(ab.slice(0));
+        } catch {
+          // una nota grabada en Android (Opus) que este móvil no sabe leer
+          if (!tieneOpus(ab)) return null;
+          const { decodificarOpus } = await import('./opus');
+          return await decodificarOpus(ab, c);
+        }
       } catch {
         return null;
       }
