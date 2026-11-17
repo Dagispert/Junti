@@ -122,6 +122,15 @@ type Store = {
   addChallenge: (groupId: string, title: string, body: string, days?: number) => Promise<void>;
   /** Un plan (contenedor de varias publicaciones), en su fecha y ya cerrado. Devuelve su id. */
   addPlan: (groupId: string, title: string, at: number) => Promise<string>;
+  /** Un zoom misterioso: la foto, el detalle elegido, la solución y el plazo. */
+  addZoom: (
+    groupId: string,
+    foto: { uri: string; mime?: string },
+    punto: { cx: number; cy: number },
+    respuesta: string,
+    alternativas: string[],
+    days: number,
+  ) => Promise<string>;
   /** Un cuento a trozos: la primera frase y cuántos días hay para seguirlo. */
   addCuento: (groupId: string, inicio: string, days: number) => Promise<string>;
   /** Un reto de karaoke; con «track», la pista se sube antes al almacén del grupo. */
@@ -745,6 +754,7 @@ async function load(me: string): Promise<Data> {
     createdBy: p.created_by ?? undefined,
     game: p.game?.type === 'karaoke' ? p.game : undefined,
     juego: p.game?.type === 'cuento' ? p.game : undefined,
+    zoom: p.game?.type === 'zoom' ? p.game : undefined,
   }));
 
   const songs: Song[] = (songRows ?? []).map((s) => ({
@@ -1358,6 +1368,39 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           })
           .select('id')
           .single(),
+      );
+      await refresh();
+      return row!.id as string;
+    },
+    addZoom: async (groupId, foto, punto, respuesta, alternativas, days) => {
+      const mime = foto.mime ?? 'image/jpeg';
+      const file = await putFile(
+        groupId,
+        me,
+        foto.uri,
+        `zoom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${extensionFor(mime, 'jpg')}`,
+        mime,
+      );
+      const row = check(
+        await supabase
+          .from('proposals')
+          .insert({
+            group_id: groupId,
+            kind: 'challenge',
+            title: 'Zoom misterioso',
+            body: '¿Qué es?',
+            ends_at: new Date(Date.now() + days * 86_400_000).toISOString(),
+            game: { type: 'zoom', path: file.path, cx: punto.cx, cy: punto.cy },
+          })
+          .select('id')
+          .single(),
+      );
+      check(
+        await supabase.from('juego_secretos').insert({
+          proposal_id: row!.id,
+          respuesta: respuesta.trim().slice(0, 80),
+          alternativas: alternativas.map((a) => a.trim().slice(0, 80)).filter(Boolean),
+        }),
       );
       await refresh();
       return row!.id as string;

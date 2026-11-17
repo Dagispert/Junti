@@ -21,6 +21,7 @@ import {
   Import,
   MessageCircle,
   Mic,
+  ZoomIn,
   type LucideIcon,
 } from 'lucide-react-native';
 
@@ -44,7 +45,14 @@ export default function AddScreen() {
 
   // Se sustituye esta pantalla para que «Cancelar» vuelva directo al grupo.
   const open = (
-    pathname: '/publish' | '/new-challenge' | '/new-karaoke' | '/new-cuento' | '/ask' | '/importar',
+    pathname:
+      | '/publish'
+      | '/new-challenge'
+      | '/new-karaoke'
+      | '/new-cuento'
+      | '/new-zoom'
+      | '/ask'
+      | '/importar',
     params: Record<string, string>,
   ) => router.replace({ pathname, params: { groupId, ...params } } as never);
 
@@ -81,7 +89,7 @@ export default function AddScreen() {
       family: 'challenge',
       icon: Gamepad2,
       title: 'Minijuegos',
-      hint: 'Karaoke, el cuento a trozos…',
+      hint: 'Karaoke, el cuento a trozos, el zoom misterioso…',
       go: () => setJuegos((v) => !v),
     },
     {
@@ -122,6 +130,13 @@ export default function AddScreen() {
       title: 'El cuento a trozos',
       hint: 'Cada uno graba cómo sigue, oyendo solo el trozo anterior',
       go: () => open('/new-cuento', {}),
+    },
+    {
+      family: 'challenge',
+      icon: ZoomIn,
+      title: 'Zoom misterioso',
+      hint: 'Un detalle muy de cerca: ¿qué es? Cada fallo lo aleja',
+      go: () => open('/new-zoom', {}),
     },
   ];
 

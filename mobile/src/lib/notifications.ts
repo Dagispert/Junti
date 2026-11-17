@@ -301,6 +301,7 @@ export function useNotifications() {
         continue;
       const karaoke = p.game?.type === 'karaoke';
       const cuento = !!p.juego;
+      const zoom = !!p.zoom;
       out.push({
         key: `proposal:${p.id}`,
         kind: karaoke ? 'karaoke' : 'challenge',
@@ -311,14 +312,18 @@ export function useNotifications() {
           ? `propuso un karaoke: «${p.game!.song}»`
           : cuento
             ? 'empezó un cuento a trozos'
-            : `propuso un reto: «${p.title}»`,
+            : zoom
+              ? 'propuso un zoom misterioso: ¿adivinas qué es?'
+              : `propuso un reto: «${p.title}»`,
         thumb: p.game?.artwork,
         scope: `proposal:${p.id}`,
         to: karaoke
           ? { pathname: '/karaoke/[id]', params: { id: p.id } }
           : cuento
             ? { pathname: '/cuento/[id]', params: { id: p.id } }
-            : { pathname: '/group/[id]/retos', params: { id: p.groupId } },
+            : zoom
+              ? { pathname: '/zoom/[id]', params: { id: p.id } }
+              : { pathname: '/group/[id]/retos', params: { id: p.groupId } },
       });
     }
 

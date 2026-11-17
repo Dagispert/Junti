@@ -5,7 +5,7 @@
 
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { BookOpen, Lock, Mic, Pause, Play } from 'lucide-react-native';
+import { BookOpen, Lock, Mic, Pause, Play, Search } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -16,9 +16,11 @@ import { useEsquema } from '@/lib/appearance';
 import { useCuentoEntero } from '@/lib/cuento-entero';
 import { capa, useInclinacion } from '@/lib/inclinacion';
 import { useMontaje } from '@/lib/montaje';
+import { NIVELES, solucion, useFotoZoom, useResultadosZoom } from '@/lib/zoom';
 import { daysLeft } from '@/lib/time';
 
 import { ComentariosJuego } from './comentarios-juego';
+import { Lupa } from './lupa';
 import { Icon } from './icon';
 import { NudgeBell } from './nudge-bell';
 import { Avatar } from './ui';
@@ -651,3 +653,297 @@ const c = StyleSheet.create({
     gap: 8,
   },
 });
+
+/* ───────────── Zoom misterioso: un expediente de detective ───────────── */
+
+const ANIM_EXPEDIENTE = `
+@keyframes zxSube { from { opacity: 0; transform: translateY(18px) } to { opacity: 1; transform: none } }
+@keyframes zxLupa { 0% { opacity: 0; transform: translateX(-40px) rotate(-25deg) scale(.8) } 70% { opacity: 1; transform: rotate(4deg) scale(1.03) } 100% { opacity: 1; transform: none } }
+@keyframes zxSello { 0% { opacity: 0; transform: scale(2.2) rotate(-25deg) } 60% { opacity: 1; transform: scale(.92) rotate(-12deg) } 100% { opacity: 1; transform: scale(1) rotate(-12deg) } }
+@keyframes zxBusca { 0%, 100% { transform: translate(0, 0) } 25% { transform: translate(3px, -2px) } 50% { transform: translate(-2px, 3px) } 75% { transform: translate(-3px, -1px) } }
+`;
+
+export function ZoomHoy({ challenge }: { challenge: Proposal }) {
+  const theme = useTheme();
+  const oscuro = useEsquema() === 'dark';
+  const { me, user } = useStore();
+  const z = challenge.zoom!;
+  const abierto = !challenge.endsAt || challenge.endsAt > Date.now();
+  const foto = useFotoZoom(z.path);
+  const resultados = useResultadosZoom(challenge.id);
+  const mio = resultados.find((r) => r.user_id === me);
+  const soyAutor = challenge.createdBy === me;
+  const [sol, setSol] = useState<string | null>(null);
+  useEffect(() => {
+    if (!abierto || soyAutor || mio?.terminado) solucion(challenge.id).then(setSol);
+  }, [abierto, soyAutor, mio?.terminado, challenge.id]);
+  const aciertos = resultados.filter((r) => r.acierto);
+  const ir = () => router.push({ pathname: '/zoom/[id]', params: { id: challenge.id } });
+
+  const caja = useRef<HTMLDivElement | null>(null);
+  useInclinacion(caja);
+  const [visto, setVisto] = useState(false);
+  useEffect(() => {
+    const el = caja.current;
+    if (!el || typeof IntersectionObserver === 'undefined') {
+      setVisto(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      ([e]) => {
+        if (e.isIntersecting) {
+          setVisto(true);
+          io.disconnect();
+        }
+      },
+      { threshold: 0.35 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  const entra = (nombre: string, retraso: number, ms = 650): React.CSSProperties => ({
+    animation: `${nombre} ${ms}ms cubic-bezier(.2,.9,.25,1.1) ${retraso}ms both`,
+    animationPlayState: visto ? 'running' : 'paused',
+  });
+
+  // el expediente: papel manila (más oscuro en modo oscuro)
+  const manila = oscuro ? '#3B3123' : '#EBD8AE';
+  const pestana = oscuro ? '#4A3E2C' : '#E2CB97';
+  const tinta = oscuro ? '#F3E6CB' : '#3E2F1C';
+  const sello = '#C8402E';
+  const terminado = !abierto;
+
+  const estado = soyAutor
+    ? `${aciertos.length} de ${resultados.length} lo han adivinado`
+    : mio?.acierto
+      ? `¡Lo adivinaste! +${mio.puntos} pt`
+      : mio?.terminado
+        ? 'Esta vez no lo adivinaste'
+        : mio
+          ? `Vas por el intento ${mio.nivel + 1}`
+          : '¿Te atreves?';
+
+  return (
+    <div
+      ref={caja}
+      style={{
+        position: 'relative',
+        marginTop: 18,
+        fontFamily:
+          '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+        transform:
+          'perspective(900px) rotateY(calc(var(--ix, 0) * 3deg)) rotateX(calc(var(--iy, 0) * -2deg))',
+        ...entra('zxSube', 0, 500),
+      }}>
+      <style>{ANIM_EXPEDIENTE}</style>
+      {/* la pestaña de la carpeta */}
+      <div
+        style={{
+          position: 'absolute',
+          top: -16,
+          left: 22,
+          height: 26,
+          padding: '4px 14px 0',
+          borderTopLeftRadius: 12,
+          borderTopRightRadius: 12,
+          background: pestana,
+          color: tinta,
+          fontSize: 11,
+          fontWeight: 800,
+          letterSpacing: 2,
+        }}>
+        ZOOM MISTERIOSO
+      </div>
+      <div
+        style={{
+          position: 'relative',
+          borderRadius: 22,
+          background: manila,
+          boxShadow: theme.shadow,
+          padding: 16,
+          overflow: 'hidden',
+        }}>
+        {/* fibras del papel */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background:
+              'repeating-linear-gradient(115deg, rgba(0,0,0,.025) 0 2px, transparent 2px 7px)',
+            pointerEvents: 'none',
+          }}
+        />
+        <div style={{ position: 'relative', display: 'flex', gap: 14, alignItems: 'center' }}>
+          {/* la lupa */}
+          <Pressable accessibilityRole="button" onPress={ir}>
+            <div
+              style={{
+                position: 'relative',
+                width: 132,
+                height: 150,
+                ...entra('zxLupa', 150, 800),
+              }}>
+              <div style={{ transform: capa(-7) }}>
+                <div
+                  style={{ animation: terminado ? undefined : 'zxBusca 6s ease-in-out infinite' }}>
+                  <div
+                    style={{
+                      borderRadius: '50%',
+                      border: `7px solid ${tinta}`,
+                      boxShadow:
+                        '0 10px 24px rgba(0,0,0,.25), inset 0 0 0 3px rgba(255,255,255,.25)',
+                      width: 118,
+                      height: 118,
+                      overflow: 'hidden',
+                      position: 'relative',
+                    }}>
+                    <Lupa
+                      src={foto}
+                      cx={z.cx}
+                      cy={z.cy}
+                      zoom={terminado ? 1 : NIVELES[0]}
+                      size={104}
+                      redonda
+                    />
+                    {/* el brillo del cristal */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        borderRadius: '50%',
+                        background:
+                          'radial-gradient(ellipse at 30% 25%, rgba(255,255,255,.45), transparent 45%)',
+                        pointerEvents: 'none',
+                      }}
+                    />
+                  </div>
+                  {/* el mango */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: 92,
+                      top: 104,
+                      width: 16,
+                      height: 52,
+                      borderRadius: 8,
+                      background: tinta,
+                      transform: 'rotate(-45deg)',
+                      transformOrigin: 'top center',
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          </Pressable>
+
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div
+              style={{
+                color: tinta,
+                fontFamily: Hand,
+                fontSize: 30,
+                lineHeight: '30px',
+                ...entra('zxSube', 300, 500),
+              }}>
+              {terminado || (sol && !abierto) ? `Era: ${sol ?? '…'}` : '¿Qué es esto?'}
+            </div>
+            <div
+              style={{ color: tinta, opacity: 0.75, fontSize: 13, ...entra('zxSube', 380, 500) }}>
+              Lo propone {soyAutor ? 'tú' : user(challenge.createdBy ?? '').name.split(' ')[0]} ·{' '}
+              {plazo(challenge)}
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                marginTop: 4,
+                ...entra('zxSube', 460, 500),
+              }}>
+              {aciertos.slice(0, 5).map((r, i) => (
+                <div
+                  key={r.user_id}
+                  style={{
+                    marginLeft: i ? -8 : 0,
+                    borderRadius: 15,
+                    border: `2px solid ${manila}`,
+                    lineHeight: 0,
+                  }}>
+                  <Avatar userId={r.user_id} size={24} />
+                </div>
+              ))}
+              <span
+                style={{
+                  marginLeft: aciertos.length ? 8 : 0,
+                  color: tinta,
+                  fontSize: 13,
+                  fontWeight: 700,
+                }}>
+                {estado}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* el sello */}
+        <div
+          aria-hidden
+          style={{
+            position: 'absolute',
+            right: 14,
+            top: 10,
+            pointerEvents: 'none',
+            ...entra('zxSello', 650, 500),
+          }}>
+          <div
+            style={{
+              transform: `${capa(10)} rotate(-12deg)`,
+              border: `3px solid ${sello}`,
+              color: sello,
+              borderRadius: 8,
+              padding: '2px 8px',
+              fontSize: 13,
+              fontWeight: 900,
+              letterSpacing: 2,
+              opacity: 0.85,
+            }}>
+            {terminado ? 'RESUELTO' : '¿QUÉ ES?'}
+          </div>
+        </div>
+
+        {/* abajo: el botón */}
+        <div
+          style={{
+            position: 'relative',
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: 8,
+            marginTop: 12,
+          }}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={ir}
+            style={[kp.boton, { backgroundColor: theme.accent }]}>
+            <Icon
+              icon={terminado || soyAutor || mio?.terminado ? Play : Search}
+              size={14}
+              color={theme.onAccent}
+            />
+            <Text style={[kp.botonTxt, { color: theme.onAccent }]}>
+              {terminado || soyAutor || mio?.terminado ? 'Ver' : mio ? 'Seguir' : 'Adivinar'}
+            </Text>
+          </Pressable>
+        </div>
+        {terminado && (
+          <div style={{ position: 'relative', marginTop: 12 }}>
+            <ComentariosJuego
+              proposalId={challenge.id}
+              colorTexto={tinta}
+              colorSuave={oscuro ? 'rgba(243,230,203,.6)' : 'rgba(62,47,28,.55)'}
+              colorFondo={oscuro ? 'rgba(243,230,203,.08)' : 'rgba(62,47,28,.07)'}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

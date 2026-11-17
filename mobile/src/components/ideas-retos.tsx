@@ -30,6 +30,7 @@ const TIPO: Record<TipoIdea, { familia: FamilyId; boton: string; dias: boolean }
   pregunta: { familia: 'open', boton: 'Preguntar', dias: false },
   recuerdo: { familia: 'memory', boton: 'Compartir un recuerdo', dias: false },
   cuento: { familia: 'challenge', boton: 'Empezar el cuento', dias: true },
+  zoom: { familia: 'challenge', boton: 'Preparar el zoom', dias: true },
 };
 
 /**
@@ -50,7 +51,10 @@ export function IdeasNarradora({ group }: { group: Group }) {
         setRes(r);
         // si la IA no respondió, se apunta (para verlo en «Errores recientes»)
         if (r.reason === 'busy' && !r.ideas.length)
-          apuntarError(new Error(`Ideas de la narradora: ${r.detalle ?? 'sin respuesta'}`), 'aviso');
+          apuntarError(
+            new Error(`Ideas de la narradora: ${r.detalle ?? 'sin respuesta'}`),
+            'aviso',
+          );
       })
       .catch((e) => {
         setFallo(true);
@@ -100,6 +104,8 @@ export function IdeasNarradora({ group }: { group: Group }) {
           pathname: '/new-cuento',
           params: { groupId: g, inicio: idea.title, days: idea.days > 5 ? '7' : '3' },
         });
+      case 'zoom':
+        return router.push({ pathname: '/new-zoom', params: { groupId: g, pista: idea.title } });
       case 'recuerdo':
         return router.push({
           pathname: '/publish',
@@ -185,9 +191,13 @@ export function IdeasNarradora({ group }: { group: Group }) {
               <Card style={styles.card}>
                 <View style={styles.cabecera}>
                   <FamilyTag family={t.familia} />
-                  {(idea.tipo === 'karaoke' || idea.tipo === 'cuento') && (
+                  {(idea.tipo === 'karaoke' || idea.tipo === 'cuento' || idea.tipo === 'zoom') && (
                     <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
-                      {idea.tipo === 'karaoke' ? 'Karaoke' : 'El cuento a trozos'}
+                      {idea.tipo === 'karaoke'
+                        ? 'Karaoke'
+                        : idea.tipo === 'cuento'
+                          ? 'El cuento a trozos'
+                          : 'Zoom misterioso'}
                     </Text>
                   )}
                 </View>

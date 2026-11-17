@@ -1275,6 +1275,7 @@ Puedes proponer cualquiera de estos tipos (campo «tipo»):
 - "quiz": «¿Quién de nosotros…?» para adivinar. Las «opciones» son SOLO nombres de pila de personas del grupo (2 a 4, sin inventar otras como «nadie» o «alguien más»). Solo si el grupo tiene 2 personas o más. Quien lo cree marcará la respuesta correcta.
 - "pregunta": una pregunta abierta que cada uno responde con sus palabras.
 - "recuerdo": invitar a compartir una foto o historia de antes («¿Quién tiene una foto de…?»), relacionada con lo que han contado.
+- "zoom": el minijuego «zoom misterioso»: alguien fotografía un detalle muy de cerca y los demás adivinan qué es. En «title» pon QUÉ fotografiar (algo de casa, de la ciudad o relacionado con lo que han contado; ej.: «Algo de tu cocina que nadie reconocería de cerca»).
 - "cuento": el minijuego «el cuento a trozos»: en «title» va la PRIMERA FRASE de un cuento (máx. 170 caracteres, muy abierta, terminada en «…») inspirada en el grupo; luego cada uno grabará cómo sigue.
 
 Reglas:
@@ -1286,7 +1287,7 @@ Reglas:
 
 Responde SOLO con JSON: {"ideas":[{"tipo":"reto","title":"…","body":"…","days":3,"porque":"…","opciones":["…"],"cancion":{"titulo":"…","artista":"…"}}]} con exactamente 4 ideas (omite «opciones» y «cancion» cuando no apliquen).`;
 
-const TIPOS_IDEA = ['reto', 'karaoke', 'encuesta', 'quiz', 'pregunta', 'recuerdo', 'cuento'] as const;
+const TIPOS_IDEA = ['reto', 'karaoke', 'encuesta', 'quiz', 'pregunta', 'recuerdo', 'cuento', 'zoom'] as const;
 type IdeaReto = {
   tipo: (typeof TIPOS_IDEA)[number];
   title: string;

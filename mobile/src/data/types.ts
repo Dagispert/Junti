@@ -116,6 +116,20 @@ export type Proposal = {
   game?: KaraokeGame;
   /** Los otros minijuegos (el cuento a trozos…). */
   juego?: CuentoGame;
+  /** El zoom misterioso. */
+  zoom?: ZoomGame;
+};
+
+/**
+ * El zoom misterioso: una foto y el detalle elegido (su centro, de 0 a 1). Se
+ * ve muy ampliado y cada fallo lo aleja; la solución la guarda el servidor.
+ */
+export type ZoomGame = {
+  type: 'zoom';
+  /** la foto en el almacén del grupo */
+  path: string;
+  cx: number;
+  cy: number;
 };
 
 /**
