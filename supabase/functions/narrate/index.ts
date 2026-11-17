@@ -418,8 +418,17 @@ Deno.serve(async (req) => {
       .order('created_at')
       .limit(200);
     if (error) throw error;
+    // Las tomas sueltas del karaoke no se cuentan: el karaoke se cuenta entero,
+    // como un reto (con su montaje), no voz a voz.
+    const { data: karaokes } = await supabase
+      .from('proposals')
+      .select('id')
+      .eq('group_id', groupId)
+      .eq('game->>type', 'karaoke');
+    const tomas = new Set((karaokes ?? []).map((k) => k.id));
     // un recuerdo importado cuenta como de quien lo mandó
     const moments = (rows ?? [])
+      .filter((m) => !m.proposal_id || !tomas.has(m.proposal_id))
       .map((m) => ({ ...m, author_id: (m.credited_to as string | null) ?? m.author_id }))
       .filter((m) => !optedOut.has(m.author_id));
 

@@ -318,7 +318,8 @@ export function ChallengeBlock({ challenge, answers }: { challenge: Proposal; an
             </View>
           </Pressable>
         ))}
-        {open && (
+        {/* en el karaoke, cada uno canta una vez */}
+        {open && !(karaoke && mine) && (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={

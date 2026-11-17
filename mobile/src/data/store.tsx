@@ -1339,7 +1339,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             kind: 'challenge',
             title: `Karaoke: ${game.song}`.slice(0, 140),
             body: 'Cada uno canta el tramo entero; Junti junta las voces en un solo vídeo.',
-            ends_at: days ? new Date(Date.now() + days * 86_400_000).toISOString() : null,
+            // sin fecha: se cierra al acabar el mes (y entonces solo queda el montaje)
+            ends_at: (days
+              ? new Date(Date.now() + days * 86_400_000)
+              : (() => {
+                  const d = new Date();
+                  return new Date(d.getFullYear(), d.getMonth() + 1, 1, 0, 0, 0, -1000);
+                })()
+            ).toISOString(),
             game: {
               type: 'karaoke',
               ...game,

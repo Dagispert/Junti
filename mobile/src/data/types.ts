@@ -135,6 +135,16 @@ export type KaraokeGame = {
   lyrics?: string;
   /** la letra con su ritmo: cada línea y su segundo dentro del audio */
   lines?: { t: number; text: string }[];
+  /** El vídeo con todas las voces juntas (se graba al verlo entero). */
+  montaje?: {
+    path: string;
+    poster?: string | null;
+    firma: string;
+    duracion?: number;
+    voces?: string[];
+  };
+  /** Se acabó el tiempo y ya se borraron las tomas sueltas: solo queda el montaje. */
+  cerrado?: boolean;
 };
 
 export type Reaction = { emoji: string; userId: string; /** cuándo */ at?: number };

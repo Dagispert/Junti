@@ -17,7 +17,7 @@ const DURATIONS = [
   { days: 3, label: '3 días' },
   { days: 7, label: 'Una semana' },
   { days: 14, label: 'Dos semanas' },
-  { days: 0, label: 'Sin fecha' },
+  { days: 0, label: 'Hasta fin de mes' },
 ];
 /** Como mucho, 5 minutos cantando (el vídeo de cada uno tiene que caber). */
 const MAX_TRAMO = 300;

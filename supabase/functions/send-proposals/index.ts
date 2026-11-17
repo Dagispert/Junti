@@ -58,8 +58,78 @@ async function vapidKeys(): Promise<{ publicKey: string; privateKey: string }> {
   return fresh;
 }
 
+/** Qué tomas tiene un montaje (igual que en la app: lib/montaje.ts). */
+function firmaTomas(ids: string[]): string {
+  const txt = [...ids].sort().join(',');
+  let h = 5381;
+  for (let i = 0; i < txt.length; i++) h = ((h << 5) + h + txt.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(16);
+}
+
+/**
+ * Karaokes que ya terminaron: si su montaje (el vídeo con todas las voces)
+ * está guardado y tiene todas las tomas, se borran las tomas sueltas y el
+ * karaoke se cierra. Si aún no hay montaje, se espera a que alguien lo vea.
+ */
+async function cerrarKaraokes() {
+  const { data: props } = await supabase
+    .from('proposals')
+    .select('id, game')
+    .eq('game->>type', 'karaoke')
+    .lt('ends_at', new Date().toISOString())
+    .limit(50);
+  for (const p of props ?? []) {
+    const game = p.game as { cerrado?: boolean; montaje?: { firma: string } };
+    if (game.cerrado) continue;
+    const { data: tomas } = await supabase
+      .from('moments')
+      .select('id, author_id, shared_at, moment_media(media_asset_id, media_assets(storage_path, thumb_path))')
+      .eq('proposal_id', p.id)
+      .is('deleted_at', null);
+    // las que cuentan en el montaje: la última de cada persona
+    const ultima = new Map<string, { id: string; shared_at: string }>();
+    for (const t of tomas ?? []) {
+      const prev = ultima.get(t.author_id);
+      if (!prev || prev.shared_at < t.shared_at) ultima.set(t.author_id, t);
+    }
+    const firma = firmaTomas([...ultima.values()].map((t) => t.id));
+    if ((tomas ?? []).length && game.montaje?.firma !== firma) continue; // falta grabar el montaje
+    const rutas: string[] = [];
+    const assets: string[] = [];
+    for (const t of tomas ?? [])
+      for (const mm of (t.moment_media ?? []) as unknown as {
+        media_asset_id: string;
+        media_assets: { storage_path: string; thumb_path: string | null } | null;
+      }[]) {
+        assets.push(mm.media_asset_id);
+        if (mm.media_assets?.storage_path) rutas.push(mm.media_assets.storage_path);
+        if (mm.media_assets?.thumb_path) rutas.push(mm.media_assets.thumb_path);
+      }
+    if (rutas.length) {
+      const { error } = await supabase.storage.from('media').remove(rutas);
+      if (error) {
+        console.error('karaoke: no se borraron los archivos', p.id, error.message);
+        continue;
+      }
+    }
+    const ids = (tomas ?? []).map((t) => t.id);
+    if (ids.length) {
+      await supabase.from('moments').update({ deleted_at: new Date().toISOString() }).in('id', ids);
+      await supabase.from('moment_media').delete().in('moment_id', ids);
+    }
+    if (assets.length) await supabase.from('media_assets').delete().in('id', assets);
+    await supabase.from('proposals').update({ game: { ...game, cerrado: true } }).eq('id', p.id);
+    console.log('karaoke cerrado', p.id, ids.length, 'tomas');
+  }
+}
+
 Deno.serve(async () => {
   try {
+    try {
+      await cerrarKaraokes();
+    } catch (e) {
+      console.error('karaokes', e);
+    }
     const keys = await vapidKeys();
     const { data: proposals, error } = await supabase.rpc('claim_due_notifications');
     if (error) throw error;

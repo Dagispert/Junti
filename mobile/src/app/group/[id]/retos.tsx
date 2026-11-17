@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { GroupHeader } from '@/components/group-header';
 import { IdeasNarradora } from '@/components/ideas-retos';
+import { MontajeEnBucle } from '@/components/montaje-bucle';
 import { NudgeBell } from '@/components/nudge-bell';
 import { OwnerActions } from '@/components/owner-actions';
 import { QuestionCard } from '@/components/question-card';
@@ -45,7 +46,9 @@ export default function Challenges() {
   const card = (challenge: (typeof challenges)[number], open: boolean) => {
     const answers = moments.filter((m) => m.proposalId === challenge.id);
     // Se muestra quién ha participado; nunca quién falta.
-    const participants = [...new Set(answers.map((m) => m.authorId))];
+    const participants = [
+      ...new Set([...answers.map((m) => m.authorId), ...(challenge.game?.montaje?.voces ?? [])]),
+    ];
     const left = challenge.endsAt ? daysLeft(challenge.endsAt) : undefined;
     const karaoke = challenge.game?.type === 'karaoke';
     return (
@@ -61,7 +64,11 @@ export default function Challenges() {
             />
           </View>
         )}
-        {answers.length > 0 && <PhotoFan moments={answers} size={120} />}
+        {karaoke && !open && challenge.game?.montaje ? (
+          <MontajeEnBucle game={challenge.game} />
+        ) : (
+          answers.length > 0 && <PhotoFan moments={answers} size={120} />
+        )}
         <View style={{ alignItems: 'center', gap: 12 }}>
           <Tag center>
             {!open
@@ -82,7 +89,7 @@ export default function Challenges() {
         <View style={styles.row}>
           <AvatarRow userIds={participants} size={32} />
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            {karaoke && answers.length > 0 && (
+            {karaoke && (answers.length > 0 || !!challenge.game?.montaje) && (
               <Button
                 variant="light"
                 label="Ver"
@@ -94,7 +101,7 @@ export default function Challenges() {
                 }
               />
             )}
-            {open && (
+            {open && !(karaoke && participants.includes(me)) && (
               <Button
                 label={karaoke ? 'Cantar' : 'Participar'}
                 onPress={() =>

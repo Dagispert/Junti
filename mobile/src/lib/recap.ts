@@ -104,8 +104,11 @@ export function buildRecap(
   events: GroupEvent[] = [],
 ): Recap {
   const to = kind === 'week' ? from + 7 * DAY : nextMonth(from);
+  // Las tomas sueltas del karaoke no cuentan: el karaoke sale entero, como reto.
+  const karaokes = new Set(proposals.filter((p) => p.game?.type === 'karaoke').map((p) => p.id));
   const moments = all
     .filter((m) => m.createdAt >= from && m.createdAt < to)
+    .filter((m) => !m.proposalId || !karaokes.has(m.proposalId))
     .sort((a, b) => a.createdAt - b.createdAt);
 
   // Selección equilibrada: por turnos entre personas, lo mejor de cada una primero.

@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Headphones, Mic, Play, RotateCcw, Send, X } from 'lucide-react-native';
+import { Headphones, Mic, Play, RotateCcw, Send, Share2, X } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -10,7 +10,19 @@ import { Icon } from '@/components/icon';
 import { Avatar } from '@/components/ui';
 import { errorText, useStore } from '@/data/store';
 import type { KaraokeGame, Moment } from '@/data/types';
+import { shareFile } from '@/lib/export-media';
 import { canRecord, partAt, planMontage, recorderType, trackUrl } from '@/lib/karaoke';
+import {
+  ALTO,
+  ANCHO,
+  firmaTomas,
+  imagenLimpia,
+  pildora,
+  pintarVideo,
+  subirMontaje,
+  textoCentrado,
+  useMontaje,
+} from '@/lib/montaje';
 import { lineAt } from '@/lib/lyrics';
 import { markRead } from '@/lib/notifications';
 import { mmss } from '@/lib/music';
@@ -117,16 +129,20 @@ export default function Karaoke() {
           onSent={() => setMode(takes.length ? 'watch' : 'home')}
         />
       )}
-      {mode === 'watch' && url && (
+      {mode === 'watch' && (game.cerrado || (!open && !takes.length)) && (
+        <MontajeGuardado game={game} onBack={() => setMode('home')} />
+      )}
+      {mode === 'watch' && url && !(game.cerrado || (!open && !takes.length)) && (
         <Montage
           game={game}
           url={url}
           takes={takes}
           seed={proposal.id}
+          groupId={proposal.groupId}
           onBack={() => setMode('home')}
         />
       )}
-      {mode !== 'home' && !url && <ActivityIndicator color="#FFFFFF" style={{ marginTop: 80 }} />}
+      {mode === 'record' && !url && <ActivityIndicator color="#FFFFFF" style={{ marginTop: 80 }} />}
     </View>
   );
 }
@@ -149,12 +165,31 @@ function Home({
   onWatch: () => void;
 }) {
   const { user } = useStore();
+  const montaje = useMontaje(game);
+  const cerrado = !canSing && !!montaje.video;
   const length = Math.round(game.end - game.start);
   const names = takes.map((m) => user(m.authorId).name.split(' ')[0]);
   return (
     <View style={styles.home}>
-      <View style={styles.cover}>
-        {game.artwork ? (
+      <View style={[styles.cover, cerrado && styles.coverVideo]}>
+        {cerrado ? (
+          // terminado: el karaoke de todos, en bucle y sin sonido
+          <video
+            src={montaje.video}
+            poster={montaje.poster}
+            muted
+            autoPlay
+            loop
+            playsInline
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+            }}
+          />
+        ) : game.artwork ? (
           <Image
             source={{ uri: game.artwork }}
             style={StyleSheet.absoluteFill}
@@ -166,41 +201,48 @@ function Home({
       </View>
       <Text style={styles.meta}>
         {length >= 60 ? mmss(length) : `${length} segundos`} de canción ·{' '}
-        {takes.length === 0
-          ? 'nadie ha cantado aún'
-          : takes.length === 1
-            ? `ha cantado ${names[0]}`
-            : `${takes.length} voces`}
+        {cerrado
+          ? 'terminado'
+          : takes.length === 0
+            ? 'nadie ha cantado aún'
+            : takes.length === 1
+              ? `ha cantado ${names[0]}`
+              : `${takes.length} voces`}
       </Text>
-      {takes.length > 0 && (
+      {(takes.length > 0 || !!game.montaje?.voces?.length) && (
         <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
-          {takes.map((m) => (
-            <Avatar key={m.id} userId={m.authorId} size={36} />
+          {(takes.length ? takes.map((m) => m.authorId) : (game.montaje?.voces ?? [])).map((u) => (
+            <Avatar key={u} userId={u} size={36} />
           ))}
         </View>
       )}
       <View style={{ gap: 12, alignSelf: 'stretch', marginTop: 8 }}>
-        {takes.length > 0 && (
+        {(takes.length > 0 || cerrado) && (
           <Pressable accessibilityRole="button" onPress={onWatch} style={[styles.big, styles.gold]}>
             <Icon icon={Play} size={20} color="#1D1F22" />
             <Text style={[styles.bigText, { color: '#1D1F22' }]}>
-              {takes.length > 1 ? 'Ver el karaoke' : 'Ver cómo va'}
+              {cerrado || takes.length > 1 ? 'Ver el karaoke' : 'Ver cómo va'}
             </Text>
           </Pressable>
         )}
-        {canSing && (
+        {canSing && !sung && (
           <Pressable
             accessibilityRole="button"
             onPress={onSing}
             style={[styles.big, takes.length ? styles.ghost : styles.gold]}>
             <Icon icon={Mic} size={20} color={takes.length ? '#FFFFFF' : '#1D1F22'} />
             <Text style={[styles.bigText, { color: takes.length ? '#FFFFFF' : '#1D1F22' }]}>
-              {sung ? 'Cantar otra vez' : 'Cantar'}
+              Cantar
             </Text>
           </Pressable>
         )}
       </View>
-      {canSing && (
+      {canSing && sung && (
+        <Text style={styles.tipText}>
+          Ya has cantado. Cuando canten los demás, sus voces se suman al karaoke.
+        </Text>
+      )}
+      {canSing && !sung && (
         <View style={styles.tip}>
           <Icon icon={Headphones} size={18} color="rgba(255,255,255,0.75)" />
           <Text style={[styles.tipText, { textAlign: 'left' }]}>
@@ -626,6 +668,71 @@ function Recorder({
   );
 }
 
+/* ───────────── El karaoke ya cerrado: solo queda el montaje ───────────── */
+
+function MontajeGuardado({ game, onBack }: { game: KaraokeGame; onBack: () => void }) {
+  const montaje = useMontaje(game);
+  const [compartiendo, setCompartiendo] = useState(false);
+  const compartir = async () => {
+    if (!montaje.video) return;
+    setCompartiendo(true);
+    try {
+      const blob = await (await fetch(montaje.video)).blob();
+      await shareFile(
+        blob,
+        `karaoke.${/mp4/.test(blob.type) ? 'mp4' : 'webm'}`,
+        `Karaoke: ${game.song}`,
+      );
+    } catch {
+      // se puede volver a intentar
+    }
+    setCompartiendo(false);
+  };
+  return (
+    <View style={styles.recorder}>
+      <View style={styles.frame}>
+        {montaje.video ? (
+          <video
+            src={montaje.video}
+            poster={montaje.poster}
+            controls
+            autoPlay
+            playsInline
+            style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }}
+          />
+        ) : (
+          <View style={[StyleSheet.absoluteFill, styles.center]}>
+            {game.montaje ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={[styles.light, { textAlign: 'center', padding: 24 }]}>
+                Este karaoke terminó sin que nadie llegara a cantar.
+              </Text>
+            )}
+          </View>
+        )}
+      </View>
+      <View style={styles.controls}>
+        <Pressable onPress={onBack} style={styles.pill}>
+          <Text style={styles.pillText}>Atrás</Text>
+        </Pressable>
+        {!!montaje.video && (
+          <Pressable
+            accessibilityRole="button"
+            disabled={compartiendo}
+            onPress={compartir}
+            style={[styles.pill, { backgroundColor: '#F6C945' }]}>
+            <Icon icon={Share2} size={16} color="#1D1F22" />
+            <Text style={[styles.pillText, { color: '#1D1F22' }]}>
+              {compartiendo ? 'Preparando…' : 'Compartir el vídeo'}
+            </Text>
+          </Pressable>
+        )}
+      </View>
+    </View>
+  );
+}
+
 /* ───────────── El montaje: todas las voces ───────────── */
 
 function Montage({
@@ -633,15 +740,34 @@ function Montage({
   url,
   takes,
   seed,
+  groupId,
   onBack,
 }: {
   game: KaraokeGame;
   url: string;
   takes: Moment[];
   seed: string;
+  groupId: string;
   onBack: () => void;
 }) {
-  const { user } = useStore();
+  const { user, me } = useStore();
+  // Si el montaje guardado no tiene todas las voces, se graba ahora, mientras se ve.
+  const firma = firmaTomas(takes.map((m) => m.id));
+  const hayQueGrabar =
+    !game.cerrado && game.montaje?.firma !== firma && !!recorderType() && takes.length > 0;
+  const grab = useRef<{
+    lienzo: HTMLCanvasElement;
+    c2d: CanvasRenderingContext2D;
+    rec: MediaRecorder;
+    trozos: Blob[];
+    dest: MediaStreamAudioDestinationNode;
+    portada: Blob | null;
+    arte: HTMLImageElement | null;
+  } | null>(null);
+  const [guardado, setGuardado] = useState<'' | 'grabando' | 'subiendo' | 'listo' | 'error'>('');
+  const [archivo, setArchivo] = useState<Blob | null>(null);
+  const [compartiendo, setCompartiendo] = useState(false);
+  const montajeGuardado = useMontaje(game);
   const duration = game.end - game.start;
   const parts = useMemo(
     () =>
@@ -716,6 +842,12 @@ function Montage({
   useEffect(
     () => () => {
       parar();
+      // si se sale a medias, la grabación no vale
+      const g = grab.current;
+      if (g && g.rec.state !== 'inactive') {
+        g.rec.onstop = null;
+        g.rec.stop();
+      }
       ctx.current?.close().catch(() => {});
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -764,12 +896,168 @@ function Montage({
       return out;
     })();
     setState('intro');
+    if (hayQueGrabar && !grab.current && !archivo) empezarGrabacion(c);
     const desde = performance.now();
     introTimer.current = setTimeout(async () => {
       const buffers = await sonido.current!;
       // si decodificar tardó más que la portada, se empieza en cuanto esté
       setTimeout(() => play(buffers), Math.max(0, INTRO_MS - (performance.now() - desde)));
     }, 0);
+  };
+
+  // ── Grabar el montaje tal como se ve ──
+  const empezarGrabacion = (c: AudioContext) => {
+    try {
+      const lienzo = document.createElement('canvas');
+      lienzo.width = ANCHO;
+      lienzo.height = ALTO;
+      const c2d = lienzo.getContext('2d');
+      if (!c2d || !lienzo.captureStream) return;
+      const dest = c.createMediaStreamDestination();
+      // un «silencio» conectado desde el principio: así la pista de sonido existe
+      // ya durante la portada (si no, algunos navegadores la descartan)
+      const silencio = c.createConstantSource();
+      silencio.offset.value = 0;
+      silencio.connect(dest);
+      silencio.start();
+      const stream = new MediaStream([
+        ...lienzo.captureStream(30).getVideoTracks(),
+        ...dest.stream.getAudioTracks(),
+      ]);
+      const rec = new MediaRecorder(stream, {
+        mimeType: recorderType() || undefined,
+        videoBitsPerSecond: 3_000_000,
+      });
+      const trozos: Blob[] = [];
+      rec.ondataavailable = (e) => e.data.size && trozos.push(e.data);
+      grab.current = { lienzo, c2d, rec, trozos, dest, portada: null, arte: null };
+      imagenLimpia(game.artwork).then((img) => grab.current && (grab.current.arte = img));
+      rec.start(1000);
+      setGuardado('grabando');
+      // la portada mientras se ve la de la pantalla
+      const portada = () => {
+        const g = grab.current;
+        if (!g || g.rec.state !== 'recording' || estado.current !== 'intro') return;
+        pintarPortada(g.c2d, g.arte);
+        requestAnimationFrame(portada);
+      };
+      requestAnimationFrame(portada);
+    } catch {
+      grab.current = null;
+    }
+  };
+  const estado = useRef(state);
+  estado.current = state;
+
+  const pintarPortada = (c2d: CanvasRenderingContext2D, arte: HTMLImageElement | null) => {
+    c2d.fillStyle = '#0E0F12';
+    c2d.fillRect(0, 0, ANCHO, ALTO);
+    if (arte) {
+      c2d.save();
+      c2d.filter = 'blur(30px) brightness(0.55)';
+      c2d.drawImage(arte, -200, -200, ANCHO + 400, ALTO + 400);
+      c2d.restore();
+      const lado = 440;
+      c2d.save();
+      c2d.shadowColor = 'rgba(0,0,0,0.5)';
+      c2d.shadowBlur = 40;
+      c2d.drawImage(arte, (ANCHO - lado) / 2, 300, lado, lado);
+      c2d.restore();
+    }
+    textoCentrado(c2d, game.song, 850, 52, 700, '#FFFFFF');
+    if (game.artist) textoCentrado(c2d, game.artist, 915, 32, 500, 'rgba(255,255,255,0.75)');
+    const nombres = takes.map((m) => user(m.authorId).name.split(' ')[0]);
+    textoCentrado(
+      c2d,
+      `Cantan ${nombres.length > 1 ? `${nombres.slice(0, -1).join(', ')} y ${nombres.at(-1)}` : nombres[0]}`,
+      1010,
+      30,
+      600,
+      '#F6C945',
+    );
+  };
+
+  const pintarFotograma = (singing: string[], verso: number, solo?: Moment) => {
+    const g = grab.current;
+    if (!g) return;
+    const c2d = g.c2d;
+    c2d.fillStyle = '#000';
+    c2d.fillRect(0, 0, ANCHO, ALTO);
+    const quien = singing.length ? singing : takes[0] ? [takes[0].id] : [];
+    const cols = Math.ceil(Math.sqrt(quien.length || 1));
+    const rows = Math.ceil((quien.length || 1) / cols);
+    quien.forEach((id, i) => {
+      const v = videos.current.get(id);
+      if (!v) return;
+      const cw = ANCHO / cols;
+      const ch = ALTO / rows;
+      pintarVideo(c2d, v, (i % cols) * cw, Math.floor(i / cols) * ch, cw, ch);
+    });
+    pildora(
+      c2d,
+      singing.length > 1
+        ? 'Todos juntos'
+        : solo
+          ? `Canta ${user(solo.authorId).name.split(' ')[0]}`
+          : '',
+      28,
+      48,
+    );
+    if (verso >= 0 && versos[verso]) {
+      const alto = textoCentrado(c2d, versos[verso].text, ALTO - 190, 46, 700, '#FFFFFF');
+      if (versos[verso + 1])
+        textoCentrado(
+          c2d,
+          versos[verso + 1].text,
+          ALTO - 190 + alto + 6,
+          30,
+          600,
+          'rgba(255,255,255,0.7)',
+        );
+    }
+  };
+
+  const terminarGrabacion = () => {
+    const g = grab.current;
+    if (!g || g.rec.state === 'inactive') return;
+    g.rec.onstop = () => {
+      const tipo = g.rec.mimeType || recorderType() || 'video/mp4';
+      const video = new Blob(g.trozos, { type: tipo.split(';')[0] });
+      grab.current = null;
+      setArchivo(video);
+      setGuardado('subiendo');
+      subirMontaje({
+        groupId,
+        me,
+        proposalId: seed,
+        video,
+        poster: g.portada?.size ? g.portada : null,
+        firma,
+        duracion: duration,
+        voces: takes.map((m) => m.authorId),
+      }).then(
+        () => setGuardado('listo'),
+        () => setGuardado('error'),
+      );
+    };
+    setTimeout(() => g.rec.stop(), 300);
+  };
+
+  const compartir = async () => {
+    setCompartiendo(true);
+    try {
+      let blob = archivo;
+      if (!blob && montajeGuardado.video) blob = await (await fetch(montajeGuardado.video)).blob();
+      if (blob)
+        await shareFile(
+          blob,
+          `karaoke-${game.song.replace(/[^\p{L}\p{N}]+/gu, '-').toLowerCase()}.${/mp4/.test(blob.type) ? 'mp4' : 'webm'}`,
+          `Karaoke: ${game.song}`,
+        );
+    } catch {
+      // si no se pudo, no pasa nada: se puede volver a intentar
+    }
+    setCompartiendo(false);
   };
 
   const play = (buffers: Map<string, AudioBuffer>) => {
@@ -783,6 +1071,7 @@ function Montage({
     salida.threshold.value = -14;
     salida.ratio.value = 4;
     salida.connect(c.destination);
+    if (grab.current) salida.connect(grab.current.dest);
     const fuente = (buf: AudioBuffer, offset: number, nivel: number, id?: string) => {
       const src = c.createBufferSource();
       src.buffer = buf;
@@ -835,6 +1124,16 @@ function Montage({
         for (const [id, g] of ganancias.current)
           g.gain.setTargetAtTime(singing.includes(id) ? VOZ : 0, c.currentTime, 0.04);
       }
+      if (grab.current) {
+        const solo = singing.length === 1 ? takes.find((m) => m.id === singing[0]) : undefined;
+        pintarFotograma(singing, versoVisto, solo);
+        // la portada del montaje: un fotograma de la mitad
+        if (!grab.current.portada && t > duration / 2) {
+          const g = grab.current;
+          g.portada = new Blob();
+          g.lienzo.toBlob((b) => (g.portada = b), 'image/jpeg', 0.85);
+        }
+      }
       const ahora = performance.now();
       for (const m of takes) {
         const v = videos.current.get(m.id);
@@ -855,6 +1154,7 @@ function Montage({
       }
       if (t >= duration) {
         parar();
+        terminarGrabacion();
         setState('ended');
         return;
       }
@@ -963,7 +1263,30 @@ function Montage({
         <Pressable onPress={onBack} style={styles.pill}>
           <Text style={styles.pillText}>Atrás</Text>
         </Pressable>
+        {(archivo || (!hayQueGrabar && montajeGuardado.video)) && state !== 'playing' && (
+          <Pressable
+            accessibilityRole="button"
+            disabled={compartiendo}
+            onPress={compartir}
+            style={[styles.pill, { backgroundColor: '#F6C945' }]}>
+            <Icon icon={Share2} size={16} color="#1D1F22" />
+            <Text style={[styles.pillText, { color: '#1D1F22' }]}>
+              {compartiendo ? 'Preparando…' : 'Compartir el vídeo'}
+            </Text>
+          </Pressable>
+        )}
       </View>
+      {!!guardado && (
+        <Text style={styles.guardado}>
+          {guardado === 'grabando'
+            ? 'Se está guardando el karaoke para el grupo mientras lo ves.'
+            : guardado === 'subiendo'
+              ? 'Guardando el karaoke…'
+              : guardado === 'listo'
+                ? 'Karaoke guardado.'
+                : 'No se ha podido guardar; se intentará la próxima vez que se vea.'}
+        </Text>
+      )}
     </View>
   );
 }
@@ -1266,6 +1589,14 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   whoText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
+  coverVideo: { width: 220, height: 390, borderRadius: 24, overflow: 'hidden' },
+  guardado: {
+    color: 'rgba(255,255,255,0.65)',
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 8,
+    paddingHorizontal: 24,
+  },
   letra: {
     position: 'absolute',
     left: 16,
