@@ -437,20 +437,19 @@ export function KaraokeHoy({ challenge, answers }: { challenge: Proposal; answer
           />
         )}
       </div>
-      {!abierto && (
-        <div
-          style={{
-            position: 'relative',
-            zIndex: 2,
-            background: theme.card,
-            borderBottomLeftRadius: 26,
-            borderBottomRightRadius: 26,
-            padding: '0 12px 12px',
-            marginTop: -14,
-          }}>
-          <ComentariosJuego proposalId={challenge.id} />
-        </div>
-      )}
+      {/* todo lo de «Hoy» se puede comentar (también mientras está abierto) */}
+      <div
+        style={{
+          position: 'relative',
+          zIndex: 2,
+          background: theme.card,
+          borderBottomLeftRadius: 26,
+          borderBottomRightRadius: 26,
+          padding: '0 12px 12px',
+          marginTop: -14,
+        }}>
+        <ComentariosJuego proposalId={challenge.id} />
+      </div>
     </div>
   );
 }
@@ -576,14 +575,13 @@ export function CuentoHoy({ challenge, answers }: { challenge: Proposal; answers
                 : 'Parar'}
         </Text>
       </Pressable>
-      {!abierto && (
-        <ComentariosJuego
-          proposalId={challenge.id}
-          colorTexto={tinta}
-          colorSuave={oscuro ? 'rgba(241,233,218,0.6)' : 'rgba(43,38,32,0.55)'}
-          colorFondo={oscuro ? 'rgba(241,233,218,0.08)' : 'rgba(43,38,32,0.06)'}
-        />
-      )}
+      <ComentariosJuego
+        proposalId={challenge.id}
+        placeholder={abierto ? 'Comenta (sin destripar el cuento)…' : undefined}
+        colorTexto={tinta}
+        colorSuave={oscuro ? 'rgba(241,233,218,0.6)' : 'rgba(43,38,32,0.55)'}
+        colorFondo={oscuro ? 'rgba(241,233,218,0.08)' : 'rgba(43,38,32,0.06)'}
+      />
     </View>
   );
 }
@@ -934,16 +932,15 @@ export function ZoomHoy({ challenge }: { challenge: Proposal }) {
             </Text>
           </Pressable>
         </div>
-        {terminado && (
-          <div style={{ position: 'relative', marginTop: 12 }}>
-            <ComentariosJuego
-              proposalId={challenge.id}
-              colorTexto={tinta}
-              colorSuave={oscuro ? 'rgba(243,230,203,.6)' : 'rgba(62,47,28,.55)'}
-              colorFondo={oscuro ? 'rgba(243,230,203,.08)' : 'rgba(62,47,28,.07)'}
-            />
-          </div>
-        )}
+        <div style={{ position: 'relative', marginTop: 12 }}>
+          <ComentariosJuego
+            proposalId={challenge.id}
+            placeholder={terminado ? undefined : 'Comenta (¡sin decir la solución!)…'}
+            colorTexto={tinta}
+            colorSuave={oscuro ? 'rgba(243,230,203,.6)' : 'rgba(62,47,28,.55)'}
+            colorFondo={oscuro ? 'rgba(243,230,203,.08)' : 'rgba(62,47,28,.07)'}
+          />
+        </div>
       </div>
     </div>
   );
@@ -1299,16 +1296,15 @@ export function DibujoHoy({ challenge }: { challenge: Proposal }) {
             </Text>
           </Pressable>
         </div>
-        {terminado && (
-          <div style={{ position: 'relative', marginTop: 12 }}>
-            <ComentariosJuego
-              proposalId={challenge.id}
-              colorTexto={tinta}
-              colorSuave={oscuro ? 'rgba(227,238,219,.6)' : 'rgba(35,64,47,.55)'}
-              colorFondo={oscuro ? 'rgba(227,238,219,.08)' : 'rgba(35,64,47,.07)'}
-            />
-          </div>
-        )}
+        <div style={{ position: 'relative', marginTop: 12 }}>
+          <ComentariosJuego
+            proposalId={challenge.id}
+            placeholder={terminado ? undefined : 'Comenta (sin desvelar los dibujos)…'}
+            colorTexto={tinta}
+            colorSuave={oscuro ? 'rgba(227,238,219,.6)' : 'rgba(35,64,47,.55)'}
+            colorFondo={oscuro ? 'rgba(227,238,219,.08)' : 'rgba(35,64,47,.07)'}
+          />
+        </div>
       </div>
     </div>
   );

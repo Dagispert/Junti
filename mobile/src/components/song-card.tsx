@@ -9,6 +9,7 @@ import { useFamily, useFamilyColorMode } from '@/lib/families';
 import { spotifyLink, usePreview } from '@/lib/music';
 import { relative } from '@/lib/time';
 
+import { ComentariosJuego } from './comentarios-juego';
 import { FamilyCard, FamilyTag } from './family';
 import { Icon } from './icon';
 import { RecordSleeve } from './soundtrack';
@@ -82,6 +83,7 @@ export function SongCard({ song }: { song: Song }) {
           <Text style={{ color: theme.textSecondary, fontSize: 14 }}>Toda la banda sonora</Text>
         </Pressable>
       </View>
+      <ComentariosJuego songId={song.id} placeholder="¿Qué te parece la canción?" />
     </FamilyCard>
   );
 }

@@ -12,17 +12,28 @@ import { Avatar } from './ui';
 
 type Comentario = { id: string; user_id: string; text: string; created_at: string };
 
+/** Cuántos se ven de primeras (los más recientes); el resto, con «Ver los otros…». */
+const VISIBLES = 3;
+
 /**
- * Los comentarios de un minijuego (el karaoke, el cuento…): lo que piensa
- * cada uno cuando ya está terminado. Llegan al momento a los demás.
+ * Los comentarios de lo que sale en «Hoy» que no es una publicación: un reto o
+ * minijuego, una canción de la banda sonora o una pregunta. Llegan al momento
+ * a los demás.
  */
 export function ComentariosJuego({
   proposalId,
+  songId,
+  questionId,
+  placeholder,
   colorTexto,
   colorSuave,
   colorFondo,
 }: {
-  proposalId: string;
+  /** lo que se comenta: un reto (o minijuego), una canción o una pregunta */
+  proposalId?: string;
+  songId?: string;
+  questionId?: string;
+  placeholder?: string;
   /** colores para encajar en la tarjeta de cada juego (por defecto, los del tema) */
   colorTexto?: string;
   colorSuave?: string;
@@ -36,6 +47,12 @@ export function ComentariosJuego({
   const [lista, setLista] = useState<Comentario[]>([]);
   const [borrador, setBorrador] = useState('');
   const [enviando, setEnviando] = useState(false);
+  const [todos, setTodos] = useState(false);
+  const [columna, id] = proposalId
+    ? (['proposal_id', proposalId] as const)
+    : songId
+      ? (['song_id', songId] as const)
+      : (['question_id', questionId ?? ''] as const);
 
   useEffect(() => {
     let vivo = true;
@@ -43,20 +60,20 @@ export function ComentariosJuego({
       supabase
         .from('juego_comentarios')
         .select('id, user_id, text, created_at')
-        .eq('proposal_id', proposalId)
+        .eq(columna, id)
         .is('deleted_at', null)
         .order('created_at')
         .then(({ data }) => vivo && setLista((data ?? []) as Comentario[]));
     cargar();
     const canal = supabase
-      .channel(`juego-comentarios-${proposalId}-${Math.random().toString(36).slice(2, 8)}`)
+      .channel(`comentarios-${id}-${Math.random().toString(36).slice(2, 8)}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'juego_comentarios',
-          filter: `proposal_id=eq.${proposalId}`,
+          filter: `${columna}=eq.${id}`,
         },
         () => cargar(),
       )
@@ -65,7 +82,7 @@ export function ComentariosJuego({
       vivo = false;
       supabase.removeChannel(canal);
     };
-  }, [proposalId]);
+  }, [columna, id]);
 
   const enviar = async () => {
     const t = borrador.trim();
@@ -73,7 +90,7 @@ export function ComentariosJuego({
     setEnviando(true);
     const { data, error } = await supabase
       .from('juego_comentarios')
-      .insert({ proposal_id: proposalId, text: t.slice(0, 1000) })
+      .insert({ [columna]: id, text: t.slice(0, 1000) })
       .select('id, user_id, text, created_at')
       .single();
     if (!error && data) {
@@ -91,9 +108,17 @@ export function ComentariosJuego({
       .eq('id', id);
   };
 
+  const ocultos = todos ? 0 : Math.max(0, lista.length - VISIBLES);
   return (
     <View style={{ gap: 8 }}>
-      {lista.map((c) => (
+      {ocultos > 0 && (
+        <Pressable accessibilityRole="button" onPress={() => setTodos(true)} hitSlop={6}>
+          <Text style={{ color: suave, fontSize: 13 }}>
+            Ver {ocultos === 1 ? 'el otro comentario' : `los otros ${ocultos} comentarios`}
+          </Text>
+        </Pressable>
+      )}
+      {lista.slice(ocultos).map((c) => (
         <View key={c.id} style={styles.fila}>
           <Avatar userId={c.user_id} size={24} />
           <View style={{ flex: 1 }}>
@@ -120,7 +145,9 @@ export function ComentariosJuego({
         <TextInput
           value={borrador}
           onChangeText={setBorrador}
-          placeholder={lista.length ? 'Añadir un comentario…' : '¿Qué os ha parecido?'}
+          placeholder={
+            placeholder ?? (lista.length ? 'Añadir un comentario…' : '¿Qué os ha parecido?')
+          }
           placeholderTextColor={suave}
           onSubmitEditing={enviar}
           returnKeyType="send"

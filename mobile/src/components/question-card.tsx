@@ -7,6 +7,7 @@ import type { Question } from '@/data/types';
 import { useFamily, useFamilyColorMode } from '@/lib/families';
 import { daysLeft, relative } from '@/lib/time';
 
+import { ComentariosJuego } from './comentarios-juego';
 import { type Burst, EmojiBursts } from './emoji-burst';
 import { FamilyCard, FamilyTag } from './family';
 import { useSmoothHeight } from './motion';
@@ -311,6 +312,14 @@ export function QuestionCard({ question }: { question: Question }) {
           cantEditNote="Ya hay respuestas: ahora solo se puede eliminar."
         />
       )}
+      <ComentariosJuego
+        questionId={question.id}
+        placeholder={
+          question.kind === 'quiz'
+            ? 'Comenta (sin desvelar tu respuesta)…'
+            : 'Añadir un comentario…'
+        }
+      />
       <EmojiBursts
         bursts={bursts}
         height={height}
