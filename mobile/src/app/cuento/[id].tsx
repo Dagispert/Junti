@@ -168,7 +168,14 @@ export default function Cuento() {
                           width: 4,
                           borderRadius: 2,
                           backgroundColor: '#E2603F',
-                          height: 6 + (voz.levels[i - (32 - voz.levels.length)] ?? 0) * 40,
+                          // los niveles van de 0 a 100
+                          height: Math.max(
+                            4,
+                            Math.min(
+                              48,
+                              ((voz.levels[i - (32 - voz.levels.length)] ?? 0) / 100) * 48,
+                            ),
+                          ),
                         }}
                       />
                     ))}
@@ -333,7 +340,14 @@ const styles = StyleSheet.create({
   subtitulo: { fontSize: 18, fontWeight: '600' },
   fila: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   grabar: { borderRadius: 24, padding: 20, gap: 12 },
-  ondas: { flexDirection: 'row', alignItems: 'center', gap: 3, height: 52 },
+  ondas: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+    height: 52,
+    overflow: 'hidden',
+  },
   mic: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' },
   grande: {
     height: 54,
