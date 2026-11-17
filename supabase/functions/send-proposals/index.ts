@@ -105,6 +105,12 @@ async function cerrarKaraokes() {
         if (mm.media_assets?.storage_path) rutas.push(mm.media_assets.storage_path);
         if (mm.media_assets?.thumb_path) rutas.push(mm.media_assets.thumb_path);
       }
+    // y la voz en WAV de cada toma (la que se usa para que suene en el iPhone)
+    const { data: voces } = await supabase
+      .from('voces_tomas')
+      .select('path')
+      .in('moment_id', (tomas ?? []).map((t) => t.id));
+    for (const v of voces ?? []) rutas.push(v.path);
     if (rutas.length) {
       const { error } = await supabase.storage.from('media').remove(rutas);
       if (error) {
@@ -116,6 +122,7 @@ async function cerrarKaraokes() {
     if (ids.length) {
       await supabase.from('moments').update({ deleted_at: new Date().toISOString() }).in('id', ids);
       await supabase.from('moment_media').delete().in('moment_id', ids);
+      await supabase.from('voces_tomas').delete().in('moment_id', ids);
     }
     if (assets.length) await supabase.from('media_assets').delete().in('id', assets);
     await supabase.from('proposals').update({ game: { ...game, cerrado: true } }).eq('id', p.id);

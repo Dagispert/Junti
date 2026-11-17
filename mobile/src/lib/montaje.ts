@@ -63,8 +63,10 @@ export async function subirMontaje(args: {
   duracion: number;
   /** quiénes cantan (para seguir viéndolo cuando se borren las tomas) */
   voces: string[];
+  /** en qué va el sonido: 'aac' (todos lo oyen) u 'opus' (el iPhone no) */
+  audio: 'aac' | 'opus';
 }) {
-  const { groupId, me, proposalId, video, poster, firma, duracion, voces } = args;
+  const { groupId, me, proposalId, video, poster, firma, duracion, voces, audio } = args;
   const ext = /mp4/.test(video.type) ? 'mp4' : 'webm';
   const base = `${groupId}/${me}/karaoke-${proposalId}-${firma}-${Date.now().toString(36)}`;
   const up = await supabase.storage
@@ -85,6 +87,7 @@ export async function subirMontaje(args: {
     firma,
     duracion: Math.round(duracion * 10) / 10,
     voces,
+    audio,
   });
   if (error) throw new Error(error.message);
 }

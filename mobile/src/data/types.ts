@@ -184,6 +184,8 @@ export type KaraokeGame = {
     firma: string;
     duracion?: number;
     voces?: string[];
+    /** en qué va el sonido: 'aac' lo oye todo el mundo; 'opus', el iPhone no */
+    audio?: 'aac' | 'opus';
   };
   /** Se acabó el tiempo y ya se borraron las tomas sueltas: solo queda el montaje. */
   cerrado?: boolean;

@@ -12,7 +12,18 @@ import { errorText, useStore } from '@/data/store';
 import type { KaraokeGame, Moment } from '@/data/types';
 import { apuntarError } from '@/lib/errores';
 import { shareFile } from '@/lib/export-media';
-import { canRecord, partAt, planMontage, recorderType, trackUrl } from '@/lib/karaoke';
+import {
+  audioDeTipo,
+  canRecord,
+  guardarVozToma,
+  partAt,
+  planMontage,
+  recorderType,
+  tieneOpus,
+  trackUrl,
+  vocesEnWav,
+} from '@/lib/karaoke';
+import { idParaPublicar } from '@/lib/cola';
 import {
   ALTO,
   ANCHO,
@@ -328,7 +339,7 @@ function Recorder({
   onCancel: () => void;
   onSent: () => void;
 }) {
-  const { addMoment } = useStore();
+  const { addMoment, me } = useStore();
   const duration = game.end - game.start;
   const preview = useRef<HTMLVideoElement | null>(null);
   const review = useRef<HTMLVideoElement | null>(null);
@@ -521,7 +532,9 @@ function Recorder({
     setPhase('sending');
     setError('');
     try {
+      const momentId = idParaPublicar();
       await addMoment({
+        id: momentId,
         groupId,
         proposalId,
         media: {
@@ -536,6 +549,23 @@ function Recorder({
           },
         },
       });
+      // Si la voz va en Opus (Chrome, Android), se guarda también en WAV: si no,
+      // en el iPhone no se oye. Va aparte y sin esperar.
+      if (audioDeTipo(take.mime) === 'opus') {
+        const uri = take.uri;
+        (async () => {
+          const Ctx =
+            window.AudioContext ||
+            (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+          const c = new Ctx();
+          try {
+            const buf = await c.decodeAudioData(await (await fetch(uri)).arrayBuffer());
+            await guardarVozToma(groupId, me, momentId, buf);
+          } finally {
+            c.close().catch(() => {});
+          }
+        })().catch((e) => apuntarError(e, 'aviso'));
+      }
       onSent();
     } catch (e) {
       setError(errorText(e));
@@ -759,8 +789,15 @@ function Montage({
   const grupo = group(groupId);
   // Si el montaje guardado no tiene todas las voces, se graba ahora, mientras se ve.
   const firma = firmaTomas(takes.map((m) => m.id));
+  // (y también si el guardado lleva el sonido en Opus y este móvil graba AAC: así
+  // queda uno que se oye en todos los móviles)
+  const tipoAqui = recorderType();
   const hayQueGrabar =
-    !game.cerrado && game.montaje?.firma !== firma && !!recorderType() && takes.length > 0;
+    !game.cerrado &&
+    !!tipoAqui &&
+    takes.length > 0 &&
+    (game.montaje?.firma !== firma ||
+      (game.montaje?.audio === 'opus' && audioDeTipo(tipoAqui) === 'aac'));
   const grab = useRef<{
     lienzo: HTMLCanvasElement;
     c2d: CanvasRenderingContext2D;
@@ -808,13 +845,29 @@ function Montage({
   // en silencio y siguen ese reloj. (En el iPhone, varios vídeos con sonido a
   // la vez se pausan entre sí y todo iba a tropezones.)
   const bytes = useRef(new Map<string, Promise<ArrayBuffer | null>>());
+  /** las tomas cuya voz viene de su WAV */
+  const deWav = useRef(new Set<string>());
+  /** quién no se oye (su voz no se pudo leer en este móvil) */
+  const [mudos, setMudos] = useState<string[]>([]);
   useEffect(() => {
     const get = (src: string) =>
       fetch(src)
         .then((r) => (r.ok ? r.arrayBuffer() : null))
         .catch(() => null);
     bytes.current.set('cancion', get(url));
-    for (const m of takes) if (m.videoUri) bytes.current.set(m.id, get(m.videoUri));
+    // la voz de cada uno: su WAV si lo tiene (se oye en todos los móviles); si no, el vídeo
+    const wavs = vocesEnWav(takes.map((m) => m.id)).catch(() => new Map<string, string>());
+    for (const m of takes)
+      bytes.current.set(
+        m.id,
+        wavs.then((w) => {
+          if (w.has(m.id)) {
+            deWav.current.add(m.id);
+            return get(w.get(m.id)!);
+          }
+          return m.videoUri ? get(m.videoUri) : null;
+        }),
+      );
   }, [takes, url]);
   const ctx = useRef<AudioContext | null>(null);
   const fuentes = useRef<AudioBufferSourceNode[]>([]);
@@ -907,10 +960,19 @@ function Montage({
             c.decodeAudioData(ab.slice(0)),
             new Promise<null>((r) => setTimeout(() => r(null), 8000)),
           ]);
-          if (buf) out.set(id, buf);
-          else apuntarError(new Error(`Karaoke: tarda en preparar el sonido (${id})`), 'aviso');
-        } catch {
-          // sin sonido para esa voz: el vídeo sale igual
+          if (buf) {
+            out.set(id, buf);
+            // una toma antigua en Opus: este móvil sí la entiende, así que deja
+            // su voz en WAV para los iPhone
+            if (id !== 'cancion' && !deWav.current.has(id) && tieneOpus(ab))
+              guardarVozToma(groupId, me, id, buf).catch((e) => apuntarError(e, 'aviso'));
+          } else apuntarError(new Error(`Karaoke: tarda en preparar el sonido (${id})`), 'aviso');
+        } catch (e) {
+          // sin sonido para esa voz: el vídeo sale igual (pero no se guarda el montaje)
+          apuntarError(
+            new Error(`Karaoke: no se pudo leer la voz (${id}): ${(e as Error)?.message ?? e}`),
+            'aviso',
+          );
         }
       }
       return out;
@@ -920,6 +982,17 @@ function Montage({
     const desde = performance.now();
     introTimer.current = setTimeout(async () => {
       const buffers = await sonido.current!;
+      // si falta la voz de alguien, el montaje no se guarda (saldría incompleto)
+      setMudos(takes.filter((m) => !buffers.has(m.id)).map((m) => m.authorId));
+      if (grab.current && takes.some((m) => !buffers.has(m.id))) {
+        const g = grab.current;
+        grab.current = null;
+        if (g.rec.state !== 'inactive') {
+          g.rec.onstop = null;
+          g.rec.stop();
+        }
+        setGuardado('');
+      }
       // si decodificar tardó más que la portada, se empieza en cuanto esté
       setTimeout(
         () => {
@@ -1190,9 +1263,13 @@ function Montage({
         firma,
         duracion: duration,
         voces: takes.map((m) => m.authorId),
+        audio: audioDeTipo(tipo),
       }).then(
         () => setGuardado('listo'),
-        () => setGuardado('error'),
+        (e) => {
+          apuntarError(e, 'error');
+          setGuardado('error');
+        },
       );
     };
     setTimeout(() => g.rec.stop(), 300);
@@ -1480,6 +1557,14 @@ function Montage({
           </Pressable>
         )}
       </View>
+      {mudos.length > 0 && (
+        <Text style={styles.guardado}>
+          En este móvil no se oye la voz de{' '}
+          {mudos.map((u) => user(u).name.split(' ')[0]).join(' y ')}: se grabó en Android. Se
+          arreglará sola en cuanto alguien con Android o un ordenador abra este karaoke; hasta
+          entonces el vídeo con todas las voces no se guarda.
+        </Text>
+      )}
       {!!guardado && (
         <Text style={styles.guardado}>
           {guardado === 'grabando'
