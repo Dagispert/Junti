@@ -126,6 +126,10 @@ export type CuentoGame = {
   type: 'cuento';
   /** la primera frase (de quien lo propone o de la narradora) */
   inicio: string;
+  /** la primera frase leída por la narradora (audio guardado) */
+  vozInicio?: string;
+  /** el final que pone la narradora al terminar el plazo */
+  cierre?: { texto: string; path?: string };
 };
 
 /**

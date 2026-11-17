@@ -11,6 +11,7 @@ import { Hand, Spacing, useTheme } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
 import type { Moment } from '@/data/types';
 import { idParaPublicar } from '@/lib/cola';
+import { cierreDelCuento, vozDelCuento } from '@/lib/ideas-retos';
 import { mmss } from '@/lib/music';
 import { markRead } from '@/lib/notifications';
 import { useVoiceRecorder } from '@/lib/recorder';
@@ -38,6 +39,13 @@ export default function Cuento() {
     [moments, id],
   );
   const voz = useVoiceRecorder();
+  // la primera frase, con la voz de la narradora (si el grupo la tiene activada)
+  const [vozInicio, setVozInicio] = useState<string | null>(null);
+  useEffect(() => {
+    if (proposal?.juego && proposal.groupId)
+      vozDelCuento(proposal.groupId, proposal.id).then(setVozInicio);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proposal?.id]);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
 
@@ -99,9 +107,12 @@ export default function Cuento() {
       <View style={[styles.papel, { backgroundColor: theme.card, boxShadow: theme.shadow }]}>
         <Icon icon={BookOpen} size={20} color={theme.textSecondary} />
         <Text style={[styles.inicio, { color: theme.text }]}>{juego.inicio}</Text>
-        <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
-          Lo empezó {primero(proposal.createdBy)}
-        </Text>
+        <View style={[styles.fila, { justifyContent: 'space-between' }]}>
+          <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
+            Lo empezó {primero(proposal.createdBy)}
+          </Text>
+          {!!vozInicio && <BotonNarradora src={vozInicio} />}
+        </View>
       </View>
 
       {abierto ? (
@@ -227,17 +238,102 @@ export default function Cuento() {
           <Notice>{notice}</Notice>
         </>
       ) : (
-        <CuentoEntero inicio={juego.inicio} trozos={trozos} />
+        <CuentoEntero
+          inicio={juego.inicio}
+          vozInicio={vozInicio}
+          trozos={trozos}
+          groupId={proposal.groupId}
+          proposalId={proposal.id}
+        />
       )}
     </Screen>
   );
 }
 
-/** El cuento ya terminado: se escucha entero, trozo a trozo. */
-function CuentoEntero({ inicio, trozos }: { inicio: string; trozos: Moment[] }) {
+/** «Escuchar a la narradora»: la primera frase con su voz. */
+function BotonNarradora({ src }: { src: string }) {
+  const theme = useTheme();
+  const [sonando, setSonando] = useState(false);
+  const audio = useRef<HTMLAudioElement | null>(null);
+  useEffect(() => () => audio.current?.pause(), []);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => {
+        if (sonando) {
+          audio.current?.pause();
+          setSonando(false);
+          return;
+        }
+        const a = audio.current ?? new Audio(src);
+        audio.current = a;
+        a.currentTime = 0;
+        a.onended = () => setSonando(false);
+        a.play()
+          .then(() => setSonando(true))
+          .catch(() => setSonando(false));
+      }}
+      style={[styles.narradora, { backgroundColor: theme.soft }]}>
+      <Icon icon={sonando ? Pause : Play} size={14} color={theme.text} />
+      <Text style={{ color: theme.text, fontSize: 13, fontWeight: '600' }}>
+        {sonando ? 'Parar' : 'Escuchar a la narradora'}
+      </Text>
+    </Pressable>
+  );
+}
+
+/** Suena un audio y espera a que acabe (o falle). */
+const sonar = (src: string, guardar: (a: HTMLAudioElement) => void) =>
+  new Promise<void>((ok) => {
+    const a = new Audio(src);
+    guardar(a);
+    a.onended = () => ok();
+    a.onerror = () => ok();
+    a.play().catch(() => ok());
+  });
+
+/** Lee un texto con la voz del móvil (si no hay voz de la narradora). */
+const leer = (texto: string) =>
+  new Promise<void>((ok) => {
+    if (typeof speechSynthesis === 'undefined') return ok();
+    const u = new SpeechSynthesisUtterance(texto);
+    u.lang = 'es-ES';
+    u.onend = () => ok();
+    u.onerror = () => ok();
+    speechSynthesis.speak(u);
+    setTimeout(ok, 20000);
+  });
+
+/**
+ * El cuento ya terminado: la narradora lee el comienzo, suenan los trozos y
+ * ella pone el final (lo escribe al terminar el plazo, tras escucharlos).
+ */
+function CuentoEntero({
+  inicio,
+  vozInicio,
+  trozos,
+  groupId,
+  proposalId,
+}: {
+  inicio: string;
+  vozInicio: string | null;
+  trozos: Moment[];
+  groupId: string;
+  proposalId: string;
+}) {
   const theme = useTheme();
   const { user } = useStore();
   const [sonando, setSonando] = useState<number | null>(null);
+  // el final de la narradora
+  const [cierre, setCierre] = useState<{ texto: string; audio?: string | null } | null>(null);
+  const [escribiendo, setEscribiendo] = useState(true);
+  useEffect(() => {
+    if (!trozos.length) return setEscribiendo(false);
+    cierreDelCuento(groupId, proposalId)
+      .then((r) => r.cierre && setCierre({ texto: r.cierre, audio: r.audio }))
+      .finally(() => setEscribiendo(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proposalId]);
   const audio = useRef<HTMLAudioElement | null>(null);
   const vivo = useRef(true);
   useEffect(
@@ -258,28 +354,21 @@ function CuentoEntero({ inicio, trozos }: { inicio: string; trozos: Moment[] }) 
 
   const escuchar = async () => {
     vivo.current = true;
-    // la primera frase, leída en voz alta (si el móvil sabe)
+    const guardar = (a: HTMLAudioElement) => (audio.current = a);
+    // el comienzo, con la voz de la narradora (o la del móvil)
     setSonando(-1);
-    if (typeof speechSynthesis !== 'undefined') {
-      await new Promise<void>((ok) => {
-        const u = new SpeechSynthesisUtterance(inicio);
-        u.lang = 'es-ES';
-        u.onend = () => ok();
-        u.onerror = () => ok();
-        speechSynthesis.speak(u);
-        setTimeout(ok, 15000);
-      });
-    }
+    if (vozInicio) await sonar(vozInicio, guardar);
+    else await leer(inicio);
     for (let i = 0; i < trozos.length && vivo.current; i++) {
       setSonando(i);
-      await new Promise<void>((ok) => {
-        const a = new Audio(trozos[i].voice!.uri);
-        audio.current = a;
-        a.onended = () => ok();
-        a.onerror = () => ok();
-        a.play().catch(() => ok());
-      });
+      await sonar(trozos[i].voice!.uri, guardar);
       if (vivo.current) await new Promise((r) => setTimeout(r, 350));
+    }
+    // y el final
+    if (vivo.current && cierre) {
+      setSonando(trozos.length);
+      if (cierre.audio) await sonar(cierre.audio, guardar);
+      else await leer(cierre.texto);
     }
     if (vivo.current) setSonando(null);
   };
@@ -322,6 +411,28 @@ function CuentoEntero({ inicio, trozos }: { inicio: string; trozos: Moment[] }) 
           <VoiceNote voice={t.voice!} />
         </Animated.View>
       ))}
+      {/* el final de la narradora */}
+      {trozos.length > 0 && (
+        <View
+          style={[
+            styles.cierre,
+            {
+              backgroundColor: theme.card,
+              borderColor: sonando === trozos.length ? theme.accent : 'transparent',
+            },
+          ]}>
+          <Text style={{ color: theme.textSecondary, fontSize: 13, fontWeight: '600' }}>
+            Y el final, según la narradora
+          </Text>
+          <Text style={[styles.inicio, { color: theme.text, fontSize: 24, lineHeight: 28 }]}>
+            {cierre
+              ? cierre.texto
+              : escribiendo
+                ? 'Está escuchando el cuento para escribirle un final…'
+                : 'Ahora mismo no puede escribir el final; lo intentará la próxima vez que abráis el cuento.'}
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -358,4 +469,19 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   trozo: { borderRadius: 20, padding: 14, gap: 10, borderWidth: 2 },
+  cierre: {
+    borderRadius: 22,
+    padding: 18,
+    gap: 8,
+    borderWidth: 2,
+    transform: [{ rotate: '0.5deg' }],
+  },
+  narradora: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    height: 32,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+  },
 });

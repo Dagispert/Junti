@@ -65,3 +65,24 @@ export const INICIOS_CUENTO = [
   'La abuela nos dejó en herencia un mapa, una llave y una condición muy rara:',
   'Esa noche, por primera vez, la luna se veía igual desde todas nuestras ciudades y…',
 ];
+
+/** La primera frase del cuento leída por la narradora (enlace al audio). */
+export async function vozDelCuento(groupId: string, proposalId: string): Promise<string | null> {
+  const { data, error } = await supabase.functions.invoke('narrate', {
+    body: { action: 'cuento-voz', groupId, proposalId },
+  });
+  if (error) return null;
+  return (data as { audio: string | null }).audio;
+}
+
+/** El cierre del cuento (texto y audio), escrito por la narradora al terminar. */
+export async function cierreDelCuento(
+  groupId: string,
+  proposalId: string,
+): Promise<{ cierre: string | null; audio?: string | null; reason?: string }> {
+  const { data, error } = await supabase.functions.invoke('narrate', {
+    body: { action: 'cuento-cierre', groupId, proposalId },
+  });
+  if (error) return { cierre: null, reason: 'busy' };
+  return data as { cierre: string | null; audio?: string | null; reason?: string };
+}

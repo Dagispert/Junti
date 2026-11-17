@@ -293,6 +293,8 @@ type Body = {
   action?: string;
   /** para «sample»: la personalidad que se está probando (sin guardar) */
   persona?: unknown;
+  /** para el cuento a trozos */
+  proposalId?: string;
 };
 
 const COLUMNS =
@@ -331,6 +333,9 @@ Deno.serve(async (req) => {
     if (body.action === 'retos') return reply(200, await ideasDeRetos(me, groupId, !!body.force));
     // «cuento»: la primera frase de un cuento a trozos, pensada para el grupo.
     if (body.action === 'cuento') return reply(200, await inicioDeCuento(me, groupId));
+    // el cuento leído por la narradora: el comienzo, y al terminar, su cierre
+    if (body.action === 'cuento-voz') return reply(200, await vozDeCuento(me, groupId, body.proposalId));
+    if (body.action === 'cuento-cierre') return reply(200, await cierreDeCuento(me, groupId, body.proposalId));
     // «Nuestra historia»: todos los recuerdos del grupo, sin periodo.
     const story = kind === 'story';
     const periodStart = story ? STORY_PERIOD : body.periodStart;
@@ -1493,6 +1498,215 @@ async function inicioDeCuento(me: string, groupId: string | undefined) {
     console.error('cuento', e);
     return { inicio: null, reason: 'busy' };
   }
+}
+
+// ── El cuento a trozos leído por la narradora ──────────────────────────────
+
+type CuentoGame = {
+  type: 'cuento';
+  inicio: string;
+  vozInicio?: string;
+  cierre?: { texto: string; path?: string };
+};
+
+/** El cuento, si quien pide es del grupo y la narradora está activada. */
+async function cuentoDe(me: string, groupId: string | undefined, proposalId: string | undefined) {
+  if (!groupId || !proposalId) return null;
+  const [{ data: membership }, { data: group }, { data: prop }] = await Promise.all([
+    supabase.from('memberships').select('status').match({ group_id: groupId, user_id: me }).maybeSingle(),
+    supabase.from('groups').select('name, narrative_enabled, narrative_style, narrator').eq('id', groupId).maybeSingle(),
+    supabase.from('proposals').select('id, group_id, game, ends_at').eq('id', proposalId).maybeSingle(),
+  ]);
+  if (membership?.status !== 'active' || !group || !prop || prop.group_id !== groupId) return null;
+  if ((prop.game as { type?: string })?.type !== 'cuento') return null;
+  return { group, prop: prop as { id: string; game: CuentoGame; ends_at: string | null } };
+}
+
+/** Lee un texto con la voz de la narradora del grupo y lo guarda; devuelve su ruta. */
+async function leerYGuardar(
+  group: { narrative_style: string | null; narrator: unknown },
+  texto: string,
+  ruta: string,
+) {
+  const persona = cleanPersona(group.narrator);
+  const voiced = await narrateAloud([texto], voiceOf((group.narrative_style as string) ?? 'emotivo', persona));
+  const up = await supabase.storage
+    .from('media')
+    .upload(ruta, voiced.wav, { contentType: 'audio/wav', upsert: true });
+  if (up.error) throw new Error(up.error.message);
+  return ruta;
+}
+
+const firmar = async (path?: string) =>
+  path ? (await supabase.storage.from('media').createSignedUrl(path, 6 * 3600)).data?.signedUrl ?? null : null;
+
+/** El comienzo del cuento, leído por la narradora (se genera una vez). */
+async function vozDeCuento(me: string, groupId: string | undefined, proposalId: string | undefined) {
+  const c = await cuentoDe(me, groupId, proposalId);
+  if (!c) return { audio: null, reason: 'forbidden' };
+  if (!c.group.narrative_enabled) return { audio: null, reason: 'off' };
+  const game = c.prop.game;
+  if (game.vozInicio) return { audio: await firmar(game.vozInicio) };
+  try {
+    const ruta = await leerYGuardar(c.group, game.inicio, `${groupId}/narradora/cuento-${proposalId}-inicio.wav`);
+    await supabase.from('proposals').update({ game: { ...game, vozInicio: ruta } }).eq('id', proposalId);
+    return { audio: await firmar(ruta) };
+  } catch (e) {
+    console.error('cuento voz', e);
+    return { audio: null, reason: 'busy' };
+  }
+}
+
+const SYSTEM_CIERRE = `Eres la narradora de Junti. Un grupo de personas que viven lejos ha jugado a «el cuento a trozos»: tú empezaste con una frase y cada persona grabó, por turnos, cómo seguía (cada una solo oía el trozo anterior, así que suele salir una historia loca).
+
+Te paso la primera frase y, en orden, las grabaciones (o lo que dijeron). Escúchalas y escribe el CIERRE del cuento: 2 o 3 frases (máx. 60 palabras) que lo rematen con gracia, recogiendo cosas que dijeron (personajes, giros, bromas) y dándole un final redondo y cariñoso. Termina con una fórmula de final de cuento («…y colorín colorado…» o similar, a tu manera).
+
+Español de España, cercano. Nada incómodo ni que ridiculice a nadie.
+
+Responde SOLO con JSON: {"cierre":"…"}`;
+
+/** Gemini con audios: escucha los trozos y escribe el cierre. */
+async function geminiConAudios(system: string, parts: unknown[], limite = 60_000): Promise<string> {
+  const empezo = Date.now();
+  const key = Deno.env.get('GEMINI_API_KEY');
+  if (!key) throw new Error('Falta GEMINI_API_KEY');
+  const { data: saved } = await supabase.from('app_config').select('value').eq('key', 'gemini_model').maybeSingle();
+  const modelos = [Deno.env.get('GEMINI_MODEL'), saved?.value as string | undefined].filter(
+    (m): m is string => !!m,
+  );
+  // y los «flash» que ofrezca la cuenta (los nombres cambian con el tiempo)
+  try {
+    const list = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000', {
+      headers: { 'x-goog-api-key': key },
+      signal: AbortSignal.timeout(10_000),
+    });
+    const { models } = (await list.json()) as {
+      models?: { name: string; supportedGenerationMethods?: string[] }[];
+    };
+    const flash = (models ?? [])
+      .filter((m) => m.supportedGenerationMethods?.includes('generateContent'))
+      .map((m) => m.name.replace(/^models\//, ''))
+      .filter((n) => /flash/.test(n) && !/image|tts|audio|live|exp|embed|lite|preview/.test(n))
+      .sort((a, b) => b.localeCompare(a, 'en', { numeric: true }));
+    modelos.push(...flash.slice(0, 3));
+  } catch {
+    // sin lista: los de siempre
+  }
+  let ultimo = '';
+  // si un modelo está saturado (503), se reintenta una vez tras unos segundos
+  const cola = [...new Set(modelos)];
+  const reintentado = new Set<string>();
+  while (cola.length) {
+    const model = cola.shift()!;
+    if (Date.now() - empezo > limite - 8_000) break;
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(Math.max(8_000, limite - (Date.now() - empezo))),
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: 'user', parts }],
+        generationConfig: { temperature: 0.9, responseMimeType: 'application/json' },
+      }),
+    }).catch((e) => ({ ok: false, status: 0, json: async () => ({ error: { message: String(e) } }) }) as Response);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      ultimo += ` ${model}: ${res.status} ${String(data?.error?.message ?? '').slice(0, 90)};`;
+      if (res.status === 503 && !reintentado.has(model)) {
+        reintentado.add(model);
+        await new Promise((r) => setTimeout(r, 4000));
+        cola.unshift(model);
+      }
+      continue;
+    }
+    const text = (data?.candidates?.[0]?.content?.parts ?? []).map((p: { text?: string }) => p.text ?? '').join('');
+    if (text) return text;
+  }
+  throw new Error(ultimo || 'sin respuesta');
+}
+
+/** El cierre del cuento (cuando se acaba el plazo): la narradora escucha los trozos y lo remata. */
+async function cierreDeCuento(me: string, groupId: string | undefined, proposalId: string | undefined) {
+  const c = await cuentoDe(me, groupId, proposalId);
+  if (!c) return { cierre: null, reason: 'forbidden' };
+  if (!c.group.narrative_enabled) return { cierre: null, reason: 'off' };
+  const game = c.prop.game;
+  if (c.prop.ends_at && Date.parse(c.prop.ends_at) > Date.now()) return { cierre: null, reason: 'abierto' };
+  if (game.cierre) return { cierre: game.cierre.texto, audio: await firmar(game.cierre.path) };
+
+  const { data: members } = await supabase
+    .from('memberships')
+    .select('user_id, narrative_opt_out')
+    .eq('group_id', groupId!)
+    .eq('status', 'active');
+  const fuera = new Set((members ?? []).filter((m) => m.narrative_opt_out).map((m) => m.user_id));
+  const { data: trozos } = await supabase
+    .from('moments')
+    .select('id, author_id, shared_at, text, moment_media(position, media_assets(kind, storage_path, mime))')
+    .eq('proposal_id', proposalId!)
+    .is('deleted_at', null)
+    .order('shared_at');
+  const ids = [...new Set((trozos ?? []).map((t) => t.author_id))];
+  const { data: perfiles } = await supabase.from('profiles').select('id, name').in('id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']);
+  const nombre = new Map((perfiles ?? []).map((p) => [p.id, String(p.name ?? '').split(' ')[0]]));
+
+  const parts: unknown[] = [{ text: `Primera frase (de la narradora): «${game.inicio}»` }];
+  let n = 0;
+  for (const t of trozos ?? []) {
+    n++;
+    if (fuera.has(t.author_id)) {
+      parts.push({ text: `Trozo ${n}: (de alguien que prefiere que no se use lo suyo; ignóralo)` });
+      continue;
+    }
+    const audio = (t.moment_media as unknown as { media_assets: { kind: string; storage_path: string; mime: string } | null }[])
+      ?.map((mm) => mm.media_assets)
+      .find((a) => a?.kind === 'audio');
+    parts.push({ text: `Trozo ${n}, de ${nombre.get(t.author_id) ?? 'alguien'}:` });
+    if (audio) {
+      const dl = await supabase.storage.from('media').download(audio.storage_path);
+      if (dl.data) {
+        const bytes = new Uint8Array(await dl.data.arrayBuffer());
+        let bin = '';
+        for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+        const mime = (audio.mime || 'audio/webm').split(';')[0].replace('video/', 'audio/');
+        parts.push({ inlineData: { mimeType: mime, data: btoa(bin) } });
+      }
+    } else if (t.text) parts.push({ text: t.text });
+  }
+  if (n === 0) return { cierre: null, reason: 'vacio' };
+
+  let texto = '';
+  let detalle = '';
+  const sacar = (raw: string) =>
+    String((JSON.parse(raw.replace(/^```(?:json)?|```$/g, '').trim()) as { cierre?: string }).cierre ?? '')
+      .trim()
+      .slice(0, 500);
+  try {
+    texto = sacar(await geminiConAudios(SYSTEM_CIERRE, parts, 70_000));
+  } catch (e) {
+    detalle = String(e instanceof Error ? e.message : e);
+    console.error('cuento cierre', detalle);
+    // si no pudo escuchar los audios, al menos un final a partir del comienzo
+    try {
+      const soloTexto = parts.filter((x) => !(x as { inlineData?: unknown }).inlineData);
+      soloTexto.push({ text: '(No has podido escuchar las grabaciones: cierra el cuento a partir del comienzo y de quiénes participaron, sin inventar lo que dijeron.)' });
+      texto = sacar(await geminiConAudios(SYSTEM_CIERRE, soloTexto, 35_000));
+    } catch (e2) {
+      detalle += ` | ${String(e2 instanceof Error ? e2.message : e2)}`;
+    }
+  }
+  if (!texto) return { cierre: null, reason: 'busy', detalle: detalle.slice(0, 300) };
+  let path: string | undefined;
+  try {
+    path = await leerYGuardar(c.group, texto, `${groupId}/narradora/cuento-${proposalId}-cierre.wav`);
+  } catch (e) {
+    console.error('cuento cierre voz', e); // queda el texto, sin voz
+  }
+  await supabase
+    .from('proposals')
+    .update({ game: { ...game, cierre: { texto, ...(path ? { path } : {}) } } })
+    .eq('id', proposalId!);
+  return { cierre: texto, audio: await firmar(path) };
 }
 
 async function gemini(system: string, prompt: string): Promise<{ text: string; model: string }> {
