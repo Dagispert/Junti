@@ -1542,29 +1542,92 @@ async function leerYGuardar(
  * un rastro de ruido, como de walkie-talkie, al acabar de hablar. Se corta
  * tras la última sílaba y se funde a silencio.
  */
+/**
+ * Dónde empieza y acaba la voz de verdad en un audio (en segundos): sin los
+ * silencios de los extremos ni la ráfaga de ruido («walkie-talkie») que la
+ * voz de la IA a veces deja al final. Se buscan los bloques de sonido (los
+ * huecos de menos de 0,1 s se unen) y se quitan del final los bloques cortos
+ * que llegan tras un silencio o que tienen pinta de ruido (cruzan el cero
+ * muchísimo más que una voz).
+ */
+function tramoDeVoz(muestra: (i: number) => number, n: number, rate: number) {
+  const ventana = Math.max(1, Math.round(rate * 0.02));
+  const E: number[] = [];
+  const Z: number[] = [];
+  for (let i = 0; i + ventana <= n; i += ventana) {
+    let e = 0;
+    let z = 0;
+    let antes = muestra(i);
+    for (let k = 0; k < ventana; k++) {
+      const x = muestra(i + k);
+      e += x * x;
+      if (k && x < 0 !== antes < 0) z++;
+      antes = x;
+    }
+    E.push(Math.sqrt(e / ventana));
+    Z.push(z / ventana);
+  }
+  const N = E.length;
+  if (!N) return { desde: 0, hasta: n / rate };
+  // la escala, sin que una ráfaga fuerte la marque
+  const orden = [...E].sort((a, b) => a - b);
+  const u = Math.max(0.008, orden[Math.floor(N * 0.9)] * 0.15);
+  const junta = Math.round(0.1 / 0.02);
+  const bloques: [number, number][] = [];
+  for (let i = 0; i < N; ) {
+    if (E[i] <= u) {
+      i++;
+      continue;
+    }
+    let b = i;
+    for (;;) {
+      let sigue = false;
+      for (let k = b + 1; k < Math.min(N, b + 1 + junta); k++)
+        if (E[k] > u) {
+          b = k;
+          sigue = true;
+          break;
+        }
+      if (!sigue) break;
+    }
+    bloques.push([i, b]);
+    i = b + 1;
+  }
+  if (!bloques.length) return { desde: 0, hasta: n / rate };
+  const ruido = ([a, b]: [number, number]) => {
+    let s = 0;
+    let c = 0;
+    for (let k = a; k <= b; k++)
+      if (E[k] > u) {
+        s += Z[k];
+        c++;
+      }
+    return c ? s / c : 0;
+  };
+  while (bloques.length > 1) {
+    const [a, b] = bloques[bloques.length - 1];
+    const pb = bloques[bloques.length - 2][1];
+    const largo = ((b - a + 1) * ventana) / rate;
+    const hueco = ((a - pb - 1) * ventana) / rate;
+    if ((largo < 0.35 && hueco >= 0.15) || ruido(bloques[bloques.length - 1]) > 0.25) bloques.pop();
+    else break;
+  }
+  const desde = Math.max(0, ((bloques[0][0] - 2) * ventana) / rate);
+  const hasta = Math.min(n / rate, ((bloques[bloques.length - 1][1] + 1) * ventana) / rate + 0.15);
+  return { desde, hasta: Math.max(hasta, desde + 0.2) };
+}
+
 function recortarWav(wav: Uint8Array): Uint8Array {
   try {
     const v = new DataView(wav.buffer, wav.byteOffset, wav.byteLength);
     const rate = v.getUint32(24, true);
     const n = (wav.length - 44) >> 1;
     const muestra = (i: number) => v.getInt16(44 + i * 2, true) / 32768;
-    const ventana = Math.round(rate * 0.02);
-    const energias: number[] = [];
-    for (let i = 0; i + ventana <= n; i += ventana) {
-      let e = 0;
-      for (let k = 0; k < ventana; k++) e += muestra(i + k) ** 2;
-      energias.push(Math.sqrt(e / ventana));
-    }
-    const pico = Math.max(...energias);
-    // la voz: lo que pasa de una fracción del pico (el ruido de cola es mucho más bajo)
-    const umbral = Math.max(0.01, pico * 0.12);
-    const primera = energias.findIndex((e) => e > umbral);
-    let ultima = energias.length - 1;
-    while (ultima > 0 && energias[ultima] <= umbral) ultima--;
-    if (primera < 0) return wav;
-    const desde = Math.max(0, (primera - 2) * ventana);
-    const hasta = Math.min(n, (ultima + 1) * ventana + Math.round(rate * 0.12));
+    const tramo = tramoDeVoz(muestra, n, rate);
+    const desde = Math.round(tramo.desde * rate);
+    const hasta = Math.round(tramo.hasta * rate);
     const largo = hasta - desde;
+    if (largo <= 0) return wav;
     const out = new Uint8Array(44 + largo * 2);
     out.set(wav.subarray(0, 44));
     const o = new DataView(out.buffer);
