@@ -32,10 +32,12 @@ const plazo = (p: Proposal) => {
 // cálidos y suaves (naranja y rojo), para que entone con el resto de la app
 const NARANJA = '#FFB48A';
 const ROJO_P = '#E8563F';
-const MORADO = '#B8A4F4';
+/** las letras grandes: crema cálida (antes moradas) */
+const MORADO = '#FFF3E0';
 const AMARILLO = '#FFE3A1';
 const CREMA_P = '#FFF6EA';
-const TINTA_P = '#3D3556';
+/** la tinta: un marrón rojizo oscuro (antes violeta) */
+const TINTA_P = '#4A2219';
 
 /** Letras gordas con relieve: un borde y varias sombras en escalera. */
 const relieve = (lado: string, borde: string, prof = 6) =>
@@ -59,6 +61,17 @@ const ANIM_POSTER = `
 @keyframes kpBrillo { 0% { opacity: 0; transform: scale(0) rotate(-90deg) } 70% { opacity: 1; transform: scale(1.3) rotate(10deg) } 100% { opacity: 1; transform: none } }
 @keyframes kpTitila { 0%, 100% { transform: scale(1) } 50% { transform: scale(.75) } }
 `;
+
+/** Lo de dentro de la tele, llenando toda la pantalla (sin bandas a los lados). */
+const LLENA: React.CSSProperties = {
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  width: '100%',
+  height: '100%',
+  objectFit: 'cover',
+  display: 'block',
+};
 
 /** Un destello de cuatro puntas. */
 function Destello({ size, style }: { size: number; style?: React.CSSProperties }) {
@@ -246,7 +259,7 @@ export function KaraokeHoy({ challenge, answers }: { challenge: Proposal; answer
             <div
               style={{
                 alignSelf: 'flex-start',
-                background: MORADO,
+                background: ROJO_P,
                 color: CREMA_P,
                 border: `2px solid ${TINTA_P}`,
                 borderRadius: 8,
@@ -295,7 +308,7 @@ export function KaraokeHoy({ challenge, answers }: { challenge: Proposal; answer
               style={{
                 width: 138,
                 transform: `${capa(-6)} rotate(4deg)`,
-                background: 'linear-gradient(160deg, #6F6884, #4A4360)',
+                background: 'linear-gradient(160deg, #6E5A52, #43332D)',
                 borderRadius: 22,
                 padding: 10,
                 paddingBottom: 22,
@@ -309,7 +322,7 @@ export function KaraokeHoy({ challenge, answers }: { challenge: Proposal; answer
                   aspectRatio: '1 / 1',
                   borderRadius: '16px / 18px',
                   overflow: 'hidden',
-                  background: '#1E1A2B',
+                  background: '#21170F',
                   boxShadow: 'inset 0 0 18px rgba(0,0,0,.8)',
                 }}>
                 {enLaTele ? (
@@ -320,19 +333,10 @@ export function KaraokeHoy({ challenge, answers }: { challenge: Proposal; answer
                     autoPlay
                     loop
                     playsInline
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'contain',
-                      display: 'block',
-                    }}
+                    style={LLENA}
                   />
                 ) : game.artwork ? (
-                  <img
-                    src={game.artwork}
-                    alt=""
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                  />
+                  <img src={game.artwork} alt="" style={LLENA} />
                 ) : null}
                 {/* líneas de la pantalla y el brillo del cristal */}
                 <div
@@ -350,7 +354,7 @@ export function KaraokeHoy({ challenge, answers }: { challenge: Proposal; answer
                 {[0, 1].map((i) => (
                   <div
                     key={i}
-                    style={{ width: 8, height: 8, borderRadius: 4, background: '#8A8A96' }}
+                    style={{ width: 8, height: 8, borderRadius: 4, background: '#A89186' }}
                   />
                 ))}
               </div>
@@ -363,7 +367,7 @@ export function KaraokeHoy({ challenge, answers }: { challenge: Proposal; answer
                   height: 5,
                   borderRadius: 3,
                   background:
-                    'repeating-linear-gradient(90deg, #6E6E7A 0 2px, transparent 2px 4px)',
+                    'repeating-linear-gradient(90deg, #8C766C 0 2px, transparent 2px 4px)',
                 }}
               />
             </div>

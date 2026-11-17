@@ -20,6 +20,7 @@ import { aplicarEnLaWeb, useEsquema } from '@/lib/appearance';
 import { StoreProvider, useStore } from '@/data/store';
 import { AlDia } from '@/lib/al-dia';
 import { apuntarError, instalarErrores } from '@/lib/errores';
+import { arrancar as arrancarInclinacion } from '@/lib/inclinacion';
 import { rememberInvite, takeInvite } from '@/lib/invite';
 import { setupInstallable } from '@/lib/push';
 import { markIntroDone } from '@/lib/tour';
@@ -87,6 +88,8 @@ export default function RootLayout() {
   useEffect(setupInstallable, []);
   useEffect(rememberInvite, []);
   useEffect(instalarErrores, []);
+  // la inclinación del móvil (en el iPhone, el permiso se pide con el primer toque)
+  useEffect(arrancarInclinacion, []);
   return (
     <ThemeProvider value={navTema}>
       <StoreProvider>

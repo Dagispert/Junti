@@ -44,37 +44,43 @@ function paso() {
   }
 }
 
-function arrancar() {
+/** Se arranca al abrir la app: así el primer toque (p. ej. al entrar en un grupo) ya sirve. */
+export function arrancar() {
   if (arrancado || Platform.OS !== 'web' || typeof window === 'undefined') return;
   arrancado = true;
+  // Se escucha desde el principio: si el móvil ya dio permiso (o no lo pide,
+  // como Android), se mueve sin tocar nada.
+  let llega = false;
+  const primero = (e: DeviceOrientationEvent) => {
+    if (e.beta != null) llega = true;
+  };
+  window.addEventListener('deviceorientation', primero);
+  window.addEventListener('deviceorientation', alGirar);
   const D = window.DeviceOrientationEvent as unknown as
     | { requestPermission?: () => Promise<'granted' | 'denied'> }
     | undefined;
   if (D?.requestPermission) {
-    // iPhone: el permiso solo se puede pedir tras un toque
-    // Safari solo lo deja pedir dentro de un toque de verdad (no al deslizar);
-    // se vuelve a intentar en cada toque hasta que se concede (y en cada
-    // apertura de la app hay que pedirlo otra vez: si ya se dio, no pregunta).
+    // iPhone: si no llega nada, hay que pedir permiso, y Safari solo deja
+    // pedirlo dentro de un toque de verdad (no al deslizar). Se intenta en cada
+    // toque hasta que se concede; si ya se había dado, no vuelve a preguntar.
     let pidiendo = false;
     const pedir = () => {
+      if (llega) return quitar();
       if (pidiendo) return;
       pidiendo = true;
       D.requestPermission!()
-        .then((r) => {
-          if (r !== 'granted') return;
-          window.addEventListener('deviceorientation', alGirar);
-          window.removeEventListener('click', pedir);
-          window.removeEventListener('touchend', pedir);
-        })
+        .then((r) => r === 'granted' && quitar())
         .catch(() => {})
         .finally(() => {
           pidiendo = false;
         });
     };
+    const quitar = () => {
+      window.removeEventListener('click', pedir);
+      window.removeEventListener('touchend', pedir);
+    };
     window.addEventListener('click', pedir);
     window.addEventListener('touchend', pedir);
-  } else {
-    window.addEventListener('deviceorientation', alGirar);
   }
   window.addEventListener('pointermove', alMover);
 }
@@ -84,7 +90,10 @@ export function useInclinacion(ref: RefObject<HTMLElement | null>) {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
+    if (
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    )
       return;
     arrancar();
     elementos.add(el);
