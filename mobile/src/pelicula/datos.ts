@@ -67,7 +67,8 @@ export function tipoDeMomento(
     .map((g) => foto(g.kind === 'photo' ? g.uri : g.poster))
     .filter((u): u is string => !!u)
     .slice(1, 3);
-  if (p?.game?.type === 'karaoke') return { tipo: 'karaoke', extra: { titulo: p.game.song, artista: p.game.artist } };
+  if (p?.game?.type === 'karaoke')
+    return { tipo: 'karaoke', extra: { titulo: p.game.song, artista: p.game.artist } };
   if (p?.kind === 'challenge') {
     const quienes = [
       ...new Set(moments.filter((x) => x.proposalId === p.id).map((x) => first(x.authorId))),
@@ -186,7 +187,8 @@ export function extrasDelPeriodo(ex: Extras, groupId: string, from: number, to: 
       .map((q) => ({ ref: `q:${q.id}`, at: q.createdAt })),
     ...ex.proposals
       .filter(
-        (p) => p.groupId === groupId && p.kind === 'challenge' && p.startsAt >= from && p.startsAt < to,
+        (p) =>
+          p.groupId === groupId && p.kind === 'challenge' && p.startsAt >= from && p.startsAt < to,
       )
       .map((p) => ({ ref: `reto:${p.id}`, at: p.startsAt })),
     ...ex.songs
@@ -262,9 +264,19 @@ export function datosPelicula(
   let pieces: Pieza[];
   if (refs.length) {
     pieces = refs
-      .map((id) => (byId.has(id) ? momentoAPieza(byId.get(id)!) : ex ? piezaExtra(id, ex, user, foto) : null))
+      .map((id) =>
+        byId.has(id) ? momentoAPieza(byId.get(id)!) : ex ? piezaExtra(id, ex, user, foto) : null,
+      )
       .filter((p): p is Pieza => !!p)
       .slice(0, max);
+    // los minijuegos del periodo salen siempre, aunque la narradora no los cuente
+    if (ex && opts.groupId) {
+      const faltan = extrasDelPeriodo(ex, opts.groupId, recap.from, recap.to)
+        .filter((x) => x.ref.startsWith('reto:') && !refs.includes(x.ref))
+        .map((x) => piezaExtra(x.ref, ex, user, foto))
+        .filter((p): p is Pieza => !!p?.extra?.juego);
+      if (faltan.length) pieces = [...pieces, ...faltan].sort((a, b) => a.at - b.at);
+    }
   } else {
     // sin narradora: los momentos elegidos y lo demás del periodo, en orden
     const extras =

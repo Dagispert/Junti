@@ -73,6 +73,17 @@ export default function Memory() {
   const thisWeek = weekStart(Date.now());
   const hayAnteriores = all.some((m) => !m.memory && m.createdAt < thisWeek);
   const week = all.filter((m) => !m.memory && m.createdAt >= thisWeek);
+  // lo de la semana: los momentos (sin las tomas de los juegos) y los juegos
+  const momentosSemana = week.filter((m) => !(m.proposalId && tomasDeJuegos.has(m.proposalId)));
+  const juegosSemana = fotogramasJuegos.filter((j) => j.createdAt >= thisWeek).length;
+  const cuenta = [
+    momentosSemana.length
+      ? `${momentosSemana.length} ${momentosSemana.length === 1 ? 'momento' : 'momentos'}`
+      : '',
+    juegosSemana ? `${juegosSemana} ${juegosSemana === 1 ? 'juego' : 'juegos'}` : '',
+  ]
+    .filter(Boolean)
+    .join(' y ');
   const who = [...new Set(week.map((m) => user(m.authorId).name.split(' ')[0]))];
   const whoText =
     who.length > 1 ? `${who.slice(0, -1).join(', ')} y ${who[who.length - 1]}` : who[0];
@@ -88,10 +99,10 @@ export default function Memory() {
         <View style={styles.hero}>
           {pile.length > 0 && <PolaroidPile moments={pile} size={320} />}
           <Text style={[styles.heroText, { color: theme.text }]}>
-            {week.length >= 5
+            {momentosSemana.length + juegosSemana >= 6
               ? 'Ha pasado mucho esta semana'
-              : week.length > 0
-                ? `Esta semana, ${week.length} ${week.length === 1 ? 'momento' : 'momentos'}`
+              : cuenta
+                ? `Esta semana, ${cuenta}`
                 : 'Una semana tranquila'}
           </Text>
           {week.length > 0 && (
