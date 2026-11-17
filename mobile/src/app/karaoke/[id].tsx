@@ -16,6 +16,7 @@ import {
   ALTO,
   ANCHO,
   firmaTomas,
+  difuminar,
   imagenLimpia,
   pildora,
   pintarVideo,
@@ -750,7 +751,8 @@ function Montage({
   groupId: string;
   onBack: () => void;
 }) {
-  const { user, me } = useStore();
+  const { user, me, group } = useStore();
+  const grupo = group(groupId);
   // Si el montaje guardado no tiene todas las voces, se graba ahora, mientras se ve.
   const firma = firmaTomas(takes.map((m) => m.id));
   const hayQueGrabar =
@@ -763,6 +765,10 @@ function Montage({
     dest: MediaStreamAudioDestinationNode;
     portada: Blob | null;
     arte: HTMLImageElement | null;
+    /** la carátula ya difuminada (para el fondo de la portada y del cierre) */
+    difuso: HTMLCanvasElement | null;
+    fase: 'portada' | 'canto' | 'cierre';
+    t0: number;
   } | null>(null);
   const [guardado, setGuardado] = useState<'' | 'grabando' | 'subiendo' | 'listo' | 'error'>('');
   const [archivo, setArchivo] = useState<Blob | null>(null);
@@ -930,15 +936,38 @@ function Montage({
       });
       const trozos: Blob[] = [];
       rec.ondataavailable = (e) => e.data.size && trozos.push(e.data);
-      grab.current = { lienzo, c2d, rec, trozos, dest, portada: null, arte: null };
-      imagenLimpia(game.artwork).then((img) => grab.current && (grab.current.arte = img));
+      const g: NonNullable<typeof grab.current> = {
+        lienzo,
+        c2d,
+        rec,
+        trozos,
+        dest,
+        portada: null,
+        arte: null,
+        difuso: null,
+        fase: 'portada',
+        t0: performance.now(),
+      };
+      grab.current = g;
+      imagenLimpia(game.artwork).then((img) => {
+        if (!img || grab.current !== g) return;
+        g.arte = img;
+        g.difuso = difuminar(img);
+      });
+      // el primer fotograma ya es la portada (si no, el vídeo empieza en negro)
+      pintarPortada(c2d, null, null, 0);
       rec.start(1000);
       setGuardado('grabando');
       // la portada mientras se ve la de la pantalla
       const portada = () => {
-        const g = grab.current;
-        if (!g || g.rec.state !== 'recording' || estado.current !== 'intro') return;
-        pintarPortada(g.c2d, g.arte);
+        const actual = grab.current;
+        if (!actual || actual.rec.state !== 'recording' || actual.fase !== 'portada') return;
+        pintarPortada(
+          actual.c2d,
+          actual.arte,
+          actual.difuso,
+          (performance.now() - actual.t0) / 1000,
+        );
         requestAnimationFrame(portada);
       };
       requestAnimationFrame(portada);
@@ -946,35 +975,120 @@ function Montage({
       grab.current = null;
     }
   };
-  const estado = useRef(state);
-  estado.current = state;
+  const nombres = takes.map((m) => user(m.authorId).name.split(' ')[0]);
+  const quienesCantan =
+    nombres.length > 1
+      ? `${nombres.slice(0, -1).join(', ')} y ${nombres.at(-1)}`
+      : (nombres[0] ?? '');
 
-  const pintarPortada = (c2d: CanvasRenderingContext2D, arte: HTMLImageElement | null) => {
+  /** El fondo: la carátula muy difuminada y oscurecida (o un degradado, sin carátula). */
+  const pintarFondo = (
+    c2d: CanvasRenderingContext2D,
+    difuso: HTMLCanvasElement | null,
+    u: number,
+  ) => {
     c2d.fillStyle = '#0E0F12';
     c2d.fillRect(0, 0, ANCHO, ALTO);
+    if (difuso) {
+      // se mueve muy despacio, como si respirara
+      const z = 1.15 + Math.min(u, 8) * 0.012;
+      const w = ANCHO * z;
+      const h = ALTO * z;
+      c2d.imageSmoothingEnabled = true;
+      c2d.imageSmoothingQuality = 'high';
+      c2d.drawImage(difuso, (ANCHO - w) / 2, (ALTO - h) / 2, w, h);
+    }
+    const sombra = c2d.createLinearGradient(0, 0, 0, ALTO);
+    sombra.addColorStop(0, 'rgba(10,10,14,0.55)');
+    sombra.addColorStop(0.55, 'rgba(10,10,14,0.35)');
+    sombra.addColorStop(1, 'rgba(10,10,14,0.85)');
+    c2d.fillStyle = sombra;
+    c2d.fillRect(0, 0, ANCHO, ALTO);
+  };
+
+  /** La portada del vídeo: la carátula entra creciendo y luego los textos. */
+  const pintarPortada = (
+    c2d: CanvasRenderingContext2D,
+    arte: HTMLImageElement | null,
+    difuso: HTMLCanvasElement | null,
+    u: number,
+  ) => {
+    pintarFondo(c2d, difuso, u);
+    const ent = (desde: number, dura = 0.6) => {
+      const x = Math.max(0, Math.min(1, (u - desde) / dura));
+      return 1 - Math.pow(1 - x, 3);
+    };
+    const lado = 420;
+    const k = ent(0.1, 0.8);
     if (arte) {
+      const l = lado * (0.86 + 0.14 * k);
       c2d.save();
-      c2d.filter = 'blur(30px) brightness(0.55)';
-      c2d.drawImage(arte, -200, -200, ANCHO + 400, ALTO + 400);
-      c2d.restore();
-      const lado = 440;
-      c2d.save();
-      c2d.shadowColor = 'rgba(0,0,0,0.5)';
-      c2d.shadowBlur = 40;
-      c2d.drawImage(arte, (ANCHO - lado) / 2, 300, lado, lado);
+      c2d.globalAlpha = k;
+      c2d.shadowColor = 'rgba(0,0,0,0.55)';
+      c2d.shadowBlur = 50;
+      c2d.shadowOffsetY = 20;
+      c2d.beginPath();
+      c2d.roundRect((ANCHO - l) / 2, 330 + (lado - l) / 2, l, l, 28);
+      c2d.clip();
+      c2d.drawImage(arte, (ANCHO - l) / 2, 330 + (lado - l) / 2, l, l);
       c2d.restore();
     }
-    textoCentrado(c2d, game.song, 850, 52, 700, '#FFFFFF');
-    if (game.artist) textoCentrado(c2d, game.artist, 915, 32, 500, 'rgba(255,255,255,0.75)');
-    const nombres = takes.map((m) => user(m.authorId).name.split(' ')[0]);
+    c2d.save();
+    c2d.globalAlpha = ent(0.6);
+    textoCentrado(c2d, 'KARAOKE', 830, 24, 700, 'rgba(255,255,255,0.6)');
+    c2d.restore();
+    c2d.save();
+    c2d.globalAlpha = ent(0.75);
+    const alto = textoCentrado(c2d, game.song, 890, 56, 700, '#FFFFFF');
+    if (game.artist)
+      textoCentrado(c2d, game.artist, 890 + alto + 4, 32, 500, 'rgba(255,255,255,0.75)');
+    c2d.restore();
+    c2d.save();
+    c2d.globalAlpha = ent(1.1);
+    textoCentrado(c2d, `Cantan ${quienesCantan}`, 1080, 30, 600, '#F6C945');
+    c2d.restore();
+  };
+
+  /** El cierre: «junti», el grupo y la canción. */
+  const pintarCierre = (
+    c2d: CanvasRenderingContext2D,
+    difuso: HTMLCanvasElement | null,
+    u: number,
+  ) => {
+    pintarFondo(c2d, difuso, 6 + u);
+    c2d.fillStyle = `rgba(10,10,14,${Math.min(0.5, u * 0.5)})`;
+    c2d.fillRect(0, 0, ANCHO, ALTO);
+    const ent = (desde: number, dura = 0.6) => {
+      const x = Math.max(0, Math.min(1, (u - desde) / dura));
+      return 1 - Math.pow(1 - x, 3);
+    };
+    c2d.save();
+    const k = ent(0.15, 0.7);
+    c2d.globalAlpha = k;
+    c2d.font = '500 132px Fraunces_500Medium, Georgia, serif';
+    c2d.textAlign = 'center';
+    c2d.textBaseline = 'alphabetic';
+    c2d.fillStyle = '#FFFFFF';
+    c2d.shadowColor = 'rgba(0,0,0,0.4)';
+    c2d.shadowBlur = 30;
+    c2d.fillText('junti', ANCHO / 2, 640 + (1 - k) * 30);
+    c2d.restore();
+    c2d.save();
+    c2d.globalAlpha = ent(0.6);
+    textoCentrado(c2d, grupo?.name ?? '', 730, 36, 600, '#FFFFFF');
     textoCentrado(
       c2d,
-      `Cantan ${nombres.length > 1 ? `${nombres.slice(0, -1).join(', ')} y ${nombres.at(-1)}` : nombres[0]}`,
-      1010,
-      30,
-      600,
-      '#F6C945',
+      `${game.song}${game.artist ? ` · ${game.artist}` : ''}`,
+      785,
+      28,
+      500,
+      'rgba(255,255,255,0.7)',
     );
+    c2d.restore();
+    c2d.save();
+    c2d.globalAlpha = ent(1);
+    textoCentrado(c2d, 'Cerca, aunque estéis lejos', 1120, 26, 500, 'rgba(255,255,255,0.55)');
+    c2d.restore();
   };
 
   const pintarFotograma = (singing: string[], verso: number, solo?: Moment) => {
@@ -1071,7 +1185,10 @@ function Montage({
     salida.threshold.value = -14;
     salida.ratio.value = 4;
     salida.connect(c.destination);
-    if (grab.current) salida.connect(grab.current.dest);
+    if (grab.current) {
+      salida.connect(grab.current.dest);
+      grab.current.fase = 'canto';
+    }
     const fuente = (buf: AudioBuffer, offset: number, nivel: number, id?: string) => {
       const src = c.createBufferSource();
       src.buffer = buf;
@@ -1154,8 +1271,21 @@ function Montage({
       }
       if (t >= duration) {
         parar();
-        terminarGrabacion();
         setState('ended');
+        const g = grab.current;
+        if (g) {
+          // el cierre de Junti (unos segundos) antes de terminar el vídeo
+          g.fase = 'cierre';
+          const desde = performance.now();
+          const cierre = () => {
+            if (grab.current !== g || g.rec.state !== 'recording') return;
+            const u = (performance.now() - desde) / 1000;
+            pintarCierre(g.c2d, g.difuso, u);
+            if (u < CIERRE_S) requestAnimationFrame(cierre);
+            else terminarGrabacion();
+          };
+          requestAnimationFrame(cierre);
+        }
         return;
       }
       frame.current = requestAnimationFrame(loop);
@@ -1290,6 +1420,9 @@ function Montage({
     </View>
   );
 }
+
+/** Lo que dura el cierre de Junti al final del vídeo grabado. */
+const CIERRE_S = 2.8;
 
 /** Volumen de la canción y de las voces en el montaje. */
 const MUSICA = 0.1;

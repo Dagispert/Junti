@@ -177,3 +177,35 @@ export async function imagenLimpia(src?: string): Promise<HTMLImageElement | nul
     return null;
   }
 }
+
+/**
+ * La imagen muy difuminada, sin «filter» (el iPhone no lo aplica en el lienzo):
+ * se encoge a unos pocos píxeles y, al agrandarla, queda borrosa.
+ */
+export function difuminar(img: HTMLImageElement): HTMLCanvasElement | null {
+  try {
+    const pasos = [96, 36, 14];
+    let actual: HTMLCanvasElement | HTMLImageElement = img;
+    let w = img.naturalWidth || img.width;
+    let h = img.naturalHeight || img.height;
+    let out: HTMLCanvasElement | null = null;
+    for (const p of pasos) {
+      const r = p / Math.max(w, h);
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(w * r));
+      c.height = Math.max(1, Math.round(h * r));
+      const x = c.getContext('2d');
+      if (!x) return null;
+      x.imageSmoothingEnabled = true;
+      x.imageSmoothingQuality = 'high';
+      x.drawImage(actual, 0, 0, c.width, c.height);
+      actual = c;
+      w = c.width;
+      h = c.height;
+      out = c;
+    }
+    return out;
+  } catch {
+    return null;
+  }
+}
