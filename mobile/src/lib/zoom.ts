@@ -69,7 +69,7 @@ export function useResultadosZoom(proposalId: string) {
         .then(({ data }) => vivo && setLista((data ?? []) as ResultadoZoom[]));
     cargar();
     const canal = supabase
-      .channel(`zoom-${proposalId}`)
+      .channel(`zoom-${proposalId}-${Math.random().toString(36).slice(2, 8)}`)
       .on(
         'postgres_changes',
         {

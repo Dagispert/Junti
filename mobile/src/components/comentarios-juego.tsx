@@ -49,7 +49,7 @@ export function ComentariosJuego({
         .then(({ data }) => vivo && setLista((data ?? []) as Comentario[]));
     cargar();
     const canal = supabase
-      .channel(`juego-comentarios-${proposalId}`)
+      .channel(`juego-comentarios-${proposalId}-${Math.random().toString(36).slice(2, 8)}`)
       .on(
         'postgres_changes',
         {
