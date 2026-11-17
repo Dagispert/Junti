@@ -22,6 +22,7 @@ import {
   MessageCircle,
   Mic,
   ZoomIn,
+  Brush,
   type LucideIcon,
 } from 'lucide-react-native';
 
@@ -51,6 +52,7 @@ export default function AddScreen() {
       | '/new-karaoke'
       | '/new-cuento'
       | '/new-zoom'
+      | '/new-dibujo'
       | '/ask'
       | '/importar',
     params: Record<string, string>,
@@ -89,7 +91,7 @@ export default function AddScreen() {
       family: 'challenge',
       icon: Gamepad2,
       title: 'Minijuegos',
-      hint: 'Karaoke, el cuento a trozos, el zoom misterioso…',
+      hint: 'Karaoke, el cuento a trozos, el zoom misterioso, el dibujo a ciegas',
       go: () => setJuegos((v) => !v),
     },
     {
@@ -137,6 +139,13 @@ export default function AddScreen() {
       title: 'Zoom misterioso',
       hint: 'Un detalle muy de cerca: ¿qué es? Cada fallo lo aleja',
       go: () => open('/new-zoom', {}),
+    },
+    {
+      family: 'challenge',
+      icon: Brush,
+      title: 'Dibujo a ciegas',
+      hint: 'Frase, dibujo, frase… cada uno ve solo lo anterior',
+      go: () => open('/new-dibujo', {}),
     },
   ];
 

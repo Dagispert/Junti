@@ -131,6 +131,8 @@ type Store = {
     alternativas: string[],
     days: number,
   ) => Promise<string>;
+  /** Un dibujo a ciegas: la frase de partida y cuántos días dura. */
+  addDibujo: (groupId: string, frase: string, days: number) => Promise<string>;
   /** Un cuento a trozos: la primera frase y cuántos días hay para seguirlo. */
   addCuento: (groupId: string, inicio: string, days: number) => Promise<string>;
   /** Un reto de karaoke; con «track», la pista se sube antes al almacén del grupo. */
@@ -755,6 +757,7 @@ async function load(me: string): Promise<Data> {
     game: p.game?.type === 'karaoke' ? p.game : undefined,
     juego: p.game?.type === 'cuento' ? p.game : undefined,
     zoom: p.game?.type === 'zoom' ? p.game : undefined,
+    dibujo: p.game?.type === 'dibujo' ? { type: 'dibujo', pasos: p.game.pasos ?? [] } : undefined,
   }));
 
   const songs: Song[] = (songRows ?? []).map((s) => ({
@@ -1404,6 +1407,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       );
       await refresh();
       return row!.id as string;
+    },
+    addDibujo: async (groupId, frase, days) => {
+      const { data, error } = await supabase.rpc('crear_dibujo', {
+        g: groupId,
+        frase: frase.trim(),
+        dias: days,
+      });
+      if (error) throw new Error(error.message);
+      await refresh();
+      return data as string;
     },
     addCuento: async (groupId, inicio, days) => {
       const row = check(

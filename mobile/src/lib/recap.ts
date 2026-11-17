@@ -106,7 +106,7 @@ export function buildRecap(
   const to = kind === 'week' ? from + 7 * DAY : nextMonth(from);
   // Las tomas sueltas del karaoke no cuentan: el karaoke sale entero, como reto.
   const karaokes = new Set(
-    proposals.filter((p) => p.game?.type === 'karaoke' || !!p.juego || !!p.zoom).map((p) => p.id),
+    proposals.filter((p) => p.game?.type === 'karaoke' || !!p.juego || !!p.zoom || !!p.dibujo).map((p) => p.id),
   );
   const moments = all
     .filter((m) => m.createdAt >= from && m.createdAt < to)

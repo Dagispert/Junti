@@ -7,7 +7,7 @@ import { ConnectionCard } from '@/components/connection-card';
 import { GroupHeader } from '@/components/group-header';
 import type { Moment, Proposal, Question, Song } from '@/data/types';
 import { ChallengeBlock } from '@/components/challenge-block';
-import { CuentoHoy, KaraokeHoy, ZoomHoy } from '@/components/minijuegos-hoy';
+import { CuentoHoy, DibujoHoy, KaraokeHoy, ZoomHoy } from '@/components/minijuegos-hoy';
 import { FamilyCard, FamilyTag } from '@/components/family';
 import { MomentCard } from '@/components/moment-card';
 import { QuestionCard } from '@/components/question-card';
@@ -120,6 +120,8 @@ export default function Today() {
           <CuentoHoy challenge={entry.challenge} answers={entry.answers} />
         ) : entry.challenge.zoom ? (
           <ZoomHoy challenge={entry.challenge} />
+        ) : entry.challenge.dibujo ? (
+          <DibujoHoy challenge={entry.challenge} />
         ) : (
           <ChallengeBlock challenge={entry.challenge} answers={entry.answers} />
         )

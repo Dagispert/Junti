@@ -302,6 +302,7 @@ export function useNotifications() {
       const karaoke = p.game?.type === 'karaoke';
       const cuento = !!p.juego;
       const zoom = !!p.zoom;
+      const dibujo = !!p.dibujo;
       out.push({
         key: `proposal:${p.id}`,
         kind: karaoke ? 'karaoke' : 'challenge',
@@ -314,7 +315,9 @@ export function useNotifications() {
             ? 'empezó un cuento a trozos'
             : zoom
               ? 'propuso un zoom misterioso: ¿adivinas qué es?'
-              : `propuso un reto: «${p.title}»`,
+              : dibujo
+                ? 'empezó un dibujo a ciegas: ¿te animas a seguirlo?'
+                : `propuso un reto: «${p.title}»`,
         thumb: p.game?.artwork,
         scope: `proposal:${p.id}`,
         to: karaoke
@@ -323,8 +326,44 @@ export function useNotifications() {
             ? { pathname: '/cuento/[id]', params: { id: p.id } }
             : zoom
               ? { pathname: '/zoom/[id]', params: { id: p.id } }
-              : { pathname: '/group/[id]/retos', params: { id: p.groupId } },
+              : dibujo
+                ? { pathname: '/dibujo/[id]', params: { id: p.id } }
+                : { pathname: '/group/[id]/retos', params: { id: p.groupId } },
       });
+    }
+
+    // 5b) dibujo a ciegas: cada paso nuevo (te toca) y cuando se destapa
+    for (const p of proposals) {
+      const pasos = p.dibujo?.pasos;
+      if (!pasos?.length) continue;
+      const fin = p.endsAt && p.endsAt <= Date.now();
+      const ultimo = pasos[pasos.length - 1];
+      const at = Date.parse(ultimo.at);
+      if (!fin && pasos.length >= 2 && ultimo.u !== me && at >= since)
+        out.push({
+          key: `dibujo:${p.id}:${pasos.length}`,
+          kind: 'challenge',
+          groupId: p.groupId,
+          at,
+          actors: [ultimo.u],
+          text:
+            ultimo.t === 'd'
+              ? 'hizo un dibujo en el dibujo a ciegas: ¿adivinas qué es?'
+              : 'describió un dibujo en el dibujo a ciegas: ¿lo dibujas tú?',
+          scope: `proposal:${p.id}`,
+          to: { pathname: '/dibujo/[id]', params: { id: p.id } },
+        });
+      if (fin && p.endsAt! >= since && pasos.length >= 3 && p.createdBy)
+        out.push({
+          key: `dibujo-fin:${p.id}`,
+          kind: 'challenge',
+          groupId: p.groupId,
+          at: p.endsAt!,
+          actors: [p.createdBy],
+          text: 'empezó un dibujo a ciegas que ya se ha destapado: mira cómo fue cambiando',
+          scope: `proposal:${p.id}`,
+          to: { pathname: '/dibujo/[id]', params: { id: p.id } },
+        });
     }
 
     // 6) preguntas, encuestas y quizzes

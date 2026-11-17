@@ -12,7 +12,8 @@ export type TipoIdea =
   | 'pregunta'
   | 'recuerdo'
   | 'cuento'
-  | 'zoom';
+  | 'zoom'
+  | 'dibujo';
 export type IdeaReto = {
   /** qué es (lo mismo que se puede crear con el «+»); sin él, un reto */
   tipo?: TipoIdea;

@@ -118,6 +118,18 @@ export type Proposal = {
   juego?: CuentoGame;
   /** El zoom misterioso. */
   zoom?: ZoomGame;
+  /** El dibujo a ciegas. */
+  dibujo?: DibujoGame;
+};
+
+/**
+ * Dibujo a ciegas: frase → dibujo → frase… Aquí solo quién hizo cada paso y de
+ * qué tipo (f: frase, d: dibujo); lo que hay en cada uno es secreto hasta el
+ * final y se pide aparte (dibujo_pasos).
+ */
+export type DibujoGame = {
+  type: 'dibujo';
+  pasos: { u: string; t: 'f' | 'd'; at: string }[];
 };
 
 /**

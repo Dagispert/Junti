@@ -151,6 +151,8 @@ function Gate() {
         <Stack.Screen name="new-cuento" options={{ presentation: 'modal' }} />
         <Stack.Screen name="new-zoom" options={{ presentation: 'modal' }} />
         <Stack.Screen name="zoom/[id]" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="new-dibujo" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="dibujo/[id]" options={{ presentation: 'modal' }} />
         <Stack.Screen name="cuento/[id]" options={{ presentation: 'modal' }} />
         <Stack.Screen name="notificaciones" options={{ presentation: 'modal' }} />
         <Stack.Screen

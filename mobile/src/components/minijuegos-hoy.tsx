@@ -5,7 +5,7 @@
 
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { BookOpen, Lock, Mic, Pause, Play, Search } from 'lucide-react-native';
+import { BookOpen, Brush, Lock, Mic, Pause, Play, Search } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -14,6 +14,7 @@ import { useStore } from '@/data/store';
 import type { Moment, Proposal } from '@/data/types';
 import { useEsquema } from '@/lib/appearance';
 import { useCuentoEntero } from '@/lib/cuento-entero';
+import { usePasosDibujo } from '@/lib/dibujo';
 import { capa, useInclinacion } from '@/lib/inclinacion';
 import { useMontaje } from '@/lib/montaje';
 import { NIVELES, solucion, useFotoZoom, useResultadosZoom } from '@/lib/zoom';
@@ -940,6 +941,371 @@ export function ZoomHoy({ challenge }: { challenge: Proposal }) {
               colorTexto={tinta}
               colorSuave={oscuro ? 'rgba(243,230,203,.6)' : 'rgba(62,47,28,.55)'}
               colorFondo={oscuro ? 'rgba(243,230,203,.08)' : 'rgba(62,47,28,.07)'}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ───────────── Dibujo a ciegas: una tira de papel doblada en acordeón ───────────── */
+
+const ANIM_ACORDEON = `
+@property --pl { syntax: '<angle>'; inherits: true; initial-value: 62deg; }
+@keyframes dbRespira { 0%,100% { --pl: 60deg } 50% { --pl: 67deg } }
+@keyframes dbAbre { from { --pl: 70deg } to { --pl: 14deg } }
+@keyframes dbSube { from { opacity: 0; transform: translateY(14px) } to { opacity: 1; transform: none } }
+@keyframes dbCinta { from { opacity: 0; transform: translateY(-10px) rotate(-14deg) scale(1.2) } to { opacity: 1; transform: rotate(-5deg) } }
+`;
+
+/** Una hoja de la tira y, dentro, la siguiente (así se pliegan juntas). */
+function HojaAcordeon({
+  i,
+  total,
+  ancho,
+  alto,
+  contenido,
+}: {
+  i: number;
+  total: number;
+  ancho: number;
+  alto: number;
+  contenido: (i: number) => React.ReactNode;
+}) {
+  if (i >= total) return null;
+  return (
+    <div
+      style={{
+        position: i === 0 ? 'relative' : 'absolute',
+        left: i === 0 ? 0 : '100%',
+        top: 0,
+        width: ancho,
+        height: alto,
+        transformOrigin: 'left center',
+        transform: i === 0 ? 'rotateY(var(--pl))' : `rotateY(calc(var(--pl) * ${i % 2 ? -2 : 2}))`,
+        transformStyle: 'preserve-3d',
+        background: '#FFFDF7',
+        borderLeft: i ? '1px solid rgba(0,0,0,.08)' : undefined,
+        boxSizing: 'border-box',
+      }}>
+      <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>{contenido(i)}</div>
+      {/* la sombra del pliegue: una cara mira a la luz y la otra no */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          pointerEvents: 'none',
+          background:
+            i % 2
+              ? 'linear-gradient(90deg, rgba(0,0,0,.16), rgba(0,0,0,.04))'
+              : 'linear-gradient(90deg, rgba(0,0,0,0), rgba(0,0,0,.07))',
+        }}
+      />
+      <HojaAcordeon i={i + 1} total={total} ancho={ancho} alto={alto} contenido={contenido} />
+    </div>
+  );
+}
+
+export function DibujoHoy({ challenge }: { challenge: Proposal }) {
+  const theme = useTheme();
+  const oscuro = useEsquema() === 'dark';
+  const { me, user } = useStore();
+  const meta = challenge.dibujo?.pasos ?? [];
+  const n = meta.length;
+  const abierto = !challenge.endsAt || challenge.endsAt > Date.now();
+  const terminado = !abierto;
+  const pasos = usePasosDibujo(challenge.id, n);
+  const ultimo = meta.at(-1);
+  const meToca = abierto && !!ultimo && ultimo.u !== me;
+  const toca = n % 2 === 1 ? 'dibujo' : 'frase';
+  const ir = () => router.push({ pathname: '/dibujo/[id]', params: { id: challenge.id } });
+  const nombre = (uid?: string) => (uid ? user(uid).name.split(' ')[0] : 'Junti');
+
+  const caja = useRef<HTMLDivElement | null>(null);
+  useInclinacion(caja);
+  const [visto, setVisto] = useState(false);
+  useEffect(() => {
+    const el = caja.current;
+    if (!el || typeof IntersectionObserver === 'undefined') {
+      setVisto(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      ([e]) => {
+        if (e.isIntersecting) {
+          setVisto(true);
+          io.disconnect();
+        }
+      },
+      { threshold: 0.35 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  const entra = (nombreAnim: string, retraso: number, ms = 600): React.CSSProperties => ({
+    animation: `${nombreAnim} ${ms}ms cubic-bezier(.2,.9,.25,1.1) ${retraso}ms both`,
+    animationPlayState: visto ? 'running' : 'paused',
+  });
+
+  // cartulina verde salvia, con tinta verde oscura
+  const carton = oscuro ? '#25312A' : '#D9E6CF';
+  const tinta = oscuro ? '#E3EEDB' : '#23402F';
+  const cinta = oscuro ? 'rgba(242,165,65,.75)' : 'rgba(242,165,65,.85)';
+
+  // la tira: como mucho 6 hojas (las últimas)
+  const MAX = 6;
+  const desde = Math.max(0, n - MAX);
+  const hojas = meta.slice(desde);
+  // plegada se ve más estrecha, así que las hojas pueden ser más grandes
+  const ancho = terminado
+    ? Math.min(62, Math.floor(290 / (Math.max(1, hojas.length) * 0.97)))
+    : Math.min(80, Math.floor(280 / (Math.max(1, hojas.length) * 0.5)));
+  const alto = terminado ? 84 : 104;
+  const angulo = terminado ? 14 : 62;
+  const anchoTira = Math.ceil(hojas.length * ancho * Math.cos((angulo * Math.PI) / 180)) + 6;
+
+  const contenido = (i: number) => {
+    const m = hojas[i];
+    const p = pasos?.find((x) => x.orden === desde + i);
+    if (terminado && p) {
+      if (p.tipo === 'dibujo' && p.url)
+        return (
+          <img
+            src={p.url}
+            alt=""
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          />
+        );
+      return (
+        <div
+          style={{
+            padding: 5,
+            fontFamily: Hand,
+            fontSize: 12,
+            lineHeight: '13px',
+            color: '#2B2B2B',
+            overflow: 'hidden',
+            height: '100%',
+            boxSizing: 'border-box',
+          }}>
+          {p.texto}
+        </div>
+      );
+    }
+    // cerrado: solo el dorso, con quién lo hizo
+    return (
+      <div
+        style={{
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '8px 0 6px',
+          boxSizing: 'border-box',
+          background:
+            'repeating-linear-gradient(0deg, transparent 0 11px, rgba(63,127,214,.12) 11px 12px)',
+        }}>
+        <span style={{ fontFamily: Hand, fontSize: 26, color: 'rgba(35,64,47,.45)' }}>
+          {m.t === 'd' ? '✎' : '?'}
+        </span>
+        <div style={{ lineHeight: 0 }}>
+          <Avatar userId={m.u} size={20} />
+        </div>
+      </div>
+    );
+  };
+
+  const primera = pasos?.find((p) => p.orden === 0)?.texto;
+  const ultimaFrase = pasos
+    ? [...pasos].reverse().find((p) => p.tipo === 'frase' && p.orden > 0)?.texto
+    : undefined;
+
+  const titulo = terminado
+    ? 'Así fue cambiando'
+    : meToca
+      ? toca === 'dibujo'
+        ? 'Te toca dibujar'
+        : 'Te toca adivinar'
+      : n === 1
+        ? 'Esperando el primer dibujo'
+        : 'Pasando de mano en mano';
+
+  return (
+    <div
+      ref={caja}
+      style={{
+        position: 'relative',
+        marginTop: 14,
+        fontFamily:
+          '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+        transform:
+          'perspective(900px) rotateY(calc(var(--ix, 0) * 3deg)) rotateX(calc(var(--iy, 0) * -2deg))',
+        ...entra('dbSube', 0, 500),
+      }}>
+      <style>{ANIM_ACORDEON}</style>
+      <div
+        style={{
+          position: 'relative',
+          borderRadius: 22,
+          background: carton,
+          boxShadow: theme.shadow,
+          padding: '26px 16px 16px',
+          overflow: 'hidden',
+        }}>
+        {/* textura de cartulina */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            pointerEvents: 'none',
+            background: 'radial-gradient(rgba(0,0,0,.05) 1px, transparent 1.2px) 0 0 / 7px 7px',
+            opacity: 0.6,
+          }}
+        />
+        {/* la cinta con el nombre */}
+        <div
+          style={{
+            position: 'absolute',
+            top: 10,
+            left: 14,
+            padding: '3px 12px',
+            background: cinta,
+            color: '#3A2A12',
+            fontSize: 11,
+            fontWeight: 800,
+            letterSpacing: 2,
+            ...entra('dbCinta', 250, 500),
+          }}>
+          DIBUJO A CIEGAS
+        </div>
+
+        {/* la tira en acordeón */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Abrir el dibujo a ciegas"
+          onPress={ir}
+          style={{ width: '100%' }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+              padding: '18px 0 10px',
+              transform: capa(-6),
+            }}>
+            <div
+              style={{
+                width: anchoTira,
+                perspective: 700,
+                filter: 'drop-shadow(0 10px 12px rgba(0,0,0,.18))',
+              }}>
+              <div
+                style={{
+                  ['--pl' as never]: `${angulo}deg`,
+                  transformStyle: 'preserve-3d',
+                  width: ancho,
+                  ...(terminado
+                    ? entra('dbAbre', 300, 1400)
+                    : {
+                        animation: 'dbRespira 5s ease-in-out infinite',
+                      }),
+                }}>
+                <HojaAcordeon
+                  i={0}
+                  total={hojas.length}
+                  ancho={ancho}
+                  alto={alto}
+                  contenido={contenido}
+                />
+              </div>
+            </div>
+          </div>
+        </Pressable>
+        {desde > 0 && (
+          <div
+            style={{
+              position: 'relative',
+              textAlign: 'center',
+              color: tinta,
+              opacity: 0.6,
+              fontSize: 12,
+              marginTop: -4,
+            }}>
+            y {desde} {desde === 1 ? 'paso' : 'pasos'} más antes
+          </div>
+        )}
+
+        <div
+          style={{
+            position: 'relative',
+            marginTop: 8,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 4,
+          }}>
+          <div
+            style={{
+              color: tinta,
+              fontFamily: Hand,
+              fontSize: 30,
+              lineHeight: '32px',
+              ...entra('dbSube', 350, 500),
+            }}>
+            {titulo}
+          </div>
+          {terminado && primera && ultimaFrase && (
+            <div
+              style={{
+                color: tinta,
+                fontSize: 15,
+                lineHeight: '20px',
+                ...entra('dbSube', 1500, 600),
+              }}>
+              Empezó en «{primera}» y acabó en «<b>{ultimaFrase}</b>»
+            </div>
+          )}
+          <div style={{ color: tinta, opacity: 0.75, fontSize: 13, ...entra('dbSube', 420, 500) }}>
+            Lo empezó {challenge.createdBy === me ? 'tú' : nombre(challenge.createdBy)} ·{' '}
+            {n === 1 ? '1 paso' : `${n} pasos`}
+            {plazo(challenge) ? ` · ${plazo(challenge)}` : ''}
+          </div>
+        </div>
+
+        <div
+          style={{
+            position: 'relative',
+            display: 'flex',
+            justifyContent: 'flex-end',
+            marginTop: 12,
+          }}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={ir}
+            style={[kp.boton, { backgroundColor: theme.accent }]}>
+            <Icon
+              icon={terminado || !meToca ? Play : toca === 'dibujo' ? Brush : Search}
+              size={14}
+              color={theme.onAccent}
+            />
+            <Text style={[kp.botonTxt, { color: theme.onAccent }]}>
+              {terminado
+                ? 'Ver la cadena'
+                : meToca
+                  ? toca === 'dibujo'
+                    ? 'Dibujar'
+                    : 'Adivinar'
+                  : 'Ver'}
+            </Text>
+          </Pressable>
+        </div>
+        {terminado && (
+          <div style={{ position: 'relative', marginTop: 12 }}>
+            <ComentariosJuego
+              proposalId={challenge.id}
+              colorTexto={tinta}
+              colorSuave={oscuro ? 'rgba(227,238,219,.6)' : 'rgba(35,64,47,.55)'}
+              colorFondo={oscuro ? 'rgba(227,238,219,.08)' : 'rgba(35,64,47,.07)'}
             />
           </div>
         )}

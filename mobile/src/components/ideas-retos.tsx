@@ -31,6 +31,7 @@ const TIPO: Record<TipoIdea, { familia: FamilyId; boton: string; dias: boolean }
   recuerdo: { familia: 'memory', boton: 'Compartir un recuerdo', dias: false },
   cuento: { familia: 'challenge', boton: 'Empezar el cuento', dias: true },
   zoom: { familia: 'challenge', boton: 'Preparar el zoom', dias: true },
+  dibujo: { familia: 'challenge', boton: 'Empezar el dibujo', dias: true },
 };
 
 /**
@@ -106,6 +107,11 @@ export function IdeasNarradora({ group }: { group: Group }) {
         });
       case 'zoom':
         return router.push({ pathname: '/new-zoom', params: { groupId: g, pista: idea.title } });
+      case 'dibujo':
+        return router.push({
+          pathname: '/new-dibujo',
+          params: { groupId: g, frase: idea.title, days: idea.days > 5 ? '7' : '3' },
+        });
       case 'recuerdo':
         return router.push({
           pathname: '/publish',
@@ -191,13 +197,18 @@ export function IdeasNarradora({ group }: { group: Group }) {
               <Card style={styles.card}>
                 <View style={styles.cabecera}>
                   <FamilyTag family={t.familia} />
-                  {(idea.tipo === 'karaoke' || idea.tipo === 'cuento' || idea.tipo === 'zoom') && (
+                  {(idea.tipo === 'karaoke' ||
+                    idea.tipo === 'cuento' ||
+                    idea.tipo === 'zoom' ||
+                    idea.tipo === 'dibujo') && (
                     <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
                       {idea.tipo === 'karaoke'
                         ? 'Karaoke'
                         : idea.tipo === 'cuento'
                           ? 'El cuento a trozos'
-                          : 'Zoom misterioso'}
+                          : idea.tipo === 'dibujo'
+                            ? 'Dibujo a ciegas'
+                            : 'Zoom misterioso'}
                     </Text>
                   )}
                 </View>
