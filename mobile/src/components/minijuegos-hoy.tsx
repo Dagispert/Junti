@@ -390,65 +390,55 @@ export function KaraokeHoy({ challenge, answers }: { challenge: Proposal; answer
           borderTop: `3px solid ${TINTA_P}`,
           borderBottomLeftRadius: 26,
           borderBottomRightRadius: 26,
-          padding: '10px 12px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
+          padding: '10px 12px 12px',
         }}>
-        <span
-          style={{
-            color: theme.text,
-            fontSize: 12,
-            fontWeight: 800,
-            letterSpacing: 1,
-            textTransform: 'uppercase',
-          }}>
-          {plazo(challenge) || 'karaoke'}
-        </span>
-        <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          {voces.length > 0 && (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => ir(true)}
-              style={[kp.boton, { backgroundColor: theme.accent }]}>
-              <Icon icon={Play} size={14} color={theme.onAccent} />
-              <Text style={[kp.botonTxt, { color: theme.onAccent }]}>Ver</Text>
-            </Pressable>
-          )}
-          {abierto && !cantado && (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => ir()}
-              style={[kp.boton, { backgroundColor: voces.length ? theme.soft : theme.accent }]}>
-              <Icon icon={Mic} size={14} color={voces.length ? theme.text : theme.onAccent} />
-              <Text style={[kp.botonTxt, { color: voces.length ? theme.text : theme.onAccent }]}>
-                Cantar
-              </Text>
-            </Pressable>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span
+            style={{
+              color: theme.text,
+              fontSize: 12,
+              fontWeight: 800,
+              letterSpacing: 1,
+              textTransform: 'uppercase',
+            }}>
+            {plazo(challenge) || 'karaoke'}
+          </span>
+          <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            {voces.length > 0 && (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => ir(true)}
+                style={[kp.boton, { backgroundColor: theme.accent }]}>
+                <Icon icon={Play} size={14} color={theme.onAccent} />
+                <Text style={[kp.botonTxt, { color: theme.onAccent }]}>Ver</Text>
+              </Pressable>
+            )}
+            {abierto && !cantado && (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => ir()}
+                style={[kp.boton, { backgroundColor: voces.length ? theme.soft : theme.accent }]}>
+                <Icon icon={Mic} size={14} color={voces.length ? theme.text : theme.onAccent} />
+                <Text style={[kp.botonTxt, { color: voces.length ? theme.text : theme.onAccent }]}>
+                  Cantar
+                </Text>
+              </Pressable>
+            )}
+          </div>
+          {abierto && (
+            <NudgeBell
+              targetId={challenge.id}
+              groupId={challenge.groupId}
+              done={voces}
+              owner={challenge.createdBy}
+              label="el karaoke"
+            />
           )}
         </div>
-        {abierto && (
-          <NudgeBell
-            targetId={challenge.id}
-            groupId={challenge.groupId}
-            done={voces}
-            owner={challenge.createdBy}
-            label="el karaoke"
-          />
-        )}
-      </div>
-      {/* todo lo de «Hoy» se puede comentar (también mientras está abierto) */}
-      <div
-        style={{
-          position: 'relative',
-          zIndex: 2,
-          background: theme.card,
-          borderBottomLeftRadius: 26,
-          borderBottomRightRadius: 26,
-          padding: '0 12px 12px',
-          marginTop: -14,
-        }}>
-        <ComentariosJuego proposalId={challenge.id} />
+        {/* todo lo de «Hoy» se puede comentar (también mientras está abierto) */}
+        <div style={{ marginTop: 10 }}>
+          <ComentariosJuego proposalId={challenge.id} />
+        </div>
       </div>
     </div>
   );
