@@ -5,7 +5,7 @@
 
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { BookOpen, Lock, Mic, Play } from 'lucide-react-native';
+import { BookOpen, Lock, Mic, Pause, Play } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -13,10 +13,12 @@ import { Hand, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import type { Moment, Proposal } from '@/data/types';
 import { useEsquema } from '@/lib/appearance';
+import { useCuentoEntero } from '@/lib/cuento-entero';
 import { capa, useInclinacion } from '@/lib/inclinacion';
 import { useMontaje } from '@/lib/montaje';
 import { daysLeft } from '@/lib/time';
 
+import { ComentariosJuego } from './comentarios-juego';
 import { Icon } from './icon';
 import { NudgeBell } from './nudge-bell';
 import { Avatar } from './ui';
@@ -432,6 +434,20 @@ export function KaraokeHoy({ challenge, answers }: { challenge: Proposal; answer
           />
         )}
       </div>
+      {!abierto && (
+        <div
+          style={{
+            position: 'relative',
+            zIndex: 2,
+            background: theme.card,
+            borderBottomLeftRadius: 26,
+            borderBottomRightRadius: 26,
+            padding: '0 12px 12px',
+            marginTop: -14,
+          }}>
+          <ComentariosJuego proposalId={challenge.id} />
+        </div>
+      )}
     </div>
   );
 }
@@ -464,6 +480,15 @@ export function CuentoHoy({ challenge, answers }: { challenge: Proposal; answers
   const tinta = oscuro ? '#F1E9DA' : '#2B2620';
   const raya = oscuro ? 'rgba(241,233,218,0.08)' : 'rgba(43,38,32,0.07)';
   const ir = () => router.push({ pathname: '/cuento/[id]', params: { id: challenge.id } });
+  // terminado: se escucha aquí mismo, y la cara de quien habla se agranda
+  const cuento = useCuentoEntero({
+    groupId: challenge.groupId,
+    proposalId: challenge.id,
+    inicio: juego.inicio,
+    trozos,
+    cargarCierre: false,
+  });
+  const habla = cuento.sonando;
   return (
     <View style={[c.card, { backgroundColor: papel, boxShadow: theme.shadow }]}>
       {/* las rayas de la libreta y el margen rojo */}
@@ -483,10 +508,22 @@ export function CuentoHoy({ challenge, answers }: { challenge: Proposal; answers
       </Pressable>
       {/* la cadena: quién ha ido siguiendo (los trozos, con candado hasta el final) */}
       <View style={c.cadena}>
+        {!abierto && (
+          <View style={c.eslabon}>
+            <View
+              style={[
+                c.narradora,
+                { borderColor: tinta },
+                (habla === -1 || habla === trozos.length) && c.hablando,
+              ]}>
+              <Icon icon={BookOpen} size={14} color={tinta} />
+            </View>
+          </View>
+        )}
         {trozos.map((t, i) => (
           <View key={t.id} style={c.eslabon}>
-            {i > 0 && <View style={[c.hilo, { borderColor: tinta }]} />}
-            <View>
+            {(i > 0 || !abierto) && <View style={[c.hilo, { borderColor: tinta }]} />}
+            <View style={[c.cara, habla === i && c.hablando]}>
               <Avatar userId={t.authorId} size={30} />
               {abierto && i < trozos.length - 1 && (
                 <View style={[c.candado, { backgroundColor: papel }]}>
@@ -516,13 +553,34 @@ export function CuentoHoy({ challenge, answers }: { challenge: Proposal; answers
       </Text>
       <Pressable
         accessibilityRole="button"
-        onPress={ir}
+        disabled={cuento.preparando}
+        onPress={abierto ? ir : cuento.sonando === null ? cuento.escuchar : cuento.parar}
         style={[c.boton, { backgroundColor: tinta }]}>
-        <Icon icon={abierto ? Mic : Play} size={16} color={papel} />
+        <Icon
+          icon={abierto ? Mic : cuento.sonando === null ? Play : Pause}
+          size={16}
+          color={papel}
+        />
         <Text style={{ color: papel, fontSize: 15, fontWeight: '700' }}>
-          {!abierto ? 'Escuchar el cuento entero' : meToca ? 'Seguir el cuento' : 'Ver el cuento'}
+          {abierto
+            ? meToca
+              ? 'Seguir el cuento'
+              : 'Ver el cuento'
+            : cuento.preparando
+              ? 'Preparando el cuento…'
+              : cuento.sonando === null
+                ? 'Escuchar el cuento entero'
+                : 'Parar'}
         </Text>
       </Pressable>
+      {!abierto && (
+        <ComentariosJuego
+          proposalId={challenge.id}
+          colorTexto={tinta}
+          colorSuave={oscuro ? 'rgba(241,233,218,0.6)' : 'rgba(43,38,32,0.55)'}
+          colorFondo={oscuro ? 'rgba(241,233,218,0.08)' : 'rgba(43,38,32,0.06)'}
+        />
+      )}
     </View>
   );
 }
@@ -558,6 +616,20 @@ const c = StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // el cambio de tamaño, suave
+  cara: { borderRadius: 18, transitionProperty: 'transform', transitionDuration: '260ms' } as never,
+  // quien está hablando: su cara, un poco más grande
+  hablando: { transform: [{ scale: 1.3 }], zIndex: 2 },
+  narradora: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1.5,
+    transitionProperty: 'transform',
+    transitionDuration: '260ms',
     alignItems: 'center',
     justifyContent: 'center',
   },
