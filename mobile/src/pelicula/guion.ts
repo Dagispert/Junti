@@ -123,7 +123,39 @@ export type TipoPieza =
   | 'quiz'
   | 'pregunta'
   | 'cancion'
-  | 'retoNuevo';
+  | 'retoNuevo'
+  // los minijuegos, cada uno con su animación (como su tarjeta de «Hoy»)
+  | 'karaokeJuego'
+  | 'cuento'
+  | 'zoom'
+  | 'dibujo';
+
+/** Lo que enseña cada minijuego en la película (las imágenes, ya en la página). */
+export type JuegoPieza =
+  | {
+      tipo: 'karaoke';
+      cancion: string;
+      artista?: string;
+      /** la portada del vídeo con todas las voces (o la carátula) */
+      portada?: string;
+      voces: string[];
+    }
+  | { tipo: 'cuento'; inicio: string; cierre?: string; voces: string[] }
+  | {
+      tipo: 'zoom';
+      foto?: string;
+      cx: number;
+      cy: number;
+      abierto: boolean;
+      solucion?: string;
+      aciertos: string[];
+      jugaron: number;
+    }
+  | {
+      tipo: 'dibujo';
+      abierto: boolean;
+      pasos: { tipo: 'frase' | 'dibujo'; quien: string; texto?: string; img?: string }[];
+    };
 
 /** Lo que necesita la animación de cada tipo. */
 export type ExtraPieza = {
@@ -143,6 +175,8 @@ export type ExtraPieza = {
   quienes?: string[];
   /** recuerdo: «hace 3 años» */
   edad?: string;
+  /** minijuego: lo que pasó en él */
+  juego?: JuegoPieza;
 };
 
 export type Pieza = {
@@ -274,7 +308,8 @@ export function planificar(d: DatosPelicula): Plan {
     const vs = i === 0 ? Math.min(a, Math.max(tv, c0)) : Math.max(a, tv);
     say(vs, v);
     tv = vs + durVoz(v);
-    const b = Math.max(a + 3.0, tv);
+    // los minijuegos tienen más que contar (la lupa que se aleja, la tira que se abre…)
+    const b = Math.max(a + (p.extra?.juego ? 5.8 : 3.0), tv);
     t = b;
     return { id: p.id, a, b };
   });

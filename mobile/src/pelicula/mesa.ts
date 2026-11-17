@@ -855,6 +855,407 @@ export function montarMesa(o: {
         });
         if (nadie) opacidad(nadie, S(u, 2.0, 0.4));
       });
+    } else if (tipo === 'karaokeJuego' && ex.juego?.tipo === 'karaoke') {
+      // ── karaoke: la tele de tubo del póster (naranja y rojo) se enciende con
+      //    el vídeo de todas las voces; salen notas y, debajo, quién cantó
+      const j = ex.juego;
+      y0 += 60; // (las antenas, por encima de la tele, sin tapar quién lo propuso)
+      const NAR = '#FFB48A',
+        ROJO = '#E8563F',
+        CREMA = '#FFF3E0';
+      const TV = 400;
+      const tv = el('g', {}, card);
+      // las antenas
+      const antenas = T.tinta(tv, `M0,${y0 + 40} L-90,${y0 - 40} M0,${y0 + 40} L80,${y0 - 50}`, {
+        color: TINTA,
+        width: 4,
+      });
+      T.tinta(tv, roundRect(-WC / 2, y0 + 30, WC, TV, 46), { color: TINTA, width: 3, fill: ROJO });
+      T.tinta(tv, roundRect(-WC / 2 + 26, y0 + 56, WC - 140, TV - 52, 34), {
+        color: TINTA,
+        width: 2.4,
+        fill: '#16171A',
+      });
+      // la pantalla: la portada del vídeo, recortada
+      const sx = -WC / 2 + 40,
+        sy = y0 + 70,
+        sw = WC - 168,
+        sh = TV - 80;
+      const idP = uid('tv');
+      el(
+        'rect',
+        { x: sx, y: sy, width: sw, height: sh, rx: 26 },
+        el('clipPath', { id: idP }, defs),
+      );
+      const pantalla = el('g', { 'clip-path': `url(#${idP})` }, tv);
+      if (j.portada)
+        el(
+          'image',
+          {
+            href: j.portada,
+            x: sx,
+            y: sy,
+            width: sw,
+            height: sh,
+            preserveAspectRatio: 'xMidYMid slice',
+          },
+          pantalla,
+        );
+      else texto(pantalla, '♪', { x: sx + sw / 2, y: sy + sh / 2 + 50, size: 150, color: NAR });
+      for (let yy = sy; yy < sy + sh; yy += 6)
+        el('rect', { x: sx, y: yy, width: sw, height: 2, fill: 'rgba(0,0,0,0.18)' }, pantalla);
+      // al encenderse: una línea blanca que se abre
+      const encendido = el(
+        'rect',
+        { x: sx, y: sy + sh / 2 - 2, width: sw, height: 4, fill: '#FFFFFF' },
+        pantalla,
+      );
+      const negro = el('rect', { x: sx, y: sy, width: sw, height: sh, fill: '#16171A' }, pantalla);
+      negro.after(encendido);
+      // los mandos
+      for (const k of [0, 1])
+        T.tinta(tv, ellipse(WC / 2 - 58, y0 + 120 + k * 90, 24), {
+          color: TINTA,
+          width: 2.4,
+          fill: k ? NAR : CREMA,
+        });
+      for (let k = 0; k < 4; k++)
+        T.tinta(tv, `M${WC / 2 - 80},${y0 + 300 + k * 18} L${WC / 2 - 36},${y0 + 300 + k * 18}`, {
+          color: TINTA,
+          width: 2,
+        });
+      // la canción y quién cantó
+      const tit = ajustar(`«${j.cancion}»`, WC - 40, [44, 38, 32], 1);
+      texto(card, tit.lines[0] ?? '', { x: 0, y: y0 + TV + 100, size: tit.size, color: TINTA });
+      if (j.artista) texto(card, j.artista, { x: 0, y: y0 + TV + 142, size: 30, color: GRIS });
+      const cantaron = j.voces.length
+        ? `cantaron ${j.voces.slice(0, 5).join(', ')}`
+        : '¿quién se anima a cantar?';
+      const fila = texto(card, cantaron, { x: 0, y: y0 + TV + 196, size: 32, color: ROJO });
+      altoTarjeta = TV + 230;
+      const notas = [0, 1, 2, 3].map((k) => {
+        const n = el('g', {}, card);
+        T.tinta(
+          n,
+          'M0,0 m-10,0 a10,8 0 1,0 20,0 a10,8 0 1,0 -20,0 M10,0 L10,-36 C22,-30 28,-22 26,-12',
+          { color: k % 2 ? ROJO : TINTA, width: 3, fill: k % 2 ? ROJO : TINTA },
+        );
+        return n;
+      });
+      anims.push((u) => {
+        revelar(antenas, S(u, 0.9, 0.4));
+        const ke = S(u, 1.2, 0.35);
+        opacidad(negro, 1 - S(u, 1.45, 0.3));
+        mover(encendido, { ox: 0, oy: sy + sh / 2, sy: 1 + ke * 30 });
+        opacidad(encendido, ke > 0 ? 1 - S(u, 1.5, 0.3) : 0);
+        mover(antenas, { ox: 0, oy: y0 + 40, r: Math.sin(u * 3) * 3 });
+        opacidad(fila, S(u, 2.0, 0.4));
+        notas.forEach((n, k) => {
+          const f = ((((u - 1.6) * 0.5 + k / 4) % 1) + 1) % 1;
+          mover(n, {
+            x: (k % 2 ? 1 : -1) * (WC / 2 + 20 + 30 * f),
+            y: y0 + 260 - 300 * f,
+            r: -12 + 24 * f,
+          });
+          opacidad(n, u > 1.6 ? Math.sin(Math.PI * f) : 0);
+        });
+      });
+    } else if (tipo === 'cuento' && ex.juego?.tipo === 'cuento') {
+      // ── el cuento a trozos: una página de libreta que se escribe sola, las
+      //    voces que lo siguieron (con sus ondas) y el final de la narradora
+      const j = ex.juego;
+      const ini = ajustar(j.inicio, WC - 130, [40, 36, 32], 4);
+      const fin = j.cierre ? ajustar(j.cierre, WC - 130, [36, 32, 28], 4) : null;
+      const hIni = ini.lines.length * ini.size * 1.2;
+      const hFin = fin ? fin.lines.length * fin.size * 1.2 + 60 : 0;
+      const hVoces = j.voces.length ? 150 : 70;
+      const H = 90 + hIni + hVoces + hFin + 40;
+      altoTarjeta = H + 20;
+      T.tinta(card, roundRect(-WC / 2, y0, WC, H, 14), {
+        color: TINTA,
+        width: 2.4,
+        fill: '#FFFDF6',
+      });
+      // el margen rojo, las rayas y las anillas
+      T.tinta(card, `M${-WC / 2 + 70},${y0 + 10} L${-WC / 2 + 70},${y0 + H - 10}`, {
+        color: '#E8A0A0',
+        width: 2,
+      });
+      for (let yy = y0 + 92; yy < y0 + H - 20; yy += 44)
+        T.tinta(card, `M${-WC / 2 + 20},${yy} L${WC / 2 - 20},${yy + 0.5}`, {
+          color: '#DCE6F0',
+          width: 1.6,
+        });
+      for (let k = 0; k < 7; k++)
+        T.tinta(card, ellipse(-WC / 2 + 60 + k * 72, y0 + 4, 12), {
+          color: TINTA,
+          width: 2.2,
+          fill: '#C8C9CC',
+        });
+      texto(card, 'el cuento a trozos', {
+        x: -WC / 2 + 90,
+        y: y0 + 62,
+        size: 24,
+        color: A,
+        hand: false,
+        weight: 700,
+        anchor: 'start',
+        spacing: 2,
+      });
+      let yy = y0 + 70;
+      const escribir = (ls: string[], size: number, color: string, t0: number) =>
+        ls.forEach((ln, k) => {
+          const id = uid('ln');
+          const y1 = yy + (k + 1) * size * 1.2;
+          const clip = el(
+            'rect',
+            { x: -WC / 2, y: y1 - size, width: 0, height: size * 1.4 },
+            el('clipPath', { id }, defs),
+          );
+          const n = texto(card, ln, { x: -WC / 2 + 90, y: y1, size, color, anchor: 'start' });
+          n.setAttribute('clip-path', `url(#${id})`);
+          anims.push((u) =>
+            clip.setAttribute('width', String(WC * S(u, t0 + k * 0.4, 0.45, ease.linear))),
+          );
+        });
+      escribir(ini.lines, ini.size, TINTA, 1.1);
+      yy += hIni;
+      // quienes lo siguieron: cada uno con su onda
+      const voces = j.voces.slice(0, 5);
+      const caras = voces.map((q, k) => {
+        const c = el('g', {}, card);
+        const cx = -WC / 2 + 130 + k * 92,
+          cy = yy + 60;
+        T.tinta(c, ellipse(cx, cy, 32), {
+          color: TINTA,
+          width: 2.2,
+          fill: k % 2 ? '#FFE9D6' : '#FFFFFF',
+        });
+        texto(c, q[0]?.toUpperCase() ?? '?', { x: cx, y: cy + 11, size: 32, color: TINTA });
+        texto(c, q, { x: cx, y: cy + 62, size: 22, color: GRIS });
+        const onda = el('g', {}, c);
+        for (let b = 0; b < 3; b++)
+          el(
+            'rect',
+            { x: cx + 36 + b * 8, y: cy - 10, width: 4, height: 20, rx: 2, fill: A },
+            onda,
+          );
+        return { c, cx, cy, onda };
+      });
+      if (!voces.length)
+        texto(card, '¿quién lo sigue?', { x: 0, y: yy + 50, size: 32, color: GRIS });
+      yy += hVoces;
+      if (fin) {
+        texto(card, 'y el final, según la narradora:', {
+          x: -WC / 2 + 90,
+          y: yy + 20,
+          size: 24,
+          color: GRIS,
+          anchor: 'start',
+        });
+        yy += 30;
+        escribir(fin.lines, fin.size, A, 1.1 + ini.lines.length * 0.4 + 0.9);
+      }
+      anims.push((u) => {
+        caras.forEach((c, k) => {
+          const kc = S(u, 1.8 + k * 0.25, 0.4, ease.back);
+          mover(c.c, { ox: c.cx, oy: c.cy, s: kc });
+          const habla = u > 2 + k * 0.25 ? Math.abs(Math.sin(u * 7 + k)) : 0;
+          mover(c.onda, { ox: c.cx + 48, oy: c.cy, sy: 0.4 + habla });
+        });
+      });
+    } else if (tipo === 'zoom' && ex.juego?.tipo === 'zoom') {
+      // ── zoom misterioso: un expediente con una lupa; la foto, muy de cerca,
+      //    se aleja hasta verse entera, y cae el sello con la solución
+      const j = ex.juego;
+      y0 += 50; // (la pestaña, sin tapar quién lo propuso)
+      const MANILA = '#EBD8AE',
+        TINTA_M = '#3E2F1C',
+        SELLO = '#C8402E';
+      const H = 640;
+      altoTarjeta = H + 40;
+      T.tinta(card, roundRect(-WC / 2 + 30, y0 - 26, 260, 60, 14), {
+        color: TINTA,
+        width: 2,
+        fill: '#E2CB97',
+      });
+      texto(card, 'ZOOM MISTERIOSO', {
+        x: -WC / 2 + 160,
+        y: y0 + 2,
+        size: 22,
+        color: TINTA_M,
+        hand: false,
+        weight: 800,
+        spacing: 2,
+      });
+      T.tinta(card, roundRect(-WC / 2, y0, WC, H, 24), { color: TINTA, width: 2.4, fill: MANILA });
+      // la lupa
+      const L = 320,
+        lx = -40,
+        ly = y0 + 60 + L / 2;
+      const idL = uid('lupa');
+      el('circle', { cx: lx, cy: ly, r: L / 2 }, el('clipPath', { id: idL }, defs));
+      const lente = el('g', { 'clip-path': `url(#${idL})` }, card);
+      el('rect', { x: lx - L / 2, y: ly - L / 2, width: L, height: L, fill: '#2B2E33' }, lente);
+      const img = j.foto
+        ? el(
+            'image',
+            { href: j.foto, width: L, height: L, preserveAspectRatio: 'xMidYMid slice' },
+            lente,
+          )
+        : null;
+      el('circle', { cx: lx - 70, cy: ly - 80, r: 34, fill: 'rgba(255,255,255,0.22)' }, lente);
+      T.tinta(card, ellipse(lx, ly, L / 2), { color: TINTA_M, width: 14 });
+      T.tinta(card, `M${lx + L * 0.36},${ly + L * 0.36} L${lx + L * 0.62},${ly + L * 0.62}`, {
+        color: TINTA_M,
+        width: 30,
+      });
+      // lo de abajo: la solución (solo si terminó) y quién la adivinó
+      const titulo = j.abierto ? '¿Qué es esto?' : j.solucion ? `Era: ${j.solucion}` : 'Así era';
+      const tit = ajustar(titulo, WC - 60, [48, 42, 36], 1);
+      const tTit = texto(card, tit.lines[0] ?? '', {
+        x: 0,
+        y: y0 + L + 160,
+        size: tit.size,
+        color: TINTA_M,
+      });
+      const pie = j.aciertos.length
+        ? `lo adivinaron ${j.aciertos.slice(0, 4).join(', ')}`
+        : j.jugaron
+          ? `jugaron ${j.jugaron} y nadie lo adivinó`
+          : '¿quién lo adivina?';
+      const tPie = texto(card, pie, { x: 0, y: y0 + L + 210, size: 30, color: GRIS });
+      const gS = sello(card, WC / 2 - 120, y0 + 70, j.abierto ? '¿QUÉ ES?' : 'RESUELTO', -12);
+      (gS.querySelectorAll('*') as NodeListOf<SVGElement>).forEach((n) => {
+        for (const at of ['fill', 'stroke'])
+          if (n.getAttribute(at) === A) n.setAttribute(at, SELLO);
+      });
+      anims.push((u) => {
+        // de muy cerca (×9) a entera (o se queda cerca si sigue abierto)
+        const k = j.abierto ? 0.15 * S(u, 1.2, 1.4, ease.inOut) : S(u, 1.1, 2.0, ease.inOut);
+        const z = lerp(9, 1, k);
+        const ax = lerp(j.cx, 0.5, k),
+          ay = lerp(j.cy, 0.5, k);
+        if (img) {
+          img.setAttribute('width', String(L * z));
+          img.setAttribute('height', String(L * z));
+          img.setAttribute('x', String(lx - ax * L * z));
+          img.setAttribute('y', String(ly - ay * L * z));
+        }
+        opacidad(tTit, S(u, j.abierto ? 1.6 : 3.2, 0.4));
+        opacidad(tPie, S(u, j.abierto ? 1.9 : 3.6, 0.4));
+        estampar(gS, u, j.abierto ? 1.4 : 3.4);
+      });
+    } else if (tipo === 'dibujo' && ex.juego?.tipo === 'dibujo') {
+      // ── dibujo a ciegas: la tira de papel en acordeón se despliega y se ve
+      //    cómo cambió (si sigue abierto, solo los dorsos con quién lo hizo)
+      const j = ex.juego;
+      y0 += 50; // (la cinta, sin tapar quién lo propuso)
+      const pasos = j.pasos.slice(-5);
+      const n = Math.max(1, pasos.length);
+      const PW = Math.min(170, Math.floor((WC - 30) / n)),
+        PH = 250;
+      const x0 = -(n * PW) / 2;
+      const yT = y0 + 40;
+      altoTarjeta = PH + (j.abierto ? 160 : 230);
+      T.tinta(card, roundRect(-WC / 2, y0 - 10, WC, PH + 100, 22), {
+        color: TINTA,
+        width: 2.2,
+        fill: '#D9E6CF',
+      });
+      T.tinta(card, roundRect(-WC / 2 + 24, y0 - 30, 250, 46, 4), {
+        color: TINTA,
+        width: 1.6,
+        fill: 'rgba(242,165,65,0.9)',
+      });
+      texto(card, 'DIBUJO A CIEGAS', {
+        x: -WC / 2 + 149,
+        y: y0 + 2,
+        size: 22,
+        color: '#3A2A12',
+        hand: false,
+        weight: 800,
+        spacing: 2,
+      });
+      const hojas = pasos.map((p, i) => {
+        const g = el('g', {}, card);
+        const hx = x0 + i * PW;
+        el('rect', { x: hx, y: yT, width: PW, height: PH, fill: '#FFFDF7' }, g);
+        if (j.abierto || (!p.img && !p.texto)) {
+          for (let yy = yT + 30; yy < yT + PH; yy += 24)
+            el('rect', { x: hx, y: yy, width: PW, height: 1.4, fill: 'rgba(63,127,214,0.15)' }, g);
+          texto(g, p.tipo === 'dibujo' ? '✎' : '?', {
+            x: hx + PW / 2,
+            y: yT + PH / 2,
+            size: 60,
+            color: 'rgba(35,64,47,0.45)',
+          });
+          texto(g, p.quien, { x: hx + PW / 2, y: yT + PH - 20, size: 24, color: GRIS });
+        } else if (p.img) {
+          el(
+            'image',
+            {
+              href: p.img,
+              x: hx + 6,
+              y: yT + 6,
+              width: PW - 12,
+              height: PH - 12,
+              preserveAspectRatio: 'xMidYMid meet',
+            },
+            g,
+          );
+        } else {
+          const f = ajustar(p.texto ?? '', PW - 20, [28, 24, 20], 6);
+          f.lines.forEach((ln, k) =>
+            texto(g, ln, {
+              x: hx + PW / 2,
+              y: yT + 40 + k * f.size * 1.15,
+              size: f.size,
+              color: TINTA,
+            }),
+          );
+        }
+        // la sombra del pliegue (una cara a la luz y la otra no)
+        el(
+          'rect',
+          {
+            x: hx,
+            y: yT,
+            width: PW,
+            height: PH,
+            fill: i % 2 ? 'rgba(0,0,0,0.12)' : 'rgba(0,0,0,0.03)',
+          },
+          g,
+        );
+        return { g, hx };
+      });
+      T.tinta(card, roundRect(x0, yT, n * PW, PH, 2), { color: TINTA, width: 1.6 });
+      const frases = j.pasos.filter((p) => p.tipo === 'frase' && p.texto);
+      const resumen = j.abierto
+        ? `${j.pasos.length} ${j.pasos.length === 1 ? 'paso' : 'pasos'} y sigue pasando de mano en mano`
+        : frases.length > 1
+          ? `empezó en «${frases[0].texto}» y acabó en «${frases[frases.length - 1].texto}»`
+          : 'así fue cambiando';
+      const r = ajustar(resumen, WC - 40, [34, 30, 26], 3);
+      const tRes = el('g', {}, card);
+      r.lines.forEach((ln, k) =>
+        texto(tRes, ln, { x: 0, y: y0 + PH + 140 + k * r.size * 1.2, size: r.size, color: TINTA }),
+      );
+      anims.push((u) => {
+        // plegada (estrecha y en zigzag) → abierta
+        const k = j.abierto ? 0.25 * S(u, 1.1, 0.8, ease.inOut) : S(u, 1.1, 1.4, ease.inOut);
+        const sx = lerp(0.3, 1, k);
+        hojas.forEach((h, i) => {
+          mover(h.g, {
+            ox: h.hx,
+            oy: yT,
+            x: (h.hx - x0) * (sx - 1) + (n * PW * (1 - sx)) / 2,
+            sx,
+            ky: (i % 2 ? 1 : -1) * 0.35 * (1 - k),
+          });
+        });
+        opacidad(tRes, S(u, j.abierto ? 1.6 : 2.6, 0.5));
+      });
     } else {
       // ── texto: una hoja rayada (del tamaño del texto) que se escribe a pluma
       const f = ajustar(p.text ?? '', WC - 90, [48, 42, 36, 32], 7);
@@ -1180,9 +1581,9 @@ export function montarMesa(o: {
       c.ondas.forEach((o, j) => {
         const k = S(u, 1.0 + j * 0.03, 0.4, ease.back);
         mover(o, {
-            sy: k,
-            oy: Number(o.getAttribute('y')) + Number(o.getAttribute('height')) / 2,
-          });
+          sy: k,
+          oy: Number(o.getAttribute('y')) + Number(o.getAttribute('height')) / 2,
+        });
       });
       // pegatinas: caen con un golpe de tinta
       c.pegatinas.forEach((pg, j) => {

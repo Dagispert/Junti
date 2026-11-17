@@ -18,6 +18,7 @@ import { Lead, Screen } from '@/components/ui';
 import { Spacing, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import type { Moment } from '@/data/types';
+import { esMinijuego, useFotogramasJuegos } from '@/lib/juegos-pelicula';
 import { weekStart } from '@/lib/recap';
 import { WeekShelf } from '@/components/week-shelf';
 import { monthOf } from '@/lib/time';
@@ -28,7 +29,11 @@ import { Missing } from './index';
 export default function Memory() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
-  const { group: groupById, moments, user } = useStore();
+  const { group: groupById, moments, user, proposals } = useStore();
+  // los minijuegos del grupo, cada uno como un fotograma de su mes
+  const delGrupo = proposals.filter((p) => p.groupId === id);
+  const fotogramasJuegos = useFotogramasJuegos(delGrupo);
+  const tomasDeJuegos = new Set(delGrupo.filter(esMinijuego).map((p) => p.id));
   const group = groupById(id);
   // las semanas anteriores, plegadas hasta que se pidan
   const [verSemanas, setVerSemanas] = useState(false);
@@ -52,7 +57,12 @@ export default function Memory() {
   const all = moments.filter((m) => m.groupId === id).sort((a, b) => b.createdAt - a.createdAt);
   const months: { key: string; label: string; items: Moment[] }[] = [];
   // Los recuerdos (lo de antes de Junti) van en «Nuestra historia», no por meses.
-  for (const moment of all.filter((m) => !m.memory)) {
+  // (las tomas sueltas de los minijuegos van dentro de su fotograma)
+  const delCarrete = [
+    ...all.filter((m) => !m.memory && !(m.proposalId && tomasDeJuegos.has(m.proposalId))),
+    ...fotogramasJuegos,
+  ].sort((a, b) => b.createdAt - a.createdAt);
+  for (const moment of delCarrete) {
     const { key, label } = monthOf(moment.createdAt);
     const last = months[months.length - 1];
     if (last?.key === key) last.items.push(moment);

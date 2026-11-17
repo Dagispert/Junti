@@ -8,6 +8,7 @@ import { useExport } from '@/components/export-sheet';
 import { type FilmControl, FilmPlayer } from '@/components/film-player';
 import { Icon } from '@/components/icon';
 import { Resting } from '@/components/narrator-resting';
+import { cargarJuegos, esMinijuego, imagenesDeJuegos } from '@/lib/juegos-pelicula';
 import { accentNight, DEFAULT_ACCENT } from '@/lib/accent';
 import { Hand } from '@/constants/theme';
 import { useStore } from '@/data/store';
@@ -25,6 +26,7 @@ import { usePreview } from '@/lib/music';
 import { narratorAudio, narratorStream, primeNarrator, stopNarrator } from '@/lib/narrator';
 import { buildRecap } from '@/lib/recap';
 import { fetchWeatherAt, type PastWeather } from '@/lib/weather';
+import type { JuegoPieza } from '@/pelicula/guion';
 import { datosPelicula, fotosEnLinea } from '@/pelicula/datos';
 
 // El resumen de la semana o del mes como una película dibujada a mano (ver
@@ -101,6 +103,7 @@ export default function RecapFilm() {
   // ── El tiempo que hacía (para elegir la vista) y las fotos en la página ──
   const [weather, setWeather] = useState<Record<string, PastWeather>>({});
   const [photos, setPhotos] = useState<Record<string, string> | null>(null);
+  const [juegos, setJuegos] = useState<Record<string, JuegoPieza>>({});
   useEffect(() => {
     let alive = true;
     for (const m of recap.moments) {
@@ -110,21 +113,37 @@ export default function RecapFilm() {
         (x) => alive && x && setWeather((all) => ({ ...all, [m.id]: x })),
       );
     }
-    fotosEnLinea(
-      [
-        ...recap.moments.flatMap((m) => [
-          m.imageUri,
-          ...(m.gallery ?? []).map((g) => (g.kind === 'photo' ? g.uri : g.poster)),
-        ]),
-        song?.artwork,
-        // las carátulas de las canciones del periodo (salen en su animación)
-        ...songs
-          .filter((x) => x.groupId === groupId && x.createdAt >= recap.from && x.createdAt < recap.to)
-          .map((x) => x.artwork),
-      ].filter((u): u is string => !!u),
-    ).then(
-      (p) => alive && setPhotos(p),
+    // los minijuegos del periodo (con sus imágenes) y luego todas las fotos en la página
+    const delPeriodo = proposals.filter(
+      (p) =>
+        p.groupId === groupId &&
+        esMinijuego(p) &&
+        p.startsAt >= recap.from &&
+        p.startsAt < recap.to,
     );
+    cargarJuegos(delPeriodo, moments, user)
+      .catch(() => ({}) as Record<string, JuegoPieza>)
+      .then((j) => {
+        if (!alive) return null;
+        setJuegos(j);
+        return fotosEnLinea(
+          [
+            ...imagenesDeJuegos(j),
+            ...recap.moments.flatMap((m) => [
+              m.imageUri,
+              ...(m.gallery ?? []).map((g) => (g.kind === 'photo' ? g.uri : g.poster)),
+            ]),
+            song?.artwork,
+            // las carátulas de las canciones del periodo (salen en su animación)
+            ...songs
+              .filter(
+                (x) => x.groupId === groupId && x.createdAt >= recap.from && x.createdAt < recap.to,
+              )
+              .map((x) => x.artwork),
+          ].filter((u): u is string => !!u),
+        );
+      })
+      .then((p) => alive && p && setPhotos(p));
     prepareRecording().catch(() => {});
     return () => {
       alive = false;
@@ -164,7 +183,7 @@ export default function RecapFilm() {
               : undefined,
             ritmo,
             groupId,
-            extras: { questions, proposals, songs, moments },
+            extras: { questions, proposals, songs, moments, juegos },
           })
         : null,
     // Se fija al empezar: la película no cambia mientras se ve.

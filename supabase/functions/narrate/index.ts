@@ -431,7 +431,7 @@ Deno.serve(async (req) => {
       .from('proposals')
       .select('id')
       .eq('group_id', groupId)
-      .in('game->>type', ['karaoke', 'cuento']);
+      .in('game->>type', ['karaoke', 'cuento', 'zoom', 'dibujo']);
     const tomas = new Set((karaokes ?? []).map((k) => k.id));
     // un recuerdo importado cuenta como de quien lo mandó
     const moments = (rows ?? [])
@@ -952,7 +952,7 @@ async function describeExtras(
       .order('created_at'),
     supabase
       .from('proposals')
-      .select('id, title, body, created_by, ends_at')
+      .select('id, title, body, created_by, ends_at, game')
       .eq('group_id', groupId)
       .eq('kind', 'challenge')
       .gte('starts_at', since)
@@ -1018,12 +1018,83 @@ async function describeExtras(
     if (r.created_by) people.add(r.created_by);
     const who = [...new Set((retoMoments ?? []).filter((m) => m.proposal_id === r.id && !optedOut.has(m.author_id)).map((m) => m.author_id))];
     who.forEach((id) => people.add(id));
+    // los minijuegos, contados con lo que pasó en cada uno
+    const juego = await describirJuego(r, who, optedOut, now);
+    if (juego) {
+      juego.people.forEach((id) => people.add(id));
+      lines.push(`- [${label.get(`reto:${r.id}`) ?? ''}] ${juego.text}`);
+      continue;
+    }
     lines.push(
       `- [${label.get(`reto:${r.id}`) ?? ''}] Reto lanzado${r.created_by ? ` por @${r.created_by}` : ''}: «${r.title}»${r.body ? ` (${String(r.body).slice(0, 120)})` : ''}` +
         (who.length ? `; se animaron ${who.map((id) => '@' + id).join(', ')}` : '; todavía nadie ha participado'),
     );
   }
   return { lines, people: [...people] };
+}
+
+/** Un minijuego (karaoke, cuento a trozos, zoom misterioso, dibujo a ciegas), contado para la narradora. */
+async function describirJuego(
+  r: { id: string; created_by: string | null; ends_at: string | null; game: Record<string, unknown> | null },
+  who: string[],
+  optedOut: Set<string>,
+  now: number,
+): Promise<{ text: string; people: string[] } | null> {
+  const g = r.game as { type?: string } & Record<string, unknown>;
+  if (!g?.type) return null;
+  const por = r.created_by ? ` de @${r.created_by}` : '';
+  const abierto = !r.ends_at || Date.parse(r.ends_at) > now;
+  const lista = (ids: string[]) => ids.map((id) => '@' + id).join(', ');
+  if (g.type === 'karaoke') {
+    const voces = ((g.montaje as { voces?: string[] } | undefined)?.voces ?? who).filter((id) => !optedOut.has(id));
+    return {
+      text: `Minijuego KARAOKE${por}: cantaron «${g.song}»${g.artist ? ` de ${g.artist}` : ''}${voces.length ? `; cantaron ${lista(voces)}` : '; aún no ha cantado nadie'}${g.montaje ? ' (ya hay vídeo con todas las voces)' : ''}`,
+      people: voces,
+    };
+  }
+  if (g.type === 'cuento') {
+    const cierre = (g.cierre as { texto?: string } | undefined)?.texto;
+    return {
+      text: `Minijuego EL CUENTO A TROZOS${por}: empezaba «${String(g.inicio ?? '').slice(0, 200)}»; lo siguieron grabando por turnos ${who.length ? lista(who) : 'nadie todavía'}${cierre ? `; la narradora (tú) le puso el final: «${cierre.slice(0, 200)}»` : abierto ? ' (sigue abierto)' : ''}`,
+      people: who,
+    };
+  }
+  if (g.type === 'zoom') {
+    const [{ data: res }, { data: sec }] = await Promise.all([
+      supabase.from('juego_respuestas').select('user_id, acierto, nivel').eq('proposal_id', r.id),
+      abierto
+        ? Promise.resolve({ data: null })
+        : supabase.from('juego_secretos').select('respuesta').eq('proposal_id', r.id).maybeSingle(),
+    ]);
+    const jug = (res ?? []).filter((x) => !optedOut.has(x.user_id));
+    const ok = jug.filter((x) => x.acierto);
+    return {
+      text: `Minijuego ZOOM MISTERIOSO${por}: una foto muy de cerca para adivinar qué es; jugaron ${jug.length}${ok.length ? ` y lo adivinaron ${lista(ok.map((x) => x.user_id))}` : ', nadie lo adivinó todavía'}` +
+        (abierto ? ' — sigue abierto: NO digas la solución' : sec?.respuesta ? `; era «${sec.respuesta}»` : ''),
+      people: [...ok.map((x) => x.user_id)],
+    };
+  }
+  if (g.type === 'dibujo') {
+    const pasos = ((g.pasos as { u: string; t: string }[] | undefined) ?? []).filter((x) => !optedOut.has(x.u));
+    const ids = [...new Set(pasos.map((x) => x.u))];
+    let final = '';
+    if (!abierto) {
+      const { data: fr } = await supabase
+        .from('dibujo_pasos')
+        .select('orden, texto')
+        .eq('proposal_id', r.id)
+        .eq('tipo', 'frase')
+        .order('orden');
+      const primera = fr?.[0]?.texto,
+        ultima = fr && fr.length > 1 ? fr[fr.length - 1].texto : null;
+      if (primera && ultima) final = `; empezó en «${primera}» y acabó en «${ultima}»`;
+    }
+    return {
+      text: `Minijuego DIBUJO A CIEGAS${por} (frase → dibujo → frase…, cada uno solo ve el paso anterior): ${pasos.length} pasos de ${lista(ids)}${final}${abierto ? ' — sigue abierto: no cuentes lo que se dibujó' : ''}`,
+      people: ids,
+    };
+  }
+  return null;
 }
 
 /** Convierte el periodo en un texto ordenado y fácil de leer para la IA. */
@@ -1256,7 +1327,7 @@ async function describePeriod(
   }
   if (extras.lines.length) {
     // los nombres van como @id en el borrador: aquí se ponen los de verdad
-    out.push('', 'Encuestas, quiz, preguntas y retos del periodo:', ...extras.lines.map((l) => l.replace(/@([0-9a-f-]{36})/g, (_, id) => first(id))));
+    out.push('', 'Encuestas, quiz, preguntas, retos y minijuegos del periodo:', ...extras.lines.map((l) => l.replace(/@([0-9a-f-]{36})/g, (_, id) => first(id))));
   }
   if (songs.data?.length) {
     out.push('', `Canciones añadidas a la banda sonora: ${songs.data.map((s) => `[${etiquetas.label.get(`song:${s.id}`) ?? ''}] «${s.title}» de ${s.artist} (la puso ${first(s.added_by)}${s.note ? `: «${s.note}»` : ''})`).join('; ')}`);

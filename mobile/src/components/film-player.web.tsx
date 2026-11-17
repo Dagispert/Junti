@@ -34,6 +34,8 @@ export function FilmPlayer({
   const stop = useRef(paused);
   stop.current = paused;
   const ended = useRef(false);
+  /** solo en las pruebas: la película parada en un segundo concreto */
+  const congelado = useRef(false);
   const [sub, setSub] = useState<{ text: string; k: number; day: boolean } | null>(null);
   const cb = useRef({ onTime, onEnd });
   cb.current = { onTime, onEnd };
@@ -45,6 +47,16 @@ export function FilmPlayer({
     t.current = 0;
     ended.current = false;
     film.current.pintar(0);
+    // las pruebas automáticas pueden ir a cualquier segundo y quedarse ahí
+    const w = window as unknown as { __juntiPruebas?: boolean; __pelicula?: unknown };
+    if (w.__juntiPruebas)
+      w.__pelicula = {
+        plan: film.current.plan,
+        ir: (x: number) => {
+          congelado.current = true;
+          t.current = x;
+        },
+      };
   }, [data]);
 
   useEffect(() => {
@@ -68,7 +80,7 @@ export function FilmPlayer({
     const loop = (now: number) => {
       const dt = Math.min(0.25, (now - last) / 1000);
       last = now;
-      if (!stop.current && !ended.current) t.current += dt;
+      if (!stop.current && !ended.current && !congelado.current) t.current += dt;
       const time = Math.min(t.current, plan.total);
       film.current?.pintar(time);
       cb.current.onTime?.(time, plan.total);

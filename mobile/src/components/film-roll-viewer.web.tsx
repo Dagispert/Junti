@@ -5,6 +5,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Hand, HandBold } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import type { Moment } from '@/data/types';
+import { rutaJuego } from '@/lib/juegos-pelicula';
 import { type CanisterPose, makeCanister } from '@/lib/canister3d';
 import { FilmString, filmPaths, straightTrack, windowPath } from '@/lib/filmstrip';
 import { primeNarrator } from '@/lib/narrator';
@@ -99,7 +100,7 @@ export function RollViewer({
   origin?: { x: number; y: number; w: number };
   onClose: () => void;
 }) {
-  const { user } = useStore();
+  const { user, proposals } = useStore();
   const uid = `jrv${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const [vp, setVp] = useState({ w: window.innerWidth, h: window.innerHeight });
   useEffect(() => {
@@ -610,7 +611,17 @@ export function RollViewer({
                   aria-label={m.text ?? `Foto de ${user(m.authorId).name}`}
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={() =>
-                    go(() => router.push({ pathname: '/moment/[id]', params: { id: m.id } }))
+                    go(() => {
+                      // un minijuego: se abre su pantalla
+                      const juego = m.id.startsWith('juego:')
+                        ? proposals.find((x) => x.id === m.proposalId)
+                        : undefined;
+                      router.push(
+                        (juego
+                          ? rutaJuego(juego)
+                          : { pathname: '/moment/[id]', params: { id: m.id } }) as never,
+                      );
+                    })
                   }
                   style={frameStyle}>
                   {m.imageUri ? (
@@ -630,6 +641,26 @@ export function RollViewer({
                     <div className="jrv-img" style={paperStyle}>
                       {m.text ?? (m.voice ? 'Nota de voz' : '')}
                     </div>
+                  )}
+                  {/* un minijuego: su etiqueta en la esquina */}
+                  {m.id.startsWith('juego:') && (
+                    <span
+                      style={{
+                        position: 'absolute',
+                        left: 4,
+                        top: 4,
+                        padding: '1px 6px',
+                        borderRadius: 6,
+                        background: 'rgba(242,165,65,.95)',
+                        color: '#3A2A12',
+                        fontSize: 9,
+                        fontWeight: 800,
+                        letterSpacing: 0.5,
+                        textTransform: 'uppercase',
+                        fontFamily: 'system-ui, -apple-system, sans-serif',
+                      }}>
+                      {(m.text ?? '').split(':')[0]}
+                    </span>
                   )}
                 </button>
                 {emojis.length > 0 && (
@@ -805,6 +836,7 @@ const frameStyle: React.CSSProperties = {
   background: '#F3EEE2',
   boxShadow: '0 0 0 2px rgba(20,10,4,.6) inset',
   cursor: 'pointer',
+  position: 'relative',
   display: 'block',
 };
 const paperStyle: React.CSSProperties = {

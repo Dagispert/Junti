@@ -12,6 +12,7 @@ import {
   elegirEscenario,
   esEscenario,
   type ExtraPieza,
+  type JuegoPieza,
   type Pieza,
   type TipoPieza,
   type Voz,
@@ -42,6 +43,8 @@ export type Extras = {
   proposals: Proposal[];
   songs: Song[];
   moments: Moment[];
+  /** lo de cada minijuego (por id de la propuesta), ya cargado */
+  juegos?: Record<string, JuegoPieza>;
 };
 
 const hace = (t: number) => {
@@ -139,6 +142,23 @@ export function piezaExtra(
     const quienes = [
       ...new Set(ex.moments.filter((m) => m.proposalId === p.id).map((m) => first(m.authorId))),
     ];
+    // un minijuego: con su propia animación (las imágenes, ya en la página)
+    const j = ex.juegos?.[p.id];
+    if (j) {
+      const juego: JuegoPieza =
+        j.tipo === 'karaoke'
+          ? { ...j, portada: foto(j.portada) }
+          : j.tipo === 'zoom'
+            ? { ...j, foto: foto(j.foto) }
+            : j.tipo === 'dibujo'
+              ? { ...j, pasos: j.pasos.map((x) => ({ ...x, img: foto(x.img) })) }
+              : j;
+      return {
+        ...base(p.startsAt, p.createdBy),
+        tipo: j.tipo === 'karaoke' ? 'karaokeJuego' : j.tipo,
+        extra: { titulo: p.title, juego },
+      };
+    }
     return {
       ...base(p.startsAt, p.createdBy),
       tipo: 'retoNuevo',
@@ -252,6 +272,8 @@ export function datosPelicula(
         ? extrasDelPeriodo(ex, opts.groupId, recap.from, recap.to)
             .map((x) => piezaExtra(x.ref, ex, user, foto))
             .filter((p): p is Pieza => !!p)
+            // los minijuegos, siempre (antes que el resto)
+            .sort((a, b) => Number(!!b.extra?.juego) - Number(!!a.extra?.juego))
             .slice(0, 4)
         : [];
     pieces = [...recap.picks.map(momentoAPieza), ...extras]

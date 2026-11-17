@@ -6,6 +6,7 @@ import Animated, { FadeInLeft, ZoomIn } from 'react-native-reanimated';
 
 import { Hand, HandBold } from '@/constants/theme';
 import { useStore } from '@/data/store';
+import { rutaJuego } from '@/lib/juegos-pelicula';
 import { monthStart } from '@/lib/recap';
 import { primeNarrator } from '@/lib/narrator';
 import type { GroupOrigin, Moment } from '@/data/types';
@@ -35,7 +36,7 @@ export function FilmRoll({
   /** Si se pasa, el título lleva un botón para ver el resumen del mes. */
   groupId?: string;
 }) {
-  const { user } = useStore();
+  const { user, proposals } = useStore();
   const ordered = [...moments].sort((a, b) => a.createdAt - b.createdAt);
   // Las reacciones más usadas del mes se convierten en pegatinas.
   const counts = new Map<string, number>();
@@ -98,7 +99,17 @@ export function FilmRoll({
                     key={m.id}
                     accessibilityRole="button"
                     accessibilityLabel={m.text ?? 'Ver el momento'}
-                    onPress={() => router.push({ pathname: '/moment/[id]', params: { id: m.id } })}>
+                    onPress={() => {
+                      // un minijuego: se abre su pantalla
+                      const juego = m.id.startsWith('juego:')
+                        ? proposals.find((x) => x.id === m.proposalId)
+                        : undefined;
+                      router.push(
+                        (juego
+                          ? rutaJuego(juego)
+                          : { pathname: '/moment/[id]', params: { id: m.id } }) as never,
+                      );
+                    }}>
                     {m.imageUri || m.videoUri ? (
                       <Photo moment={m} style={styles.frame} />
                     ) : (
