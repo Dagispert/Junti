@@ -155,10 +155,64 @@ export default function Karaoke() {
           takes={takes}
           seed={proposal.id}
           groupId={proposal.groupId}
+          abierto={open}
           onBack={() => setMode('home')}
         />
       )}
       {mode === 'record' && !url && <ActivityIndicator color="#FFFFFF" style={{ marginTop: 80 }} />}
+    </View>
+  );
+}
+
+/* ───────────── Borrar mi vídeo (si salió mal) ───────────── */
+
+/** «Borrar mi vídeo y repetirlo», con su pregunta antes. */
+function BorrarMiToma({ toma, onBorrado }: { toma: Moment; onBorrado?: () => void }) {
+  const { deleteMoment } = useStore();
+  const [borrando, setBorrando] = useState<'' | 'preguntar' | 'borrando'>('');
+  return (
+    <View style={{ alignItems: 'center', gap: 8 }}>
+      {borrando === 'preguntar' ? (
+        <>
+          <Text style={[styles.tipText, { marginTop: 0 }]}>
+            Se borrará tu vídeo del karaoke y podrás grabarlo otra vez. ¿Lo borramos?
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={async () => {
+                setBorrando('borrando');
+                try {
+                  await deleteMoment(toma.id);
+                  onBorrado?.();
+                } catch {
+                  // si falla, se puede volver a intentar
+                }
+                setBorrando('');
+              }}
+              style={[styles.pill, { backgroundColor: '#E8563F' }]}>
+              <Text style={[styles.pillText, { color: '#FFFFFF' }]}>Sí, borrarlo</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setBorrando('')}
+              style={[styles.pill, { backgroundColor: 'rgba(255,255,255,0.14)' }]}>
+              <Text style={[styles.pillText, { color: '#FFFFFF' }]}>Aún no</Text>
+            </Pressable>
+          </View>
+        </>
+      ) : (
+        <Pressable
+          accessibilityRole="button"
+          disabled={borrando === 'borrando'}
+          onPress={() => setBorrando('preguntar')}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, padding: 8 }}>
+          <Icon icon={Trash2} size={15} color="rgba(255,255,255,0.75)" />
+          <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 14, fontWeight: '600' }}>
+            {borrando === 'borrando' ? 'Borrando…' : 'Borrar mi vídeo y repetirlo'}
+          </Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -180,12 +234,11 @@ function Home({
   onSing: () => void;
   onWatch: () => void;
 }) {
-  const { user, me, deleteMoment } = useStore();
+  const { user, me } = useStore();
   const montaje = useMontaje(game);
   const cerrado = !canSing && !!montaje.video;
   // borrar mi vídeo (si salió mal) para poder cantar otra vez
   const mio = takes.find((m) => m.authorId === me);
-  const [borrando, setBorrando] = useState<'' | 'preguntar' | 'borrando'>('');
   const length = Math.round(game.end - game.start);
   const names = takes.map((m) => user(m.authorId).name.split(' ')[0]);
   return (
@@ -261,50 +314,7 @@ function Home({
           Ya has cantado. Cuando canten los demás, sus voces se suman al karaoke.
         </Text>
       )}
-      {canSing && mio && (
-        <View style={{ alignItems: 'center', gap: 8 }}>
-          {borrando === 'preguntar' ? (
-            <>
-              <Text style={[styles.tipText, { marginTop: 0 }]}>
-                Se borrará tu vídeo del karaoke y podrás grabarlo otra vez. ¿Lo borramos?
-              </Text>
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={async () => {
-                    setBorrando('borrando');
-                    try {
-                      await deleteMoment(mio.id);
-                    } catch {
-                      // si falla, se puede volver a intentar
-                    }
-                    setBorrando('');
-                  }}
-                  style={[styles.pill, { backgroundColor: '#E8563F' }]}>
-                  <Text style={[styles.pillText, { color: '#FFFFFF' }]}>Sí, borrarlo</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => setBorrando('')}
-                  style={[styles.pill, { backgroundColor: 'rgba(255,255,255,0.14)' }]}>
-                  <Text style={[styles.pillText, { color: '#FFFFFF' }]}>Aún no</Text>
-                </Pressable>
-              </View>
-            </>
-          ) : (
-            <Pressable
-              accessibilityRole="button"
-              disabled={borrando === 'borrando'}
-              onPress={() => setBorrando('preguntar')}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 6, padding: 8 }}>
-              <Icon icon={Trash2} size={15} color="rgba(255,255,255,0.75)" />
-              <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 14, fontWeight: '600' }}>
-                {borrando === 'borrando' ? 'Borrando…' : 'Borrar mi vídeo y repetirlo'}
-              </Text>
-            </Pressable>
-          )}
-        </View>
-      )}
+      {canSing && mio && <BorrarMiToma toma={mio} />}
       {canSing && !sung && (
         <View style={styles.tip}>
           <Icon icon={Headphones} size={18} color="rgba(255,255,255,0.75)" />
@@ -858,6 +868,7 @@ function Montage({
   takes,
   seed,
   groupId,
+  abierto,
   onBack,
 }: {
   game: KaraokeGame;
@@ -865,6 +876,8 @@ function Montage({
   takes: Moment[];
   seed: string;
   groupId: string;
+  /** si aún se puede cantar (y por tanto borrar tu vídeo para repetirlo) */
+  abierto: boolean;
   onBack: () => void;
 }) {
   const { user, me, group } = useStore();
@@ -1652,10 +1665,14 @@ function Montage({
           </Pressable>
         )}
       </View>
+      {/* tu vídeo salió mal: se borra aquí mismo y vuelves a la portada para repetirlo */}
+      {abierto && state !== 'playing' && takes.some((m) => m.authorId === me) && (
+        <BorrarMiToma toma={takes.find((m) => m.authorId === me)!} onBorrado={onBack} />
+      )}
       {mudos.length > 0 && (
         <Text style={styles.guardado}>
-          No se ha podido leer la voz de {mudos.map((u) => user(u).name.split(' ')[0]).join(' y ')}
-          . El vídeo con todas las voces no se guarda así; vuelve a intentarlo en un rato.
+          No se ha podido leer la voz de {mudos.map((u) => user(u).name.split(' ')[0]).join(' y ')}.
+          El vídeo con todas las voces no se guarda así; vuelve a intentarlo en un rato.
         </Text>
       )}
       {!!guardado && (
