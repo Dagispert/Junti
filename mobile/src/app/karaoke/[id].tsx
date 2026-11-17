@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Headphones, Mic, Play, RotateCcw, Send, Share2, X } from 'lucide-react-native';
+import { Headphones, Mic, Play, RotateCcw, Send, Share2, Trash2, X } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -180,9 +180,12 @@ function Home({
   onSing: () => void;
   onWatch: () => void;
 }) {
-  const { user } = useStore();
+  const { user, me, deleteMoment } = useStore();
   const montaje = useMontaje(game);
   const cerrado = !canSing && !!montaje.video;
+  // borrar mi vídeo (si salió mal) para poder cantar otra vez
+  const mio = takes.find((m) => m.authorId === me);
+  const [borrando, setBorrando] = useState<'' | 'preguntar' | 'borrando'>('');
   const length = Math.round(game.end - game.start);
   const names = takes.map((m) => user(m.authorId).name.split(' ')[0]);
   return (
@@ -258,11 +261,56 @@ function Home({
           Ya has cantado. Cuando canten los demás, sus voces se suman al karaoke.
         </Text>
       )}
+      {canSing && mio && (
+        <View style={{ alignItems: 'center', gap: 8 }}>
+          {borrando === 'preguntar' ? (
+            <>
+              <Text style={[styles.tipText, { marginTop: 0 }]}>
+                Se borrará tu vídeo del karaoke y podrás grabarlo otra vez. ¿Lo borramos?
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={async () => {
+                    setBorrando('borrando');
+                    try {
+                      await deleteMoment(mio.id);
+                    } catch {
+                      // si falla, se puede volver a intentar
+                    }
+                    setBorrando('');
+                  }}
+                  style={[styles.pill, { backgroundColor: '#E8563F' }]}>
+                  <Text style={[styles.pillText, { color: '#FFFFFF' }]}>Sí, borrarlo</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setBorrando('')}
+                  style={[styles.pill, { backgroundColor: 'rgba(255,255,255,0.14)' }]}>
+                  <Text style={[styles.pillText, { color: '#FFFFFF' }]}>Aún no</Text>
+                </Pressable>
+              </View>
+            </>
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              disabled={borrando === 'borrando'}
+              onPress={() => setBorrando('preguntar')}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 6, padding: 8 }}>
+              <Icon icon={Trash2} size={15} color="rgba(255,255,255,0.75)" />
+              <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 14, fontWeight: '600' }}>
+                {borrando === 'borrando' ? 'Borrando…' : 'Borrar mi vídeo y repetirlo'}
+              </Text>
+            </Pressable>
+          )}
+        </View>
+      )}
       {canSing && !sung && (
         <View style={styles.tip}>
           <Icon icon={Headphones} size={18} color="rgba(255,255,255,0.75)" />
           <Text style={[styles.tipText, { textAlign: 'left' }]}>
-            Con cascos suena mucho mejor: así solo se graba tu voz y la canción se pone después.
+            Mientras grabas, la canción suena muy bajita para que no se cuele en tu vídeo: guíate
+            por la letra. Luego se pone debajo de todas las voces.
           </Text>
         </View>
       )}
@@ -357,6 +405,34 @@ function Recorder({
   const [take, setTake] = useState<Take | null>(null);
   const stopRef = useRef<() => void>(() => {});
 
+  // El volumen de la canción: al grabar, casi sin oírse (2 %) para que no se
+  // cuele en tu vídeo; al revisar, normal. Va por Web Audio porque el iPhone
+  // no deja cambiar el volumen de un audio normal.
+  const sonido = useRef<{ ctx: AudioContext; gain: GainNode } | null>(null);
+  const conVolumen = (a: HTMLAudioElement) => {
+    if (sonido.current) return;
+    try {
+      const Ctx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      const ctx = new Ctx();
+      const gain = ctx.createGain();
+      ctx.createMediaElementSource(a).connect(gain).connect(ctx.destination);
+      ctx.resume().catch(() => {});
+      sonido.current = { ctx, gain };
+    } catch {
+      // sin Web Audio: se usa el volumen del audio (vale en Android y ordenador)
+    }
+  };
+  const volumen = (v: number) => {
+    const a = audio.current;
+    if (sonido.current) {
+      sonido.current.ctx.resume().catch(() => {});
+      sonido.current.gain.gain.value = v;
+    } else if (a) a.volume = v;
+  };
+  useEffect(() => () => void sonido.current?.ctx.close().catch(() => {}), []);
+
   // La cámara frontal y el micrófono.
   useEffect(() => {
     if (!canRecord()) {
@@ -382,6 +458,8 @@ function Recorder({
       );
     const a = new Audio();
     a.preload = 'auto';
+    // (para poder pasarla por Web Audio y bajarle el volumen)
+    a.crossOrigin = 'anonymous';
     a.src = url;
     audio.current = a;
     return () => {
@@ -396,6 +474,8 @@ function Recorder({
   const start = () => {
     const a = audio.current;
     if (!a || !stream.current) return;
+    conVolumen(a);
+    volumen(VOL_GRABANDO);
     // En iPhone el audio solo arranca tras un toque: se «despierta» ahora, en silencio.
     a.muted = true;
     a.play()
@@ -508,6 +588,8 @@ function Recorder({
     }
     v.currentTime = take.offset;
     a.currentTime = game.start;
+    // al revisar, la canción se oye normal
+    volumen(1);
     setReviewing(true);
     Promise.all([v.play(), a.play()]).catch(() => setReviewing(false));
     const sync = () => {
@@ -1596,6 +1678,8 @@ const CIERRE_S = 4;
 
 /** Volumen de la canción y de las voces en el montaje. */
 const MUSICA = 0.1;
+/** Lo que suena la canción mientras grabas (para que no se cuele en tu vídeo). */
+const VOL_GRABANDO = 0.02;
 const VOZ = 1.6;
 
 /** Lo que dura la portada antes de que empiece el montaje. */
