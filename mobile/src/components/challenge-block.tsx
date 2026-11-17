@@ -9,7 +9,6 @@ import type { Moment, Proposal } from '@/data/types';
 import { useFamily, useFamilyColorMode } from '@/lib/families';
 import { daysLeft } from '@/lib/time';
 
-import { ComentariosJuego } from './comentarios-juego';
 import { FamilyCard, FamilyTag } from './family';
 import { Icon } from './icon';
 import { MomentCard } from './moment-card';
@@ -378,7 +377,6 @@ export function ChallengeBlock({ challenge, answers }: { challenge: Proposal; an
           {participated}
         </Text>
       </View>
-      <ComentariosJuego proposalId={challenge.id} placeholder="Comentar el reto…" />
     </FamilyCard>
   );
 }
