@@ -10,6 +10,7 @@ import { Icon } from '@/components/icon';
 import { Avatar } from '@/components/ui';
 import { errorText, useStore } from '@/data/store';
 import type { KaraokeGame, Moment } from '@/data/types';
+import { apuntarError } from '@/lib/errores';
 import { shareFile } from '@/lib/export-media';
 import { canRecord, partAt, planMontage, recorderType, trackUrl } from '@/lib/karaoke';
 import {
@@ -19,6 +20,9 @@ import {
   difuminar,
   imagenLimpia,
   pildora,
+  pintarAvatar,
+  pintarLogo,
+  pintarPalabra,
   pintarVideo,
   subirMontaje,
   textoCentrado,
@@ -769,6 +773,10 @@ function Montage({
     difuso: HTMLCanvasElement | null;
     fase: 'portada' | 'canto' | 'cierre';
     t0: number;
+    /** las fotos de perfil de quien canta (por toma) */
+    caras: Map<string, HTMLImageElement | null>;
+    /** cada fotograma dibujado se manda a la grabación (algunos navegadores dejan de captarlos solos) */
+    fotograma: () => void;
   } | null>(null);
   const [guardado, setGuardado] = useState<'' | 'grabando' | 'subiendo' | 'listo' | 'error'>('');
   const [archivo, setArchivo] = useState<Blob | null>(null);
@@ -894,7 +902,13 @@ function Montage({
         const ab = await p;
         if (!ab) continue;
         try {
-          out.set(id, await c.decodeAudioData(ab.slice(0)));
+          // como mucho unos segundos por archivo: si no, se empieza sin esa voz
+          const buf = await Promise.race([
+            c.decodeAudioData(ab.slice(0)),
+            new Promise<null>((r) => setTimeout(() => r(null), 8000)),
+          ]);
+          if (buf) out.set(id, buf);
+          else apuntarError(new Error(`Karaoke: tarda en preparar el sonido (${id})`), 'aviso');
         } catch {
           // sin sonido para esa voz: el vídeo sale igual
         }
@@ -907,7 +921,17 @@ function Montage({
     introTimer.current = setTimeout(async () => {
       const buffers = await sonido.current!;
       // si decodificar tardó más que la portada, se empieza en cuanto esté
-      setTimeout(() => play(buffers), Math.max(0, INTRO_MS - (performance.now() - desde)));
+      setTimeout(
+        () => {
+          try {
+            play(buffers);
+          } catch (e) {
+            apuntarError(e, 'error');
+            setState('ready');
+          }
+        },
+        Math.max(0, INTRO_MS - (performance.now() - desde)),
+      );
     }, 0);
   };
 
@@ -926,10 +950,8 @@ function Montage({
       silencio.offset.value = 0;
       silencio.connect(dest);
       silencio.start();
-      const stream = new MediaStream([
-        ...lienzo.captureStream(30).getVideoTracks(),
-        ...dest.stream.getAudioTracks(),
-      ]);
+      const pistaVideo = lienzo.captureStream(30).getVideoTracks();
+      const stream = new MediaStream([...pistaVideo, ...dest.stream.getAudioTracks()]);
       const rec = new MediaRecorder(stream, {
         mimeType: recorderType() || undefined,
         videoBitsPerSecond: 3_000_000,
@@ -947,7 +969,12 @@ function Montage({
         difuso: null,
         fase: 'portada',
         t0: performance.now(),
+        caras: new Map(),
+        fotograma: () =>
+          (pistaVideo[0] as MediaStreamTrack & { requestFrame?: () => void })?.requestFrame?.(),
       };
+      for (const m of takes)
+        imagenLimpia(user(m.authorId).avatarUri).then((img) => g.caras.set(m.id, img));
       grab.current = g;
       imagenLimpia(game.artwork).then((img) => {
         if (!img || grab.current !== g) return;
@@ -968,6 +995,7 @@ function Montage({
           actual.difuso,
           (performance.now() - actual.t0) / 1000,
         );
+        actual.fotograma();
         requestAnimationFrame(portada);
       };
       requestAnimationFrame(portada);
@@ -1025,8 +1053,8 @@ function Montage({
       c2d.save();
       c2d.globalAlpha = k;
       c2d.shadowColor = 'rgba(0,0,0,0.55)';
-      c2d.shadowBlur = 50;
-      c2d.shadowOffsetY = 20;
+      c2d.shadowBlur = 24;
+      c2d.shadowOffsetY = 12;
       c2d.beginPath();
       c2d.roundRect((ANCHO - l) / 2, 330 + (lado - l) / 2, l, l, 28);
       c2d.clip();
@@ -1045,7 +1073,15 @@ function Montage({
     c2d.restore();
     c2d.save();
     c2d.globalAlpha = ent(1.1);
-    textoCentrado(c2d, `Cantan ${quienesCantan}`, 1080, 30, 600, '#F6C945');
+    // las caras de quienes cantan, en fila
+    const r = 30;
+    const paso = r * 1.5;
+    const x0 = ANCHO / 2 - ((takes.length - 1) * paso) / 2;
+    takes.forEach((m, i) => {
+      const cara = caraDe(m.id);
+      pintarAvatar(c2d, cara.img, cara.inicial, x0 + i * paso, 1050, r);
+    });
+    textoCentrado(c2d, `Cantan ${quienesCantan}`, 1130, 30, 600, '#F6C945');
     c2d.restore();
   };
 
@@ -1062,33 +1098,37 @@ function Montage({
       const x = Math.max(0, Math.min(1, (u - desde) / dura));
       return 1 - Math.pow(1 - x, 3);
     };
+    // el logo, con la animación de la pantalla de carga, y debajo «junti»
+    pintarLogo(c2d, ANCHO / 2, 470, 190, Math.min(1, u / 1.6));
     c2d.save();
-    const k = ent(0.15, 0.7);
+    const k = ent(1.2, 0.6);
     c2d.globalAlpha = k;
-    c2d.font = '500 132px Fraunces_500Medium, Georgia, serif';
-    c2d.textAlign = 'center';
-    c2d.textBaseline = 'alphabetic';
-    c2d.fillStyle = '#FFFFFF';
-    c2d.shadowColor = 'rgba(0,0,0,0.4)';
-    c2d.shadowBlur = 30;
-    c2d.fillText('junti', ANCHO / 2, 640 + (1 - k) * 30);
+    pintarPalabra(c2d, ANCHO / 2, 650 + (1 - k) * 20, 92);
     c2d.restore();
     c2d.save();
-    c2d.globalAlpha = ent(0.6);
-    textoCentrado(c2d, grupo?.name ?? '', 730, 36, 600, '#FFFFFF');
+    c2d.globalAlpha = ent(1.6);
+    textoCentrado(c2d, grupo?.name ?? '', 790, 36, 600, '#FFFFFF');
     textoCentrado(
       c2d,
       `${game.song}${game.artist ? ` · ${game.artist}` : ''}`,
-      785,
+      845,
       28,
       500,
       'rgba(255,255,255,0.7)',
     );
     c2d.restore();
     c2d.save();
-    c2d.globalAlpha = ent(1);
+    c2d.globalAlpha = ent(2);
     textoCentrado(c2d, 'Cerca, aunque estéis lejos', 1120, 26, 500, 'rgba(255,255,255,0.55)');
     c2d.restore();
+  };
+
+  const caraDe = (tomaId: string) => {
+    const m = takes.find((x) => x.id === tomaId);
+    return {
+      img: grab.current?.caras.get(tomaId),
+      inicial: m ? user(m.authorId).name : '?',
+    };
   };
 
   const pintarFotograma = (singing: string[], verso: number, solo?: Moment) => {
@@ -1116,6 +1156,7 @@ function Montage({
           : '',
       28,
       48,
+      singing.map(caraDe),
     );
     if (verso >= 0 && versos[verso]) {
       const alto = textoCentrado(c2d, versos[verso].text, ALTO - 190, 46, 700, '#FFFFFF');
@@ -1243,7 +1284,22 @@ function Montage({
       }
       if (grab.current) {
         const solo = singing.length === 1 ? takes.find((m) => m.id === singing[0]) : undefined;
-        pintarFotograma(singing, versoVisto, solo);
+        try {
+          pintarFotograma(singing, versoVisto, solo);
+          grab.current?.fotograma();
+        } catch (e) {
+          // si dibujar falla, se sigue viendo el karaoke (sin grabarlo)
+          apuntarError(e, 'error');
+          const g = grab.current;
+          grab.current = null;
+          if (g.rec.state !== 'inactive') {
+            g.rec.onstop = null;
+            g.rec.stop();
+          }
+          setGuardado('error');
+        }
+      }
+      if (grab.current) {
         // la portada del montaje: un fotograma de la mitad
         if (!grab.current.portada && t > duration / 2) {
           const g = grab.current;
@@ -1281,6 +1337,7 @@ function Montage({
             if (grab.current !== g || g.rec.state !== 'recording') return;
             const u = (performance.now() - desde) / 1000;
             pintarCierre(g.c2d, g.difuso, u);
+            g.fotograma();
             if (u < CIERRE_S) requestAnimationFrame(cierre);
             else terminarGrabacion();
           };
@@ -1353,7 +1410,24 @@ function Montage({
             <View style={styles.progress}>
               <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
             </View>
-            <View style={styles.who}>
+            <View style={[styles.who, { flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
+              <View style={{ flexDirection: 'row' }}>
+                {active.map((tid, i) => {
+                  const t = takes.find((m) => m.id === tid);
+                  return t ? (
+                    <View
+                      key={tid}
+                      style={{
+                        marginLeft: i ? -8 : 0,
+                        borderRadius: 13,
+                        borderWidth: 2,
+                        borderColor: '#FFFFFF',
+                      }}>
+                      <Avatar userId={t.authorId} size={22} />
+                    </View>
+                  ) : null;
+                })}
+              </View>
               <Text style={styles.whoText}>
                 {grid
                   ? 'Todos juntos'
@@ -1422,7 +1496,7 @@ function Montage({
 }
 
 /** Lo que dura el cierre de Junti al final del vídeo grabado. */
-const CIERRE_S = 2.8;
+const CIERRE_S = 4;
 
 /** Volumen de la canción y de las voces en el montaje. */
 const MUSICA = 0.1;
@@ -1474,7 +1548,6 @@ function TitleCard({
           "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
         cursor: state === 'loading' || intro ? 'default' : 'pointer',
         zIndex: 5,
-        ...(intro ? { animation: `kOut 600ms ease ${INTRO_MS - 600}ms both` } : {}),
       }}>
       <style>{`
         @keyframes kCover { from { opacity: 0; transform: scale(.55) rotate(-8deg) } to { opacity: 1; transform: none } }
