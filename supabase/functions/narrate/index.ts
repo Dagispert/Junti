@@ -487,7 +487,7 @@ Deno.serve(async (req) => {
       const msg = e instanceof Error ? e.message : String(e);
       if (!msg.startsWith('busy') && !msg.includes('texto válido')) throw e;
       console.error(msg);
-      parsed = await restingNarration(style, kind!, moments);
+      parsed = await restingNarration(style, kind!, moments, { groupId, from, to, optedOut });
       model = 'plantilla';
     }
 
@@ -2340,10 +2340,137 @@ const TONES: Record<string, Tone> = {
   },
 };
 
+/**
+ * Los minijuegos, retos, encuestas, quiz, preguntas y canciones del periodo,
+ * contados con frases hechas (sin IA) para la versión corta de la narradora.
+ * Si algo sigue abierto, no se desvela (ni la solución del zoom, ni los dibujos).
+ */
+async function escenasExtrasSinIA(o: {
+  groupId: string;
+  from: number;
+  to: number;
+  optedOut: Set<string>;
+}): Promise<Scene[]> {
+  const since = new Date(o.from).toISOString(),
+    until = new Date(o.to).toISOString();
+  const [{ data: retos }, { data: qs }, { data: songs }] = await Promise.all([
+    supabase.from('proposals').select('id, title, created_by, ends_at, game').eq('group_id', o.groupId).eq('kind', 'challenge').gte('starts_at', since).lt('starts_at', until).order('starts_at'),
+    supabase.from('questions').select('id, created_by, kind, title, options, closes_at').eq('group_id', o.groupId).gte('created_at', since).lt('created_at', until).order('created_at'),
+    supabase.from('songs').select('id, added_by, title, artist').eq('group_id', o.groupId).gte('created_at', since).lt('created_at', until).order('created_at'),
+  ]);
+  const ids = new Set<string>();
+  for (const r of retos ?? []) if (r.created_by) ids.add(r.created_by);
+  for (const q of qs ?? []) ids.add(q.created_by);
+  for (const x of songs ?? []) ids.add(x.added_by);
+  const retoIds = (retos ?? []).map((r) => r.id);
+  const [{ data: autores }, { data: answers }, { data: respZoom }] = await Promise.all([
+    retoIds.length
+      ? supabase.from('moments').select('proposal_id, author_id').in('proposal_id', retoIds).is('deleted_at', null)
+      : Promise.resolve({ data: [] as { proposal_id: string; author_id: string }[] }),
+    (qs ?? []).length
+      ? supabase.from('question_answers').select('question_id, choice').in('question_id', (qs ?? []).map((q) => q.id))
+      : Promise.resolve({ data: [] as { question_id: string; choice: number | null }[] }),
+    retoIds.length
+      ? supabase.from('juego_respuestas').select('proposal_id, user_id, acierto').in('proposal_id', retoIds)
+      : Promise.resolve({ data: [] as { proposal_id: string; user_id: string; acierto: boolean }[] }),
+  ]);
+  for (const a of autores ?? []) ids.add(a.author_id);
+  for (const z of respZoom ?? []) ids.add(z.user_id);
+  const { data: people } = await supabase.from('profiles').select('id, name, nickname').in('id', [...ids]);
+  const nombre = (id?: string | null) => {
+    const p = (people ?? []).find((x) => x.id === id);
+    return p?.nickname || (p?.name ?? 'Alguien').split(' ')[0];
+  };
+  const lista = (xs: string[]) =>
+    xs.length <= 1 ? (xs[0] ?? '') : `${xs.slice(0, -1).join(', ')} y ${xs[xs.length - 1]}`;
+  const corta = (t: string, n = 80) => (t.length > n ? `${t.slice(0, n - 3).replace(/\s\S*$/, '')}…` : t);
+  const now = Date.now();
+  const juegos: Scene[] = [];
+  const resto: Scene[] = [];
+  for (const r of retos ?? []) {
+    if (r.created_by && o.optedOut.has(r.created_by)) continue;
+    const g = (r.game ?? {}) as Record<string, unknown> & { type?: string };
+    const abierto = !r.ends_at || Date.parse(r.ends_at) > now;
+    const quienes = [...new Set((autores ?? []).filter((a) => a.proposal_id === r.id && !o.optedOut.has(a.author_id)).map((a) => a.author_id))];
+    const ref = `reto:${r.id}`;
+    if (g.type === 'karaoke') {
+      const voces = ((g.montaje as { voces?: string[] } | undefined)?.voces ?? quienes).filter((id) => !o.optedOut.has(id));
+      juegos.push({
+        moment_id: ref,
+        text: voces.length
+          ? `Y hubo karaoke: ${lista(voces.map(nombre))} cantaron «${g.song}»${g.artist ? ` de ${g.artist}` : ''}.`
+          : `${nombre(r.created_by)} propuso un karaoke con «${g.song}». ¿Quién se anima a cantar?`,
+      });
+    } else if (g.type === 'cuento') {
+      const cierre = (g.cierre as { texto?: string } | undefined)?.texto;
+      juegos.push({
+        moment_id: ref,
+        text:
+          `Hubo cuento a trozos: empezaba «${corta(String(g.inicio ?? ''))}»` +
+          (quienes.length ? ` y lo siguieron ${lista(quienes.map(nombre))}.` : '. ¿Quién lo sigue?') +
+          (cierre ? ` Y el final: «${corta(cierre, 120)}»` : ''),
+      });
+    } else if (g.type === 'zoom') {
+      const ok = (respZoom ?? []).filter((z) => z.proposal_id === r.id && z.acierto && !o.optedOut.has(z.user_id)).map((z) => nombre(z.user_id));
+      let sol = '';
+      if (!abierto) {
+        const { data } = await supabase.from('juego_secretos').select('respuesta').eq('proposal_id', r.id).maybeSingle();
+        sol = data?.respuesta ?? '';
+      }
+      juegos.push({
+        moment_id: ref,
+        text: abierto
+          ? `${nombre(r.created_by)} propuso un zoom misterioso${ok.length ? `, y ${lista(ok)} ya lo ${ok.length > 1 ? 'han' : 'ha'} adivinado` : ''}. ¿Qué será?`
+          : `En el zoom misterioso de ${nombre(r.created_by)}${ok.length ? `, lo ${ok.length > 1 ? 'adivinaron' : 'adivinó'} ${lista(ok)}` : ', nadie lo adivinó'}${sol ? `: era «${sol}»` : ''}.`,
+      });
+    } else if (g.type === 'dibujo') {
+      const pasos = ((g.pasos as unknown[]) ?? []).length;
+      if (abierto) {
+        juegos.push({ moment_id: ref, text: `Un dibujo a ciegas va pasando de mano en mano: ya lleva ${pasos} ${pasos === 1 ? 'paso' : 'pasos'}.` });
+      } else {
+        const { data: fr } = await supabase.from('dibujo_pasos').select('texto').eq('proposal_id', r.id).eq('tipo', 'frase').order('orden');
+        const a = fr?.[0]?.texto, b = fr && fr.length > 1 ? fr[fr.length - 1].texto : null;
+        juegos.push({
+          moment_id: ref,
+          text: a && b ? `Y el dibujo a ciegas empezó en «${a}» y acabó en «${b}».` : 'Y hubo dibujo a ciegas, pasando de mano en mano.',
+        });
+      }
+    } else {
+      resto.push({
+        moment_id: ref,
+        text: `${nombre(r.created_by)} lanzó el reto «${corta(r.title)}»${quienes.length ? ` y se animaron ${lista(quienes.map(nombre))}` : ''}.`,
+      });
+    }
+  }
+  for (const q of (qs ?? []) as QuestionRow[]) {
+    if (o.optedOut.has(q.created_by)) continue;
+    const ref = `q:${q.id}`;
+    if (q.kind === 'poll') {
+      const opts = q.options ?? [];
+      const votos = opts.map((_, i) => (answers ?? []).filter((a) => a.question_id === q.id && a.choice === i).length);
+      const max = Math.max(0, ...votos);
+      const gana = max > 0 && votos.filter((v) => v === max).length === 1 ? opts[votos.indexOf(max)] : '';
+      resto.push({ moment_id: ref, text: `${nombre(q.created_by)} preguntó «${corta(q.title)}»${gana ? ` y ganó «${gana}»` : ''}.` });
+    } else if (q.kind === 'quiz') {
+      resto.push({ moment_id: ref, text: `${nombre(q.created_by)} os puso a prueba con un quiz: «${corta(q.title)}».` });
+    } else {
+      resto.push({ moment_id: ref, text: `${nombre(q.created_by)} os preguntó «${corta(q.title)}».` });
+    }
+  }
+  for (const x of songs ?? []) {
+    if (o.optedOut.has(x.added_by)) continue;
+    resto.push({ moment_id: `song:${x.id}`, text: `${nombre(x.added_by)} añadió «${x.title}» de ${x.artist} a la banda sonora.` });
+  }
+  // los minijuegos siempre; de lo demás, unos pocos
+  return [...juegos, ...resto.slice(0, 3)];
+}
+
 async function restingNarration(
   style: string,
   kind: string,
   moments: MomentRow[],
+  /** el periodo: para contar también minijuegos, retos, encuestas y canciones */
+  periodo?: { groupId: string; from: number; to: number; optedOut: Set<string> },
 ): Promise<{ title: string; body: string; scenes: Scene[] }> {
   const tone = TONES[style] ?? TONES.emotivo;
   const ids = moments.map((m) => m.id);
@@ -2402,12 +2529,24 @@ async function restingNarration(
       .replace('{city}', city);
     scenes.push({ moment_id: m.id, text: line.charAt(0).toUpperCase() + line.slice(1) });
   });
+  // lo demás del periodo (minijuegos primero), cada uno con su escena y animación
+  if (periodo) {
+    try {
+      scenes.push(...(await escenasExtrasSinIA(periodo)));
+    } catch (e) {
+      console.error('extras sin IA', e);
+    }
+  }
   scenes.push({
     moment_id: 'stats',
     text: tone.stats
       .replace('{n}', String(moments.length))
       .replace('{r}', String(r ?? 0))
-      .replace('{c}', String(c ?? 0)),
+      .replace('{c}', String(c ?? 0))
+      // (el singular)
+      .replace(/\b1 momentos\b/, 'un momento')
+      .replace(/\b1 reacciones\b/, 'una reacción')
+      .replace(/\b1 comentarios\b/, 'un comentario'),
   });
   scenes.push({ moment_id: 'end', text: tone.bye });
   return { title: tone.title, body: scenes.map((s) => s.text).join('\n\n'), scenes };
