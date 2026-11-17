@@ -5,7 +5,7 @@
 Un minijuego no está terminado hasta que tiene:
 
 1. **Su pantalla** para jugar (`mobile/src/app/<juego>/[id].tsx`) y la de crearlo (`new-<juego>.tsx`), con su entrada en «Minijuegos» del «+» (`app/add.tsx`).
-2. **Su tarjeta propia en «Hoy»** (`components/minijuegos-hoy.tsx`), con identidad visual propia, animación de entrada y la inclinación 3D (`lib/inclinacion.ts`).
+2. **Su tarjeta propia en «Hoy»** (`components/minijuegos-hoy.tsx`), con identidad visual propia, animación de entrada y la inclinación 3D (`lib/inclinacion.ts`; en iPhone no se usa: nunca pedir el permiso de movimiento).
 3. **Comentarios** (`ComentariosJuego`), también mientras está abierto (con un aviso de no destripar si hace falta).
 4. **Su versión en las historias de la semana y el mes**: los datos en `lib/juegos-pelicula.ts` (`cargarJuegos`), su tipo en `pelicula/guion.ts` (`JuegoPieza` y `TipoPieza`) y su animación en `pelicula/mesa.ts`. Si sigue abierto, sin desvelar nada.
 5. **Su fotograma en el carrete del mes** (`useFotogramasJuegos` y `rutaJuego` en `lib/juegos-pelicula.ts`), sin destripar si sigue abierto.

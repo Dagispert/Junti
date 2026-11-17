@@ -2,7 +2,7 @@
 // mueve un poco según cómo lo sostienes (como si fuera 3D). Una sola escucha
 // para toda la app; cada elemento recibe las variables CSS --ix y --iy (de -1
 // a 1) y sus capas se desplazan con calc(var(--ix) * N px).
-// En el iPhone hay que pedir permiso: se pide con el primer toque en la app.
+// En el iPhone no se usa: pide permiso cada vez que se abre la app.
 
 import { type RefObject, useEffect } from 'react';
 import { Platform } from 'react-native';
@@ -48,40 +48,10 @@ function paso() {
 export function arrancar() {
   if (arrancado || Platform.OS !== 'web' || typeof window === 'undefined') return;
   arrancado = true;
-  // Se escucha desde el principio: si el móvil ya dio permiso (o no lo pide,
-  // como Android), se mueve sin tocar nada.
-  let llega = false;
-  const primero = (e: DeviceOrientationEvent) => {
-    if (e.beta != null) llega = true;
-  };
-  window.addEventListener('deviceorientation', primero);
+  // Android lo da sin preguntar. En el iPhone NO se pide permiso: Safari lo
+  // vuelve a preguntar cada vez que se abre la app (insoportable), así que
+  // allí las tarjetas se quedan quietas (si algún día llega sin pedirlo, se usa).
   window.addEventListener('deviceorientation', alGirar);
-  const D = window.DeviceOrientationEvent as unknown as
-    | { requestPermission?: () => Promise<'granted' | 'denied'> }
-    | undefined;
-  if (D?.requestPermission) {
-    // iPhone: si no llega nada, hay que pedir permiso, y Safari solo deja
-    // pedirlo dentro de un toque de verdad (no al deslizar). Se intenta en cada
-    // toque hasta que se concede; si ya se había dado, no vuelve a preguntar.
-    let pidiendo = false;
-    const pedir = () => {
-      if (llega) return quitar();
-      if (pidiendo) return;
-      pidiendo = true;
-      D.requestPermission!()
-        .then((r) => r === 'granted' && quitar())
-        .catch(() => {})
-        .finally(() => {
-          pidiendo = false;
-        });
-    };
-    const quitar = () => {
-      window.removeEventListener('click', pedir);
-      window.removeEventListener('touchend', pedir);
-    };
-    window.addEventListener('click', pedir);
-    window.addEventListener('touchend', pedir);
-  }
   window.addEventListener('pointermove', alMover);
 }
 
