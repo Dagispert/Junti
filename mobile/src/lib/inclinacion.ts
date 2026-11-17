@@ -20,10 +20,11 @@ function alGirar(e: DeviceOrientationEvent) {
   if (e.beta == null || e.gamma == null) return;
   // la postura con la que se coge el móvil cuenta como «recto»
   base ??= { beta: e.beta, gamma: e.gamma };
-  base.beta += (e.beta - base.beta) * 0.005;
-  base.gamma += (e.gamma - base.gamma) * 0.005;
-  objetivoX = Math.max(-1, Math.min(1, (e.gamma - base.gamma) / 25));
-  objetivoY = Math.max(-1, Math.min(1, (e.beta - base.beta) / 25));
+  // poco a poco, la nueva postura pasa a ser la «recta»
+  base.beta += (e.beta - base.beta) * 0.002;
+  base.gamma += (e.gamma - base.gamma) * 0.002;
+  objetivoX = Math.max(-1, Math.min(1, (e.gamma - base.gamma) / 18));
+  objetivoY = Math.max(-1, Math.min(1, (e.beta - base.beta) / 18));
 }
 
 // En el ordenador: con el ratón.
@@ -51,12 +52,23 @@ function arrancar() {
     | undefined;
   if (D?.requestPermission) {
     // iPhone: el permiso solo se puede pedir tras un toque
+    // (Safari solo lo deja pedir dentro de un «click» o «touchend»)
+    let pedido = false;
     const pedir = () => {
+      if (pedido) return;
+      pedido = true;
+      window.removeEventListener('click', pedir);
+      window.removeEventListener('touchend', pedir);
       D.requestPermission!()
-        .then((r) => r === 'granted' && window.addEventListener('deviceorientation', alGirar))
-        .catch(() => {});
+        .then((r) => {
+          if (r === 'granted') window.addEventListener('deviceorientation', alGirar);
+        })
+        .catch(() => {
+          pedido = false;
+        });
     };
-    window.addEventListener('pointerup', pedir, { once: true });
+    window.addEventListener('click', pedir);
+    window.addEventListener('touchend', pedir);
   } else {
     window.addEventListener('deviceorientation', alGirar);
   }
