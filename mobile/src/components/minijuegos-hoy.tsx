@@ -1,17 +1,19 @@
 // Cada minijuego tiene su propia tarjeta en «Hoy», con su identidad: el
-// karaoke es un bar de karaoke (neón, la canción que se ilumina como una letra y
-// un ecualizador); el cuento a trozos, una
+// karaoke es un póster de los 80-90 con su tele de tubo (y se mueve con la
+// inclinación del móvil); el cuento a trozos, una
 // página de libreta escrita a mano.
 
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { BookOpen, Lock, Mic, Play } from 'lucide-react-native';
+import { useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Hand, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import type { Moment, Proposal } from '@/data/types';
 import { useEsquema } from '@/lib/appearance';
+import { capa, useInclinacion } from '@/lib/inclinacion';
 import { useMontaje } from '@/lib/montaje';
 import { daysLeft } from '@/lib/time';
 
@@ -25,87 +27,314 @@ const plazo = (p: Proposal) => {
   return d ? (d === 1 ? 'queda 1 día' : `quedan ${d} días`) : '';
 };
 
-/* ───────────── Karaoke: un bar de karaoke de noche ───────────── */
+/* ───────────── Karaoke: un póster de los 80-90 con su tele de tubo ───────────── */
 
-const NEON = '#FF4FA3';
-const CIAN = '#5BE7FF';
-const ORO = '#FFD25E';
-const FONDO = '#140F24';
+const NARANJA = '#FF5B1F';
+const ROJO_P = '#E5322B';
+const MORADO = '#8F72F5';
+const AMARILLO = '#FFC93C';
+const CREMA_P = '#FFF1D6';
+const TINTA_P = '#1E1636';
 
-// Las animaciones del karaoke (una sola vez en la página).
-const ANIM_KARAOKE = `
-@keyframes kNeon { 0%,18%,22%,60%,64%,100% { opacity: 1 } 20%,62% { opacity: .35 } }
-@keyframes kBarrido { 0% { clip-path: inset(0 100% 0 0) } 70%,100% { clip-path: inset(0 0 0 0) } }
-@keyframes kEq { 0%,100% { transform: scaleY(.25) } 50% { transform: scaleY(1) } }
-@keyframes kAro { 0% { transform: scale(1); opacity: .7 } 100% { transform: scale(1.45); opacity: 0 } }
-`;
+/** Letras gordas con relieve: un borde y varias sombras en escalera. */
+const relieve = (lado: string, borde: string, prof = 6) =>
+  [
+    `-2px -2px 0 ${borde}`,
+    `2px -2px 0 ${borde}`,
+    `-2px 2px 0 ${borde}`,
+    `2px 2px 0 ${borde}`,
+    ...Array.from(
+      { length: prof },
+      (_, i) => `${i + 3}px ${i + 3}px 0 ${i === prof - 1 ? borde : lado}`,
+    ),
+  ].join(', ');
+
+/** Un destello de cuatro puntas. */
+function Destello({ size, style }: { size: number; style?: React.CSSProperties }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 100 100"
+      style={{ position: 'absolute', overflow: 'visible', ...style }}>
+      <path
+        d="M50 0 C55 35 65 45 100 50 C65 55 55 65 50 100 C45 65 35 55 0 50 C35 45 45 35 50 0Z"
+        fill={AMARILLO}
+        stroke={TINTA_P}
+        strokeWidth={5}
+      />
+    </svg>
+  );
+}
 
 export function KaraokeHoy({ challenge, answers }: { challenge: Proposal; answers: Moment[] }) {
-  const { me } = useStore();
+  const { me, user } = useStore();
   const game = challenge.game!;
   const abierto = !challenge.endsAt || challenge.endsAt > Date.now();
   const voces = [...new Set([...answers.map((m) => m.authorId), ...(game.montaje?.voces ?? [])])];
   const cantado = voces.includes(me);
   const montaje = useMontaje(game);
+  // en la tele: el montaje; si aún no, la última toma; si nadie ha cantado, la carátula
+  const ultima = [...answers].filter((m) => m.videoUri).sort((a, b) => b.sharedAt - a.sharedAt)[0];
+  const enLaTele = montaje.video ?? ultima?.videoUri;
   const ir = (watch?: boolean) =>
     router.push({
       pathname: '/karaoke/[id]',
       params: { id: challenge.id, ...(watch ? { watch: '1' } : {}) },
     });
-
+  const caja = useRef<HTMLDivElement | null>(null);
+  useInclinacion(caja);
   return (
     <div
+      ref={caja}
       style={{
         position: 'relative',
-        borderRadius: 28,
-        overflow: 'hidden',
-        background: `radial-gradient(ellipse at 50% 0%, #2B1C4D 0%, ${FONDO} 65%)`,
-        padding: 18,
-        boxShadow: '0 18px 40px rgba(20,22,26,0.22)',
+        marginTop: 26,
         fontFamily:
           '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+        // toda la tarjeta se inclina un poco con el móvil
+        transform:
+          'perspective(900px) rotateY(calc(var(--ix, 0) * 4deg)) rotateX(calc(var(--iy, 0) * -3deg))',
       }}>
-      <style>{ANIM_KARAOKE}</style>
-      {/* la carátula, como luz de fondo */}
-      {!!game.artwork && (
-        <div
-          style={{
-            position: 'absolute',
-            inset: -40,
-            background: `url("${game.artwork}") center / cover`,
-            filter: 'blur(40px) saturate(1.4)',
-            opacity: 0.22,
-          }}
-        />
-      )}
-      {/* puntitos de luz, como un bar */}
+      {/* el póster: naranja con trama de puntos */}
       <div
         style={{
           position: 'absolute',
           inset: 0,
-          background:
-            'radial-gradient(rgba(255,255,255,.07) 1px, transparent 1.5px) 0 0 / 16px 16px',
-        }}
-      />
-
-      <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {/* el letrero de neón y el plazo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          borderRadius: 26,
+          overflow: 'hidden',
+          background: `radial-gradient(circle, rgba(229,50,43,.55) 1.4px, transparent 1.8px) 0 0 / 9px 9px, radial-gradient(ellipse at 30% 20%, #FF7A2E, ${NARANJA} 55%, ${ROJO_P})`,
+          boxShadow: '0 18px 40px rgba(20,22,26,0.25)',
+        }}>
+        {!!game.artwork && (
           <div
             style={{
-              color: '#FFE3F1',
-              fontSize: 22,
-              fontWeight: 800,
-              letterSpacing: 4,
-              fontStyle: 'italic',
-              textShadow: `0 0 4px ${NEON}, 0 0 10px ${NEON}, 0 0 22px ${NEON}`,
-              animation: 'kNeon 5s infinite',
+              position: 'absolute',
+              inset: -30,
+              background: `url("${game.artwork}") center / cover`,
+              filter: 'grayscale(1) contrast(1.2)',
+              mixBlendMode: 'multiply',
+              opacity: 0.18,
+            }}
+          />
+        )}
+      </div>
+
+      {/* «KARAOKE» en grande: se sale por arriba */}
+      <div
+        aria-hidden
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          top: -30,
+          textAlign: 'center',
+          fontSize: 58,
+          lineHeight: '62px',
+          fontWeight: 900,
+          fontStyle: 'italic',
+          letterSpacing: -1,
+          color: MORADO,
+          textShadow: relieve(ROJO_P, TINTA_P, 7),
+          transform: `${capa(9)} rotate(-4deg)`,
+          zIndex: 3,
+          pointerEvents: 'none',
+        }}>
+        KARAOKE
+      </div>
+      <Destello size={30} style={{ top: -26, left: 18, transform: capa(14), zIndex: 4 }} />
+      <Destello size={20} style={{ top: 30, right: 22, transform: capa(16), zIndex: 4 }} />
+
+      <div
+        style={{
+          position: 'relative',
+          zIndex: 2,
+          display: 'flex',
+          gap: 10,
+          padding: '54px 16px 14px',
+          alignItems: 'center',
+        }}>
+        {/* la canción, a lo póster */}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div
+            style={{
+              fontSize: 27,
+              lineHeight: '30px',
+              fontWeight: 900,
+              color: AMARILLO,
+              textShadow: relieve(ROJO_P, TINTA_P, 3),
+              transform: capa(5),
+              wordBreak: 'break-word',
             }}>
-            KARAOKE
+            {game.song.toUpperCase()}
           </div>
-          <div style={{ flex: 1, color: 'rgba(255,255,255,.6)', fontSize: 13, textAlign: 'right' }}>
-            {plazo(challenge)}
+          {!!game.artist && (
+            <div
+              style={{
+                alignSelf: 'flex-start',
+                background: MORADO,
+                color: CREMA_P,
+                border: `2px solid ${TINTA_P}`,
+                borderRadius: 8,
+                padding: '2px 10px',
+                fontSize: 14,
+                fontWeight: 800,
+                boxShadow: `3px 3px 0 ${TINTA_P}`,
+                transform: capa(4),
+              }}>
+              {game.artist}
+            </div>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', marginTop: 4 }}>
+            {voces.slice(0, 5).map((u, i) => (
+              <div
+                key={u}
+                style={{
+                  marginLeft: i ? -8 : 0,
+                  borderRadius: 16,
+                  border: `2px solid ${TINTA_P}`,
+                  lineHeight: 0,
+                }}>
+                <Avatar userId={u} size={26} />
+              </div>
+            ))}
+            <span
+              style={{
+                marginLeft: voces.length ? 8 : 0,
+                color: CREMA_P,
+                fontSize: 13,
+                fontWeight: 800,
+                textShadow: `1px 1px 0 ${TINTA_P}`,
+              }}>
+              {voces.length === 0
+                ? '¡Nadie ha cantado aún!'
+                : voces.length === 1
+                  ? `${user(voces[0]).name.split(' ')[0]} ya cantó`
+                  : `${voces.length} voces`}
+            </span>
           </div>
+        </div>
+
+        {/* la tele de tubo */}
+        <Pressable accessibilityRole="button" onPress={() => ir(voces.length > 0)}>
+          <div
+            style={{
+              width: 150,
+              transform: `${capa(-6)} rotate(4deg)`,
+              background: 'linear-gradient(160deg, #4A4A55, #24242B)',
+              borderRadius: 22,
+              padding: 10,
+              paddingBottom: 22,
+              border: `3px solid ${TINTA_P}`,
+              boxShadow: `6px 7px 0 ${TINTA_P}`,
+              position: 'relative',
+            }}>
+            <div
+              style={{
+                position: 'relative',
+                aspectRatio: '4 / 3',
+                borderRadius: '18px / 22px',
+                overflow: 'hidden',
+                background: '#0C1B22',
+                boxShadow: 'inset 0 0 18px rgba(0,0,0,.8)',
+              }}>
+              {enLaTele ? (
+                <video
+                  src={enLaTele}
+                  poster={montaje.poster ?? ultima?.imageUri}
+                  muted
+                  autoPlay
+                  loop
+                  playsInline
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                />
+              ) : game.artwork ? (
+                <img
+                  src={game.artwork}
+                  alt=""
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                />
+              ) : null}
+              {/* líneas de la pantalla y el brillo del cristal */}
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  background:
+                    'repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 1px, transparent 1px 3px), radial-gradient(ellipse at 30% 20%, rgba(255,255,255,.28), transparent 45%)',
+                  pointerEvents: 'none',
+                }}
+              />
+            </div>
+            {/* botones de la tele */}
+            <div style={{ position: 'absolute', bottom: 6, right: 14, display: 'flex', gap: 5 }}>
+              {[0, 1].map((i) => (
+                <div
+                  key={i}
+                  style={{ width: 8, height: 8, borderRadius: 4, background: '#8A8A96' }}
+                />
+              ))}
+            </div>
+            <div
+              style={{
+                position: 'absolute',
+                bottom: 7,
+                left: 14,
+                width: 34,
+                height: 5,
+                borderRadius: 3,
+                background: 'repeating-linear-gradient(90deg, #6E6E7A 0 2px, transparent 2px 4px)',
+              }}
+            />
+          </div>
+        </Pressable>
+      </div>
+
+      {/* una pegatina escrita a mano */}
+      <div
+        aria-hidden
+        style={{
+          position: 'absolute',
+          right: 120,
+          top: 150,
+          zIndex: 4,
+          fontFamily: Hand,
+          fontSize: 30,
+          color: CREMA_P,
+          textShadow: `2px 2px 0 ${TINTA_P}`,
+          transform: capa(12, -12),
+          pointerEvents: 'none',
+        }}>
+        ¡al micro!
+      </div>
+
+      {/* la franja de abajo, como la del cartel */}
+      <div
+        style={{
+          position: 'relative',
+          zIndex: 2,
+          margin: '0 0 0',
+          background: AMARILLO,
+          borderTop: `3px solid ${TINTA_P}`,
+          borderBottomLeftRadius: 26,
+          borderBottomRightRadius: 26,
+          padding: '10px 12px 12px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 10,
+        }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span
+            style={{
+              flex: 1,
+              color: TINTA_P,
+              fontSize: 13,
+              fontWeight: 800,
+              letterSpacing: 1,
+              textTransform: 'uppercase',
+            }}>
+            {plazo(challenge) || 'karaoke'}
+          </span>
           {abierto && (
             <NudgeBell
               targetId={challenge.id}
@@ -116,128 +345,23 @@ export function KaraokeHoy({ challenge, answers }: { challenge: Proposal; answer
             />
           )}
         </div>
-
-        {/* la carátula con su aro de sonido, y la canción que se ilumina como una letra */}
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => ir(voces.length > 0)}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-          <div style={{ position: 'relative', width: 96, height: 96, flexShrink: 0 }}>
-            {[0, 1].map((i) => (
-              <div
-                key={i}
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  borderRadius: 20,
-                  border: `2px solid ${CIAN}`,
-                  animation: `kAro 2.4s ease-out ${i * 1.2}s infinite`,
-                }}
-              />
-            ))}
-            <View style={kb.portada}>
-              {montaje.video ? (
-                <video
-                  src={montaje.video}
-                  poster={montaje.poster}
-                  muted
-                  autoPlay
-                  loop
-                  playsInline
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                />
-              ) : game.artwork ? (
-                <Image
-                  source={{ uri: game.artwork }}
-                  style={StyleSheet.absoluteFill}
-                  contentFit="cover"
-                />
-              ) : (
-                <Icon icon={Mic} size={34} color="rgba(255,255,255,0.85)" />
-              )}
-            </View>
-          </div>
-          <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-            {/* el título: gris debajo y dorado encima, que se va llenando */}
-            <div
-              style={{ position: 'relative', fontSize: 24, lineHeight: '28px', fontWeight: 800 }}>
-              <div style={{ color: 'rgba(255,255,255,.28)' }}>{game.song}</div>
-              <div
-                aria-hidden
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  color: ORO,
-                  textShadow: `0 0 10px rgba(255,210,94,.45)`,
-                  animation: 'kBarrido 3.6s linear infinite',
-                }}>
-                {game.song}
-              </div>
-            </div>
-            {!!game.artist && (
-              <div style={{ color: 'rgba(255,255,255,.7)', fontSize: 15, marginTop: 4 }}>
-                {game.artist}
-              </div>
-            )}
-            {/* el ecualizador */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'flex-end',
-                gap: 3,
-                height: 22,
-                marginTop: 10,
-              }}>
-              {[0.9, 0.5, 1.1, 0.7, 1.3, 0.6, 1, 0.8].map((d, i) => (
-                <div
-                  key={i}
-                  style={{
-                    width: 4,
-                    height: '100%',
-                    borderRadius: 2,
-                    transformOrigin: 'bottom',
-                    background: i % 2 ? CIAN : NEON,
-                    animation: `kEq ${d}s ease-in-out ${i * 0.11}s infinite`,
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-        </Pressable>
-
-        {/* quién ha cantado */}
-        <View style={kb.voces}>
-          {voces.slice(0, 6).map((u, i) => (
-            <View key={u} style={[kb.cara, { marginLeft: i ? -8 : 0 }]}>
-              <Avatar userId={u} size={26} />
-            </View>
-          ))}
-          <Text style={kb.vocesTxt}>
-            {voces.length === 0
-              ? 'Nadie ha cantado aún: ¿abres tú el micro?'
-              : voces.length === 1
-                ? '1 voz'
-                : `${voces.length} voces`}
-          </Text>
-        </View>
-
-        <View style={kb.botones}>
+        <View style={kp.botones}>
           {voces.length > 0 && (
             <Pressable
               accessibilityRole="button"
               onPress={() => ir(true)}
-              style={[kb.boton, kb.lleno]}>
-              <Icon icon={Play} size={16} color={FONDO} />
-              <Text style={[kb.botonTxt, { color: FONDO }]}>Ver el karaoke</Text>
+              style={[kp.boton, kp.lleno]}>
+              <Icon icon={Play} size={16} color={CREMA_P} />
+              <Text style={[kp.botonTxt, { color: CREMA_P }]}>Ver el karaoke</Text>
             </Pressable>
           )}
           {abierto && !cantado && (
             <Pressable
               accessibilityRole="button"
               onPress={() => ir()}
-              style={[kb.boton, voces.length ? kb.hueco : kb.lleno]}>
-              <Icon icon={Mic} size={16} color={voces.length ? '#FFFFFF' : FONDO} />
-              <Text style={[kb.botonTxt, { color: voces.length ? '#FFFFFF' : FONDO }]}>Cantar</Text>
+              style={[kp.boton, voces.length ? kp.hueco : kp.lleno]}>
+              <Icon icon={Mic} size={16} color={voces.length ? TINTA_P : CREMA_P} />
+              <Text style={[kp.botonTxt, { color: voces.length ? TINTA_P : CREMA_P }]}>Cantar</Text>
             </Pressable>
           )}
         </View>
@@ -246,36 +370,23 @@ export function KaraokeHoy({ challenge, answers }: { challenge: Proposal; answer
   );
 }
 
-const kb = StyleSheet.create({
-  portada: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 20,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    boxShadow: '0 12px 30px rgba(0,0,0,0.5)',
-  },
-  voces: { flexDirection: 'row', alignItems: 'center' },
-  cara: { borderRadius: 15, borderWidth: 2, borderColor: FONDO },
-  vocesTxt: { color: 'rgba(255,255,255,0.75)', fontSize: 14, fontWeight: '600', marginLeft: 8 },
+const kp = StyleSheet.create({
   botones: { flexDirection: 'row', gap: 10 },
   boton: {
     flex: 1,
-    height: 46,
-    borderRadius: 23,
+    height: 44,
+    borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    borderWidth: 2.5,
+    borderColor: TINTA_P,
+    boxShadow: `3px 3px 0 ${TINTA_P}`,
   },
-  lleno: { backgroundColor: ORO },
-  hueco: { borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.55)' },
-  botonTxt: { fontSize: 15, fontWeight: '700' },
+  lleno: { backgroundColor: TINTA_P },
+  hueco: { backgroundColor: CREMA_P },
+  botonTxt: { fontSize: 15, fontWeight: '800' },
 });
 
 /* ───────────── El cuento a trozos: una página de libreta ───────────── */
