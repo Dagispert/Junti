@@ -11,6 +11,7 @@ import { Hand, Spacing, useTheme } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
 import type { Moment } from '@/data/types';
 import { idParaPublicar } from '@/lib/cola';
+import { supabase } from '@/lib/supabase';
 import { cierreDelCuento, vozDelCuento } from '@/lib/ideas-retos';
 import { mmss } from '@/lib/music';
 import { markRead } from '@/lib/notifications';
@@ -30,7 +31,8 @@ export default function Cuento() {
     if (id) markRead(`proposal:${id}`);
   }, [id]);
   const theme = useTheme();
-  const { proposals, moments, me, user, addMoment } = useStore();
+  const { proposals, moments, me, user, addMoment, refresh } = useStore();
+  const [terminando, setTerminando] = useState<'' | 'preguntar' | 'cerrando'>('');
   const proposal = proposals.find((p) => p.id === id);
   const juego = proposal?.juego;
   const trozos = useMemo(
@@ -130,8 +132,11 @@ export default function Cuento() {
               </View>
               <Text style={{ color: theme.textSecondary, fontSize: 14, flex: 1 }}>
                 {trozos.length - 1 === 1
-                  ? '1 trozo escondido hasta el final'
-                  : `${trozos.length - 1} trozos escondidos hasta el final`}
+                  ? '1 trozo escondido'
+                  : `${trozos.length - 1} trozos escondidos`}
+                {quedan
+                  ? `: el cuento entero se podrá escuchar cuando termine (${quedan === 1 ? 'mañana' : `en ${quedan} días`})`
+                  : ' hasta el final'}
               </Text>
             </View>
           )}
@@ -236,6 +241,48 @@ export default function Cuento() {
             </Text>
           )}
           <Notice>{notice}</Notice>
+          {/* quien lo empezó puede terminarlo antes del plazo */}
+          {proposal.createdBy === me && trozos.length >= 2 && (
+            <View style={{ gap: 8, alignItems: 'center' }}>
+              {terminando === 'preguntar' ? (
+                <>
+                  <Text style={{ color: theme.textSecondary, fontSize: 14, textAlign: 'center' }}>
+                    Nadie más podrá seguirlo y se podrá escuchar entero. ¿Lo terminamos?
+                  </Text>
+                  <View style={styles.fila}>
+                    <Button
+                      compact
+                      label="Sí, terminarlo"
+                      onPress={async () => {
+                        setTerminando('cerrando');
+                        const { error } = await supabase
+                          .from('proposals')
+                          .update({ ends_at: new Date().toISOString() })
+                          .eq('id', proposal.id);
+                        if (error) setNotice(errorText(error));
+                        await refresh().catch(() => {});
+                        setTerminando('');
+                      }}
+                    />
+                    <Button
+                      compact
+                      variant="quiet"
+                      label="Aún no"
+                      onPress={() => setTerminando('')}
+                    />
+                  </View>
+                </>
+              ) : (
+                <Button
+                  compact
+                  variant="quiet"
+                  label={terminando === 'cerrando' ? 'Terminando…' : 'Terminar el cuento ya'}
+                  disabled={terminando === 'cerrando'}
+                  onPress={() => setTerminando('preguntar')}
+                />
+              )}
+            </View>
+          )}
         </>
       ) : (
         <CuentoEntero
