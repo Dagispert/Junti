@@ -29,9 +29,9 @@ const plazo = (p: Proposal) => {
 
 /* ───────────── Karaoke: un póster de los 80-90 con su tele de tubo ───────────── */
 
-// en pastel, para que entone con el resto de la app
-const NARANJA = '#FFC9AE';
-const ROJO_P = '#F29C8F';
+// cálidos y suaves (naranja y rojo), para que entone con el resto de la app
+const NARANJA = '#FFB48A';
+const ROJO_P = '#E8563F';
 const MORADO = '#B8A4F4';
 const AMARILLO = '#FFE3A1';
 const CREMA_P = '#FFF6EA';
@@ -79,6 +79,7 @@ function Destello({ size, style }: { size: number; style?: React.CSSProperties }
 }
 
 export function KaraokeHoy({ challenge, answers }: { challenge: Proposal; answers: Moment[] }) {
+  const theme = useTheme();
   const { me, user } = useStore();
   const game = challenge.game!;
   const abierto = !challenge.endsAt || challenge.endsAt > Date.now();
@@ -140,7 +141,7 @@ export function KaraokeHoy({ challenge, answers }: { challenge: Proposal; answer
             inset: 0,
             borderRadius: 26,
             overflow: 'hidden',
-            background: `radial-gradient(circle, rgba(242,156,143,.45) 1.4px, transparent 1.8px) 0 0 / 9px 9px, radial-gradient(ellipse at 30% 20%, #FFDCC8, ${NARANJA} 60%, #F7B3A3)`,
+            background: `radial-gradient(circle, rgba(232,86,63,.35) 1.4px, transparent 1.8px) 0 0 / 9px 9px, radial-gradient(ellipse at 30% 20%, #FFCDA8, ${NARANJA} 55%, #FF8F66)`,
             boxShadow: '0 18px 40px rgba(20,22,26,0.25)',
           }}>
           {!!game.artwork && (
@@ -370,86 +371,78 @@ export function KaraokeHoy({ challenge, answers }: { challenge: Proposal; answer
         </Pressable>
       </div>
 
-      {/* la franja de abajo, como la del cartel */}
+      {/* abajo: el plazo, el botón (pequeño) y la campanita, con los colores de tu tema */}
       <div
         style={{
           position: 'relative',
           zIndex: 2,
-          margin: '0 0 0',
           ...entra('kpSube', 520, 550),
-          background: AMARILLO,
+          background: theme.card,
           borderTop: `3px solid ${TINTA_P}`,
           borderBottomLeftRadius: 26,
           borderBottomRightRadius: 26,
-          padding: '10px 12px 12px',
+          padding: '10px 12px',
           display: 'flex',
-          flexDirection: 'column',
+          alignItems: 'center',
           gap: 10,
         }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span
-            style={{
-              flex: 1,
-              color: TINTA_P,
-              fontSize: 13,
-              fontWeight: 800,
-              letterSpacing: 1,
-              textTransform: 'uppercase',
-            }}>
-            {plazo(challenge) || 'karaoke'}
-          </span>
-          {abierto && (
-            <NudgeBell
-              targetId={challenge.id}
-              groupId={challenge.groupId}
-              done={voces}
-              owner={challenge.createdBy}
-              label="el karaoke"
-            />
-          )}
-        </div>
-        <View style={kp.botones}>
+        <span
+          style={{
+            color: theme.text,
+            fontSize: 12,
+            fontWeight: 800,
+            letterSpacing: 1,
+            textTransform: 'uppercase',
+          }}>
+          {plazo(challenge) || 'karaoke'}
+        </span>
+        <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           {voces.length > 0 && (
             <Pressable
               accessibilityRole="button"
               onPress={() => ir(true)}
-              style={[kp.boton, kp.lleno]}>
-              <Icon icon={Play} size={16} color={CREMA_P} />
-              <Text style={[kp.botonTxt, { color: CREMA_P }]}>Ver el karaoke</Text>
+              style={[kp.boton, { backgroundColor: theme.accent }]}>
+              <Icon icon={Play} size={14} color={theme.onAccent} />
+              <Text style={[kp.botonTxt, { color: theme.onAccent }]}>Ver</Text>
             </Pressable>
           )}
           {abierto && !cantado && (
             <Pressable
               accessibilityRole="button"
               onPress={() => ir()}
-              style={[kp.boton, voces.length ? kp.hueco : kp.lleno]}>
-              <Icon icon={Mic} size={16} color={voces.length ? TINTA_P : CREMA_P} />
-              <Text style={[kp.botonTxt, { color: voces.length ? TINTA_P : CREMA_P }]}>Cantar</Text>
+              style={[kp.boton, { backgroundColor: voces.length ? theme.soft : theme.accent }]}>
+              <Icon icon={Mic} size={14} color={voces.length ? theme.text : theme.onAccent} />
+              <Text style={[kp.botonTxt, { color: voces.length ? theme.text : theme.onAccent }]}>
+                Cantar
+              </Text>
             </Pressable>
           )}
-        </View>
+        </div>
+        {abierto && (
+          <NudgeBell
+            targetId={challenge.id}
+            groupId={challenge.groupId}
+            done={voces}
+            owner={challenge.createdBy}
+            label="el karaoke"
+          />
+        )}
       </div>
     </div>
   );
 }
 
 const kp = StyleSheet.create({
-  botones: { flexDirection: 'row', gap: 10 },
   boton: {
-    flex: 1,
-    height: 44,
-    borderRadius: 12,
+    height: 36,
+    paddingHorizontal: 16,
+    borderRadius: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    borderWidth: 2.5,
-    borderColor: TINTA_P,
-    boxShadow: `3px 3px 0 ${TINTA_P}`,
+    gap: 6,
   },
-  lleno: { backgroundColor: TINTA_P },
-  hueco: { backgroundColor: CREMA_P },
-  botonTxt: { fontSize: 15, fontWeight: '800' },
+  botonTxt: { fontSize: 14, fontWeight: '700' },
 });
 
 /* ───────────── El cuento a trozos: una página de libreta ───────────── */

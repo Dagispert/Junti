@@ -52,19 +52,23 @@ function arrancar() {
     | undefined;
   if (D?.requestPermission) {
     // iPhone: el permiso solo se puede pedir tras un toque
-    // (Safari solo lo deja pedir dentro de un «click» o «touchend»)
-    let pedido = false;
+    // Safari solo lo deja pedir dentro de un toque de verdad (no al deslizar);
+    // se vuelve a intentar en cada toque hasta que se concede (y en cada
+    // apertura de la app hay que pedirlo otra vez: si ya se dio, no pregunta).
+    let pidiendo = false;
     const pedir = () => {
-      if (pedido) return;
-      pedido = true;
-      window.removeEventListener('click', pedir);
-      window.removeEventListener('touchend', pedir);
+      if (pidiendo) return;
+      pidiendo = true;
       D.requestPermission!()
         .then((r) => {
-          if (r === 'granted') window.addEventListener('deviceorientation', alGirar);
+          if (r !== 'granted') return;
+          window.addEventListener('deviceorientation', alGirar);
+          window.removeEventListener('click', pedir);
+          window.removeEventListener('touchend', pedir);
         })
-        .catch(() => {
-          pedido = false;
+        .catch(() => {})
+        .finally(() => {
+          pidiendo = false;
         });
     };
     window.addEventListener('click', pedir);
