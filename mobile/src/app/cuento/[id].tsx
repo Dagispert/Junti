@@ -329,6 +329,32 @@ function BotonNarradora({ src }: { src: string }) {
   );
 }
 
+/**
+ * Dónde empieza y acaba de verdad un audio (sin el silencio ni el ruido de
+ * los extremos), en segundos.
+ */
+function recorte(buf: AudioBuffer) {
+  const d = buf.getChannelData(0);
+  const rate = buf.sampleRate;
+  const ventana = Math.max(1, Math.round(rate * 0.02));
+  const e: number[] = [];
+  for (let i = 0; i + ventana <= d.length; i += ventana) {
+    let x = 0;
+    for (let k = 0; k < ventana; k += 4) x += d[i + k] ** 2;
+    e.push(Math.sqrt(x / (ventana / 4)));
+  }
+  const pico = Math.max(...e, 0.0001);
+  const umbral = Math.max(0.008, pico * 0.1);
+  let a = e.findIndex((x) => x > umbral);
+  let z = e.length - 1;
+  while (z > 0 && e[z] <= umbral) z--;
+  if (a < 0) return { desde: 0, hasta: buf.duration };
+  a = Math.max(0, a - 3);
+  const desde = (a * ventana) / rate;
+  const hasta = Math.min(buf.duration, ((z + 1) * ventana) / rate + 0.15);
+  return { desde, hasta: Math.max(hasta, desde + 0.2) };
+}
+
 /** Suena un audio y espera a que acabe (o falle). */
 const sonar = (src: string, guardar: (a: HTMLAudioElement) => void) =>
   new Promise<void>((ok) => {
@@ -392,32 +418,111 @@ function CuentoEntero({
     [],
   );
 
+  // Todo el cuento seguido, sin huecos: se descargan y se preparan todos los
+  // audios antes de empezar, se les quita el silencio de los extremos y se
+  // encadenan con una pausa mínima (con Web Audio, en un solo reloj).
+  const ctx = useRef<AudioContext | null>(null);
+  const fuentes = useRef<AudioBufferSourceNode[]>([]);
+  const relojes = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const [preparando, setPreparando] = useState(false);
+
   const parar = () => {
     vivo.current = false;
     audio.current?.pause();
     if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel();
+    fuentes.current.forEach((f) => {
+      try {
+        f.stop();
+      } catch {
+        // ya parada
+      }
+    });
+    fuentes.current = [];
+    relojes.current.forEach(clearTimeout);
+    relojes.current = [];
     setSonando(null);
   };
+  useEffect(
+    () => () => {
+      ctx.current?.close().catch(() => {});
+    },
+    [],
+  );
 
   const escuchar = async () => {
     vivo.current = true;
-    const guardar = (a: HTMLAudioElement) => (audio.current = a);
-    // el comienzo, con la voz de la narradora (o la del móvil)
-    setSonando(-1);
-    if (vozInicio) await sonar(vozInicio, guardar);
-    else await leer(inicio);
-    for (let i = 0; i < trozos.length && vivo.current; i++) {
-      setSonando(i);
-      await sonar(trozos[i].voice!.uri, guardar);
-      if (vivo.current) await new Promise((r) => setTimeout(r, 350));
+    const Ctx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    const c = (ctx.current ??= new Ctx());
+    await c.resume().catch(() => {});
+    // un sonido vacío dentro del toque: así el iPhone deja sonar lo demás
+    const b0 = c.createBufferSource();
+    b0.buffer = c.createBuffer(1, 1, 22050);
+    b0.connect(c.destination);
+    b0.start();
+    setPreparando(true);
+    const cargar = async (src?: string | null) => {
+      if (!src) return null;
+      try {
+        const ab = await (await fetch(src)).arrayBuffer();
+        return await c.decodeAudioData(ab);
+      } catch {
+        return null;
+      }
+    };
+    const [primero, ...resto] = await Promise.all([
+      cargar(vozInicio),
+      ...trozos.map((t) => cargar(t.voice!.uri)),
+      cargar(cierre?.audio),
+    ]);
+    const final = resto.pop() ?? null;
+    setPreparando(false);
+    if (!vivo.current) return;
+
+    // sin voz de la narradora para el comienzo: lo lee el móvil primero
+    if (!primero) {
+      setSonando(-1);
+      await leer(inicio);
+      if (!vivo.current) return;
     }
-    // y el final
-    if (vivo.current && cierre) {
-      setSonando(trozos.length);
-      if (cierre.audio) await sonar(cierre.audio, guardar);
-      else await leer(cierre.texto);
+    const piezas: { buf: AudioBuffer | null; i: number }[] = [
+      ...(primero ? [{ buf: primero, i: -1 }] : []),
+      ...resto.map((buf, i) => ({ buf, i })),
+      ...(final ? [{ buf: final, i: trozos.length }] : []),
+    ];
+    let t = c.currentTime + 0.15;
+    for (const p of piezas) {
+      if (!p.buf) continue;
+      const { desde, hasta } = recorte(p.buf);
+      const src = c.createBufferSource();
+      src.buffer = p.buf;
+      const g = c.createGain();
+      // fundidos cortos: sin chasquidos ni colas de ruido
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(1, t + 0.02);
+      g.gain.setValueAtTime(1, t + Math.max(0.03, hasta - desde - 0.08));
+      g.gain.linearRampToValueAtTime(0, t + (hasta - desde));
+      src.connect(g).connect(c.destination);
+      src.start(t, desde, hasta - desde);
+      fuentes.current.push(src);
+      const cuando = (t - c.currentTime) * 1000;
+      relojes.current.push(setTimeout(() => vivo.current && setSonando(p.i), Math.max(0, cuando)));
+      t += hasta - desde + 0.18;
     }
-    if (vivo.current) setSonando(null);
+    relojes.current.push(
+      setTimeout(
+        () => {
+          if (!vivo.current) return;
+          // sin voz para el final: lo lee el móvil al terminar
+          if (cierre && !final) {
+            setSonando(trozos.length);
+            leer(cierre.texto).then(() => vivo.current && setSonando(null));
+          } else setSonando(null);
+        },
+        Math.max(0, (t - c.currentTime) * 1000),
+      ),
+    );
   };
 
   if (!trozos.length)
@@ -431,11 +536,16 @@ function CuentoEntero({
     <View style={{ gap: Spacing.three }}>
       <Pressable
         accessibilityRole="button"
+        disabled={preparando}
         onPress={sonando === null ? escuchar : parar}
         style={[styles.grande, { backgroundColor: theme.accent }]}>
         <Icon icon={sonando === null ? Play : Pause} size={20} color={theme.onAccent} />
         <Text style={{ color: theme.onAccent, fontSize: 17, fontWeight: '600' }}>
-          {sonando === null ? 'Escuchar el cuento entero' : 'Parar'}
+          {preparando
+            ? 'Preparando el cuento…'
+            : sonando === null
+              ? 'Escuchar el cuento entero'
+              : 'Parar'}
         </Text>
       </Pressable>
       {trozos.map((t, i) => (

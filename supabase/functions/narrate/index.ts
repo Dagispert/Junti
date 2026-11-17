@@ -1532,9 +1532,56 @@ async function leerYGuardar(
   const voiced = await narrateAloud([texto], voiceOf((group.narrative_style as string) ?? 'emotivo', persona));
   const up = await supabase.storage
     .from('media')
-    .upload(ruta, voiced.wav, { contentType: 'audio/wav', upsert: true });
+    .upload(ruta, recortarWav(voiced.wav), { contentType: 'audio/wav', upsert: true });
   if (up.error) throw new Error(up.error.message);
   return ruta;
+}
+
+/**
+ * Quita lo que sobra al final (y al principio) de la voz: la IA a veces deja
+ * un rastro de ruido, como de walkie-talkie, al acabar de hablar. Se corta
+ * tras la última sílaba y se funde a silencio.
+ */
+function recortarWav(wav: Uint8Array): Uint8Array {
+  try {
+    const v = new DataView(wav.buffer, wav.byteOffset, wav.byteLength);
+    const rate = v.getUint32(24, true);
+    const n = (wav.length - 44) >> 1;
+    const muestra = (i: number) => v.getInt16(44 + i * 2, true) / 32768;
+    const ventana = Math.round(rate * 0.02);
+    const energias: number[] = [];
+    for (let i = 0; i + ventana <= n; i += ventana) {
+      let e = 0;
+      for (let k = 0; k < ventana; k++) e += muestra(i + k) ** 2;
+      energias.push(Math.sqrt(e / ventana));
+    }
+    const pico = Math.max(...energias);
+    // la voz: lo que pasa de una fracción del pico (el ruido de cola es mucho más bajo)
+    const umbral = Math.max(0.01, pico * 0.12);
+    const primera = energias.findIndex((e) => e > umbral);
+    let ultima = energias.length - 1;
+    while (ultima > 0 && energias[ultima] <= umbral) ultima--;
+    if (primera < 0) return wav;
+    const desde = Math.max(0, (primera - 2) * ventana);
+    const hasta = Math.min(n, (ultima + 1) * ventana + Math.round(rate * 0.12));
+    const largo = hasta - desde;
+    const out = new Uint8Array(44 + largo * 2);
+    out.set(wav.subarray(0, 44));
+    const o = new DataView(out.buffer);
+    o.setUint32(4, 36 + largo * 2, true);
+    o.setUint32(40, largo * 2, true);
+    const fundidoIn = Math.round(rate * 0.01);
+    const fundidoOut = Math.round(rate * 0.09);
+    for (let i = 0; i < largo; i++) {
+      let g = 1;
+      if (i < fundidoIn) g = i / fundidoIn;
+      if (i > largo - fundidoOut) g = Math.min(g, (largo - i) / fundidoOut);
+      o.setInt16(44 + i * 2, Math.round(muestra(desde + i) * g * 32767), true);
+    }
+    return out;
+  } catch {
+    return wav;
+  }
 }
 
 const firmar = async (path?: string) =>
@@ -1632,7 +1679,17 @@ async function cierreDeCuento(me: string, groupId: string | undefined, proposalI
   if (!c.group.narrative_enabled) return { cierre: null, reason: 'off' };
   const game = c.prop.game;
   if (c.prop.ends_at && Date.parse(c.prop.ends_at) > Date.now()) return { cierre: null, reason: 'abierto' };
-  if (game.cierre) return { cierre: game.cierre.texto, audio: await firmar(game.cierre.path) };
+  if (game.cierre?.path) return { cierre: game.cierre.texto, audio: await firmar(game.cierre.path) };
+  if (game.cierre) {
+    // el texto ya está: solo falta (o se rehace) su voz
+    try {
+      const path = await leerYGuardar(c.group, game.cierre.texto, `${groupId}/narradora/cuento-${proposalId}-cierre.wav`);
+      await supabase.from('proposals').update({ game: { ...game, cierre: { ...game.cierre, path } } }).eq('id', proposalId!);
+      return { cierre: game.cierre.texto, audio: await firmar(path) };
+    } catch {
+      return { cierre: game.cierre.texto, audio: null };
+    }
+  }
 
   const { data: members } = await supabase
     .from('memberships')
