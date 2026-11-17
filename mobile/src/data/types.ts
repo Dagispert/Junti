@@ -114,6 +114,18 @@ export type Proposal = {
   createdBy?: string;
   /** Un minijuego dentro del reto (por ahora, el karaoke). */
   game?: KaraokeGame;
+  /** Los otros minijuegos (el cuento a trozos…). */
+  juego?: CuentoGame;
+};
+
+/**
+ * El cuento a trozos: empieza con una frase y cada uno graba, por turnos, cómo
+ * sigue (solo oye el trozo anterior). Al terminar se escucha entero.
+ */
+export type CuentoGame = {
+  type: 'cuento';
+  /** la primera frase (de quien lo propone o de la narradora) */
+  inicio: string;
 };
 
 /**

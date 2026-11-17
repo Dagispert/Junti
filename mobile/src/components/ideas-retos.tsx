@@ -29,6 +29,7 @@ const TIPO: Record<TipoIdea, { familia: FamilyId; boton: string; dias: boolean }
   quiz: { familia: 'quiz', boton: 'Crear el quiz', dias: true },
   pregunta: { familia: 'open', boton: 'Preguntar', dias: false },
   recuerdo: { familia: 'memory', boton: 'Compartir un recuerdo', dias: false },
+  cuento: { familia: 'challenge', boton: 'Empezar el cuento', dias: true },
 };
 
 /**
@@ -93,6 +94,11 @@ export function IdeasNarradora({ group }: { group: Group }) {
         return router.push({
           pathname: '/ask',
           params: { groupId: g, kind: 'open', title: idea.title },
+        });
+      case 'cuento':
+        return router.push({
+          pathname: '/new-cuento',
+          params: { groupId: g, inicio: idea.title, days: idea.days > 5 ? '7' : '3' },
         });
       case 'recuerdo':
         return router.push({
@@ -179,8 +185,10 @@ export function IdeasNarradora({ group }: { group: Group }) {
               <Card style={styles.card}>
                 <View style={styles.cabecera}>
                   <FamilyTag family={t.familia} />
-                  {idea.tipo === 'karaoke' && (
-                    <Text style={{ color: theme.textSecondary, fontSize: 13 }}>Karaoke</Text>
+                  {(idea.tipo === 'karaoke' || idea.tipo === 'cuento') && (
+                    <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
+                      {idea.tipo === 'karaoke' ? 'Karaoke' : 'El cuento a trozos'}
+                    </Text>
                   )}
                 </View>
                 <View style={{ gap: 4 }}>

@@ -122,6 +122,8 @@ type Store = {
   addChallenge: (groupId: string, title: string, body: string, days?: number) => Promise<void>;
   /** Un plan (contenedor de varias publicaciones), en su fecha y ya cerrado. Devuelve su id. */
   addPlan: (groupId: string, title: string, at: number) => Promise<string>;
+  /** Un cuento a trozos: la primera frase y cuántos días hay para seguirlo. */
+  addCuento: (groupId: string, inicio: string, days: number) => Promise<string>;
   /** Un reto de karaoke; con «track», la pista se sube antes al almacén del grupo. */
   addKaraoke: (
     groupId: string,
@@ -742,6 +744,7 @@ async function load(me: string): Promise<Data> {
     endsAt: p.ends_at ? Date.parse(p.ends_at) : undefined,
     createdBy: p.created_by ?? undefined,
     game: p.game?.type === 'karaoke' ? p.game : undefined,
+    juego: p.game?.type === 'cuento' ? p.game : undefined,
   }));
 
   const songs: Song[] = (songRows ?? []).map((s) => ({
@@ -1352,6 +1355,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               ...game,
               ...(trackPath ? { trackPath, previewUrl: undefined } : {}),
             },
+          })
+          .select('id')
+          .single(),
+      );
+      await refresh();
+      return row!.id as string;
+    },
+    addCuento: async (groupId, inicio, days) => {
+      const row = check(
+        await supabase
+          .from('proposals')
+          .insert({
+            group_id: groupId,
+            kind: 'challenge',
+            title: 'El cuento a trozos',
+            body: inicio,
+            ends_at: new Date(Date.now() + days * 86_400_000).toISOString(),
+            game: { type: 'cuento', inicio },
           })
           .select('id')
           .single(),

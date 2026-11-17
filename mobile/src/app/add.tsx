@@ -1,4 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
@@ -9,7 +10,10 @@ import { Spacing, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import { type FamilyId, useFamily, useFamilyColorMode } from '@/lib/families';
 import {
+  BookOpen,
   Camera,
+  ChevronDown,
+  Gamepad2,
   ChartColumn,
   CircleHelp,
   Flag,
@@ -34,11 +38,13 @@ export default function AddScreen() {
   const theme = useTheme();
   const group = useStore().group(groupId);
   const mode = useFamilyColorMode();
+  // «Minijuegos» se despliega con todos los que hay
+  const [juegos, setJuegos] = useState(false);
   if (!group) return null;
 
   // Se sustituye esta pantalla para que «Cancelar» vuelva directo al grupo.
   const open = (
-    pathname: '/publish' | '/new-challenge' | '/new-karaoke' | '/ask' | '/importar',
+    pathname: '/publish' | '/new-challenge' | '/new-karaoke' | '/new-cuento' | '/ask' | '/importar',
     params: Record<string, string>,
   ) => router.replace({ pathname, params: { groupId, ...params } } as never);
 
@@ -73,10 +79,10 @@ export default function AddScreen() {
     },
     {
       family: 'challenge',
-      icon: Mic,
-      title: 'Un karaoke',
-      hint: 'Cantad todos la misma canción',
-      go: () => open('/new-karaoke', {}),
+      icon: Gamepad2,
+      title: 'Minijuegos',
+      hint: 'Karaoke, el cuento a trozos…',
+      go: () => setJuegos((v) => !v),
     },
     {
       family: 'poll',
@@ -98,6 +104,24 @@ export default function AddScreen() {
       title: 'Una pregunta',
       hint: 'Cada uno responde con sus palabras',
       go: () => open('/ask', { kind: 'open' }),
+    },
+  ];
+
+  // Los minijuegos (se irán sumando más).
+  const minijuegos: Option[] = [
+    {
+      family: 'challenge',
+      icon: Mic,
+      title: 'Karaoke',
+      hint: 'Cantad todos la misma canción y sale un vídeo con todas las voces',
+      go: () => open('/new-karaoke', {}),
+    },
+    {
+      family: 'challenge',
+      icon: BookOpen,
+      title: 'El cuento a trozos',
+      hint: 'Cada uno graba cómo sigue, oyendo solo el trozo anterior',
+      go: () => open('/new-cuento', {}),
     },
   ];
 
@@ -158,6 +182,41 @@ export default function AddScreen() {
       </View>
       {tile(main, 0, true)}
       <View style={styles.grid}>{options.map((o, i) => tile(o, i + 1))}</View>
+      {juegos && (
+        <Animated.View
+          entering={FadeInDown.duration(300)}
+          style={[styles.juegos, { backgroundColor: theme.card, boxShadow: theme.shadow }]}>
+          <View style={styles.juegosCab}>
+            <Icon icon={Gamepad2} size={18} color={theme.textSecondary} />
+            <Text style={{ color: theme.text, fontSize: 17, fontWeight: '600', flex: 1 }}>
+              Minijuegos
+            </Text>
+            <PressScale
+              accessibilityRole="button"
+              accessibilityLabel="Plegar"
+              onPress={() => setJuegos(false)}>
+              <Icon icon={ChevronDown} size={18} color={theme.textSecondary} />
+            </PressScale>
+          </View>
+          {minijuegos.map((o, i) => (
+            <Animated.View key={o.title} entering={FadeInDown.delay(60 * i).duration(300)}>
+              <PressScale
+                accessibilityRole="button"
+                accessibilityLabel={o.title}
+                onPress={o.go}
+                style={[styles.juego, { backgroundColor: theme.soft }]}>
+                <View style={[styles.icon, { backgroundColor: theme.card }]}>
+                  <Icon icon={o.icon} size={22} color={theme.text} />
+                </View>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={[styles.title, { color: theme.text }]}>{o.title}</Text>
+                  <Text style={[styles.hint, { color: theme.textSecondary }]}>{o.hint}</Text>
+                </View>
+              </PressScale>
+            </Animated.View>
+          ))}
+        </Animated.View>
+      )}
     </Screen>
   );
 }
@@ -172,4 +231,13 @@ const styles = StyleSheet.create({
   iconWide: { width: 64, height: 64, borderRadius: 20 },
   title: { fontSize: 17, fontWeight: '600' },
   hint: { fontSize: 15, lineHeight: 19 },
+  juegos: { borderRadius: 26, padding: 14, gap: 10 },
+  juegosCab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 6,
+    paddingTop: 4,
+  },
+  juego: { flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: 20, padding: 12 },
 });

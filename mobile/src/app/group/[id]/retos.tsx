@@ -51,6 +51,7 @@ export default function Challenges() {
     ];
     const left = challenge.endsAt ? daysLeft(challenge.endsAt) : undefined;
     const karaoke = challenge.game?.type === 'karaoke';
+    const cuento = !!challenge.juego;
     return (
       <Card key={challenge.id} style={styles.card}>
         {open && (
@@ -79,7 +80,9 @@ export default function Challenges() {
                   : `Quedan ${left} días`
                 : karaoke
                   ? 'Karaoke'
-                  : 'Reto'}
+                  : cuento
+                    ? 'El cuento a trozos'
+                    : 'Reto'}
           </Tag>
           <Text style={[styles.title, { color: theme.text }]}>{challenge.title}</Text>
           {!!challenge.body && (
@@ -101,7 +104,15 @@ export default function Challenges() {
                 }
               />
             )}
-            {open && !(karaoke && participants.includes(me)) && (
+            {cuento && (
+              <Button
+                label={open ? 'Seguir el cuento' : 'Escuchar el cuento'}
+                onPress={() =>
+                  router.push({ pathname: '/cuento/[id]', params: { id: challenge.id } })
+                }
+              />
+            )}
+            {open && !cuento && !(karaoke && participants.includes(me)) && (
               <Button
                 label={karaoke ? 'Cantar' : 'Participar'}
                 onPress={() =>

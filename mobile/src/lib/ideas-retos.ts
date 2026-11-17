@@ -4,7 +4,14 @@
 
 import { supabase } from './supabase';
 
-export type TipoIdea = 'reto' | 'karaoke' | 'encuesta' | 'quiz' | 'pregunta' | 'recuerdo';
+export type TipoIdea =
+  | 'reto'
+  | 'karaoke'
+  | 'encuesta'
+  | 'quiz'
+  | 'pregunta'
+  | 'recuerdo'
+  | 'cuento';
 export type IdeaReto = {
   /** qué es (lo mismo que se puede crear con el «+»); sin él, un reto */
   tipo?: TipoIdea;
@@ -35,3 +42,26 @@ export async function pedirIdeasRetos(groupId: string, otras = false): Promise<R
   if (error) throw error;
   return data as RespuestaIdeas;
 }
+
+/** La primera frase de un cuento a trozos, pensada por la narradora para el grupo. */
+export async function pedirInicioCuento(
+  groupId: string,
+): Promise<{ inicio: string | null; reason?: 'off' | 'busy' | 'forbidden' | 'bad' }> {
+  const { data, error } = await supabase.functions.invoke('narrate', {
+    body: { action: 'cuento', groupId },
+  });
+  if (error) throw error;
+  return data as { inicio: string | null; reason?: 'off' | 'busy' | 'forbidden' | 'bad' };
+}
+
+/** Comienzos de cuento por si la narradora no está (o para pedir otro). */
+export const INICIOS_CUENTO = [
+  'Aquella mañana, al abrir la nevera, había una nota escrita a mano que decía…',
+  'Nadie en el grupo sabía que el gato de la vecina hablaba, hasta que un martes…',
+  'El avión aterrizó en una ciudad que no salía en ningún mapa y, al bajar…',
+  'Encontramos una caja con nuestros nombres enterrada en la playa y dentro había…',
+  'Cada vez que alguien del grupo estornudaba, en algún lugar del mundo…',
+  'El ascensor no paraba en el quinto, sino en un piso que no existía, y allí…',
+  'La abuela nos dejó en herencia un mapa, una llave y una condición muy rara:',
+  'Esa noche, por primera vez, la luna se veía igual desde todas nuestras ciudades y…',
+];

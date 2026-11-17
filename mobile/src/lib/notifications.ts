@@ -194,6 +194,7 @@ export function useNotifications() {
           });
         } else {
           const karaoke = p?.game?.type === 'karaoke';
+          const cuento = !!p?.juego;
           out.push({
             key: `moment:${m.id}`,
             kind: karaoke ? 'karaoke' : p ? 'answer' : m.memory ? 'memory' : 'moment',
@@ -202,25 +203,29 @@ export function useNotifications() {
             actors: [m.authorId],
             text: karaoke
               ? `cantó en el karaoke «${p!.game!.song}»`
-              : p?.kind === 'plan'
-                ? `añadió fotos a «${p.title}»`
-                : p
-                  ? `respondió a «${p.title}»`
-                  : m.memory
-                    ? 'compartió un recuerdo'
-                    : m.videoUri
-                      ? 'publicó un vídeo'
-                      : m.imageUri
-                        ? 'publicó un momento'
-                        : m.voice
-                          ? 'mandó una nota de voz'
-                          : 'escribió algo',
+              : cuento
+                ? 'siguió el cuento a trozos: ¿te toca?'
+                : p?.kind === 'plan'
+                  ? `añadió fotos a «${p.title}»`
+                  : p
+                    ? `respondió a «${p.title}»`
+                    : m.memory
+                      ? 'compartió un recuerdo'
+                      : m.videoUri
+                        ? 'publicó un vídeo'
+                        : m.imageUri
+                          ? 'publicó un momento'
+                          : m.voice
+                            ? 'mandó una nota de voz'
+                            : 'escribió algo',
             quote: first(m.text),
             thumb: m.imageUri,
-            scope: karaoke ? `proposal:${p!.id}` : scope,
+            scope: karaoke || cuento ? `proposal:${p!.id}` : scope,
             to: karaoke
               ? { pathname: '/karaoke/[id]', params: { id: p!.id, watch: '1' } }
-              : momentTo(m),
+              : cuento
+                ? { pathname: '/cuento/[id]', params: { id: p!.id } }
+                : momentTo(m),
           });
         }
       }
@@ -295,18 +300,25 @@ export function useNotifications() {
       if (p.kind !== 'challenge' || !p.createdBy || p.createdBy === me || p.startsAt < since)
         continue;
       const karaoke = p.game?.type === 'karaoke';
+      const cuento = !!p.juego;
       out.push({
         key: `proposal:${p.id}`,
         kind: karaoke ? 'karaoke' : 'challenge',
         groupId: p.groupId,
         at: p.startsAt,
         actors: [p.createdBy],
-        text: karaoke ? `propuso un karaoke: «${p.game!.song}»` : `propuso un reto: «${p.title}»`,
+        text: karaoke
+          ? `propuso un karaoke: «${p.game!.song}»`
+          : cuento
+            ? 'empezó un cuento a trozos'
+            : `propuso un reto: «${p.title}»`,
         thumb: p.game?.artwork,
         scope: `proposal:${p.id}`,
         to: karaoke
           ? { pathname: '/karaoke/[id]', params: { id: p.id } }
-          : { pathname: '/group/[id]/retos', params: { id: p.groupId } },
+          : cuento
+            ? { pathname: '/cuento/[id]', params: { id: p.id } }
+            : { pathname: '/group/[id]/retos', params: { id: p.groupId } },
       });
     }
 

@@ -329,6 +329,8 @@ Deno.serve(async (req) => {
     if (body.action === 'sample') return reply(200, await sample(me, groupId, body.persona));
     // «retos»: ideas de retos pensadas para este grupo, a partir de lo que comparte.
     if (body.action === 'retos') return reply(200, await ideasDeRetos(me, groupId, !!body.force));
+    // «cuento»: la primera frase de un cuento a trozos, pensada para el grupo.
+    if (body.action === 'cuento') return reply(200, await inicioDeCuento(me, groupId));
     // «Nuestra historia»: todos los recuerdos del grupo, sin periodo.
     const story = kind === 'story';
     const periodStart = story ? STORY_PERIOD : body.periodStart;
@@ -424,7 +426,7 @@ Deno.serve(async (req) => {
       .from('proposals')
       .select('id')
       .eq('group_id', groupId)
-      .eq('game->>type', 'karaoke');
+      .in('game->>type', ['karaoke', 'cuento']);
     const tomas = new Set((karaokes ?? []).map((k) => k.id));
     // un recuerdo importado cuenta como de quien lo mandó
     const moments = (rows ?? [])
@@ -1268,6 +1270,7 @@ Puedes proponer cualquiera de estos tipos (campo «tipo»):
 - "quiz": «¿Quién de nosotros…?» para adivinar. Las «opciones» son SOLO nombres de pila de personas del grupo (2 a 4, sin inventar otras como «nadie» o «alguien más»). Solo si el grupo tiene 2 personas o más. Quien lo cree marcará la respuesta correcta.
 - "pregunta": una pregunta abierta que cada uno responde con sus palabras.
 - "recuerdo": invitar a compartir una foto o historia de antes («¿Quién tiene una foto de…?»), relacionada con lo que han contado.
+- "cuento": el minijuego «el cuento a trozos»: en «title» va la PRIMERA FRASE de un cuento (máx. 170 caracteres, muy abierta, terminada en «…») inspirada en el grupo; luego cada uno grabará cómo sigue.
 
 Reglas:
 - Usa de verdad lo que ha pasado en el grupo: sus bromas, lugares, aficiones, planes, lo que dijeron. Que se note que los conoces, sin desvelar nada privado ni ridiculizar a nadie.
@@ -1278,7 +1281,7 @@ Reglas:
 
 Responde SOLO con JSON: {"ideas":[{"tipo":"reto","title":"…","body":"…","days":3,"porque":"…","opciones":["…"],"cancion":{"titulo":"…","artista":"…"}}]} con exactamente 4 ideas (omite «opciones» y «cancion» cuando no apliquen).`;
 
-const TIPOS_IDEA = ['reto', 'karaoke', 'encuesta', 'quiz', 'pregunta', 'recuerdo'] as const;
+const TIPOS_IDEA = ['reto', 'karaoke', 'encuesta', 'quiz', 'pregunta', 'recuerdo', 'cuento'] as const;
 type IdeaReto = {
   tipo: (typeof TIPOS_IDEA)[number];
   title: string;
@@ -1399,7 +1402,7 @@ async function ideasDeRetos(me: string, groupId: string | undefined, otraVez: bo
         if (tipo === 'karaoke' && !c?.titulo) return null;
         return {
           tipo,
-          title: String(x.title).trim().slice(0, 80),
+          title: String(x.title).trim().slice(0, tipo === 'cuento' ? 200 : 80),
           body: String(x.body ?? '').trim().slice(0, 220),
           days: Math.max(1, Math.min(7, Math.round(Number(x.days) || 3))),
           porque: String(x.porque ?? '').trim().slice(0, 110),
@@ -1434,6 +1437,62 @@ async function ideasDeRetos(me: string, groupId: string | undefined, otraVez: bo
     generations_today: usadasHoy + 1,
   });
   return { ideas, generatedAt, left: Math.max(0, 5 - usadasHoy - 1) };
+}
+
+// ── El cuento a trozos: la primera frase ───────────────────────────────────
+const SYSTEM_CUENTO = `Eres la narradora de Junti, una app privada para grupos de personas que viven lejos. Vais a jugar a «el cuento a trozos»: tú escribes la PRIMERA frase de un cuento y luego cada persona del grupo grabará, por turnos, cómo sigue.
+
+Escribe una sola frase (máx. 170 caracteres), en español de España, que:
+- deje la historia muy abierta y con ganas de seguirla (termina en algo que invite a continuar, por ejemplo con «…»);
+- tenga algún guiño a lo que el grupo comparte o a dónde viven (sin datos privados), o, si no hay nada, sea un comienzo divertido y sorprendente;
+- sea apta para todos y sin nada incómodo.
+
+Responde SOLO con JSON: {"inicio":"…"}`;
+
+async function inicioDeCuento(me: string, groupId: string | undefined) {
+  if (!groupId) return { inicio: null, reason: 'bad' };
+  const [{ data: membership }, { data: group }] = await Promise.all([
+    supabase.from('memberships').select('status').match({ group_id: groupId, user_id: me }).maybeSingle(),
+    supabase.from('groups').select('name, description, narrative_enabled').eq('id', groupId).maybeSingle(),
+  ]);
+  if (membership?.status !== 'active' || !group) return { inicio: null, reason: 'forbidden' };
+  if (!group.narrative_enabled) return { inicio: null, reason: 'off' };
+  const since = new Date(Date.now() - 30 * DAY).toISOString();
+  const { data: members } = await supabase
+    .from('memberships')
+    .select('user_id, narrative_opt_out')
+    .eq('group_id', groupId)
+    .eq('status', 'active');
+  const fuera = new Set((members ?? []).filter((m) => m.narrative_opt_out).map((m) => m.user_id));
+  const ids = (members ?? []).map((m) => m.user_id);
+  const [{ data: people }, { data: moments }] = await Promise.all([
+    supabase.from('profiles').select('id, name, home_city').in('id', ids),
+    supabase
+      .from('moments')
+      .select('author_id, text')
+      .eq('group_id', groupId)
+      .is('deleted_at', null)
+      .not('text', 'is', null)
+      .gte('created_at', since)
+      .order('created_at', { ascending: false })
+      .limit(20),
+  ]);
+  const prompt = [
+    `Grupo: «${group.name}»${group.description ? ` — ${group.description}` : ''}`,
+    'Personas: ' +
+      (people ?? []).map((p) => `${String(p.name ?? '').split(' ')[0]}${p.home_city ? ` (${p.home_city})` : ''}`).join(', '),
+    'Lo último que han contado:',
+    ...(moments ?? []).filter((m) => !fuera.has(m.author_id)).map((m) => `- ${String(m.text).slice(0, 160)}`),
+  ].join('\n');
+  try {
+    const answer = await gemini(SYSTEM_CUENTO, prompt);
+    const json = JSON.parse(answer.text.replace(/^```(?:json)?|```$/g, '').trim()) as { inicio?: string };
+    const inicio = String(json.inicio ?? '').trim().slice(0, 200);
+    return inicio ? { inicio } : { inicio: null, reason: 'busy' };
+  } catch (e) {
+    console.error('cuento', e);
+    return { inicio: null, reason: 'busy' };
+  }
 }
 
 async function gemini(system: string, prompt: string): Promise<{ text: string; model: string }> {

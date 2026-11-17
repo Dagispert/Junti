@@ -41,6 +41,8 @@ export function ChallengeBlock({ challenge, answers }: { challenge: Proposal; an
   const isPlan = challenge.kind === 'plan';
   // un minijuego de karaoke: se canta en su pantalla y se ve el montaje
   const karaoke = challenge.game?.type === 'karaoke';
+  // el cuento a trozos: sus trozos no se enseñan sueltos (se oirían antes de tiempo)
+  const cuento = !!challenge.juego;
   const family = isChallenge ? 'challenge' : isPlan ? 'memory' : 'prompt';
   const fam = useFamily(family);
   const theme0 = useTheme();
@@ -236,6 +238,19 @@ export function ChallengeBlock({ challenge, answers }: { challenge: Proposal; an
           </Text>
         )}
       </Pressable>
+      {cuento && (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push({ pathname: '/cuento/[id]', params: { id: challenge.id } })}
+          style={[styles.watch, { backgroundColor: f.color }]}>
+          <Icon icon={open ? Mic : Play} size={16} color="#FFFFFF" />
+          <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>
+            {open
+              ? `Seguir el cuento · ${answers.length} ${answers.length === 1 ? 'trozo' : 'trozos'}`
+              : 'Escuchar el cuento entero'}
+          </Text>
+        </Pressable>
+      )}
       {karaoke && answers.length > 0 && (
         <Pressable
           accessibilityRole="button"
@@ -278,7 +293,7 @@ export function ChallengeBlock({ challenge, answers }: { challenge: Proposal; an
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ gap: 10, paddingVertical: 4, paddingRight: 4 }}>
-        {rest.map((m) => (
+        {(cuento ? [] : rest).map((m) => (
           <Pressable
             key={m.id}
             ref={(n) => {
@@ -319,7 +334,7 @@ export function ChallengeBlock({ challenge, answers }: { challenge: Proposal; an
           </Pressable>
         ))}
         {/* en el karaoke, cada uno canta una vez */}
-        {open && !(karaoke && mine) && (
+        {open && !(karaoke && mine) && !cuento && (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={
