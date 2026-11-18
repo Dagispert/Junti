@@ -452,12 +452,17 @@ Deno.serve(async (req) => {
     // La versión de siesta (sin IA) se da por buena un rato; luego se vuelve a
     // intentar con la narradora de verdad.
     const resting = existing?.model === 'plantilla';
+    // En la semana (o el mes) que aún no ha terminado, lo que se comparte va
+    // cambiando sin parar: la crónica (y su voz) se reescribe como mucho cada
+    // 3 horas, no con cada publicación (si no, se agota el cupo de Gemini).
+    const enCurso = to > Date.now();
+    const reciente = !!existing && Date.now() - Date.parse(existing.updated_at) < 3 * 3600_000;
     const fresh =
       existing &&
       existing.scenes &&
       (existing.model === 'plantilla' || (existing.scenes as { moment_id: string | null }[]).some((x) => x.moment_id === 'greeting')) &&
       existing.style === style &&
-      existing.moment_count === moments.length + extras &&
+      (existing.moment_count === moments.length + extras || (enCurso && !resting && reciente)) &&
       (!resting || Date.now() - Date.parse(existing.updated_at) < 15 * 60_000);
     if (fresh && !body.force) return reply(200, { narration: await present(existing as Row) });
     if (existing && body.force && existing.generations >= MAX_VERSIONS) {
@@ -1938,7 +1943,8 @@ async function gemini(system: string, prompt: string): Promise<{ text: string; m
   let listed = false;
   let busy = '';
   const retried = new Set<string>();
-  while (tried.length < 8) {
+  // (hasta 14 modelos: cada uno tiene su propio cupo gratis; los «lite», más)
+  while (tried.length < 14) {
     if (!queue.length && !listed) {
       listed = true;
       const list = await fetch(`${base}/models?pageSize=1000`, {
