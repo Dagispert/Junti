@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { type ReactNode, useEffect } from 'react';
+import { type ReactNode } from 'react';
 import { router } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -31,7 +31,7 @@ export function RecapCard({
   accessory?: ReactNode;
 }) {
   const theme = useTheme();
-  const { moments, user, proposals, songs, group, narrate } = useStore();
+  const { moments, user, proposals, songs } = useStore();
   const recap = buildRecap(
     kind,
     from,
@@ -40,20 +40,8 @@ export function RecapCard({
     proposals,
     songs,
   );
-  // Con la narradora activada, la crónica se va escribiendo en cuanto se ve la
-  // tarjeta: al abrir el resumen ya está lista.
-  const narrating = !!group(groupId)?.narrativeEnabled && recap.moments.length > 0;
-  const count = recap.moments.length;
-  useEffect(() => {
-    if (!narrating) return;
-    const args = { groupId, kind, from, to: recap.to, label: recap.range };
-    narrate(args)
-      .then((r) => {
-        if (r.narration && !r.narration.audioUrl) return narrate({ ...args, action: 'voice' });
-      })
-      .catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [narrating, groupId, kind, from, count]);
+  // (La crónica y su voz ya NO se encargan al ver la tarjeta: gastaban el cupo
+  // gratis de Gemini con cada visita a Memoria. Se escriben al abrir la historia.)
 
   if (!recap.moments.length) return null;
   const photos = recap.picks.filter((m) => m.imageUri || m.videoUri);
