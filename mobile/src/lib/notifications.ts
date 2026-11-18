@@ -15,6 +15,7 @@ import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { useStore } from '@/data/store';
 import type { Moment } from '@/data/types';
 
+import { monthStart, weekStart } from './recap';
 import { supabase } from './supabase';
 
 export type NotifKind =
@@ -30,7 +31,9 @@ export type NotifKind =
   | 'addition'
   | 'challenge'
   | 'question'
-  | 'song';
+  | 'song'
+  /** la narradora ya ha contado la semana o el mes que terminó */
+  | 'historia';
 
 export type Notif = {
   key: string;
@@ -364,6 +367,45 @@ export function useNotifications() {
           scope: `proposal:${p.id}`,
           to: { pathname: '/dibujo/[id]', params: { id: p.id } },
         });
+    }
+
+    // 5c) la historia narrada de la semana (y del mes) que acaba de terminar
+    {
+      const ahora = Date.now();
+      const periodos = [
+        { kind: 'week' as const, fin: weekStart(ahora), ini: weekStart(ahora) - 7 * 86_400_000 },
+        {
+          kind: 'month' as const,
+          fin: monthStart(ahora),
+          ini: monthStart(monthStart(ahora) - 86_400_000),
+        },
+      ];
+      for (const g of groups) {
+        if (!g.narrativeEnabled) continue;
+        for (const pe of periodos) {
+          if (pe.fin < since) continue;
+          const hubo = moments.some(
+            (m) => m.groupId === g.id && m.createdAt >= pe.ini && m.createdAt < pe.fin,
+          );
+          if (!hubo) continue;
+          out.push({
+            key: `historia:${g.id}:${pe.kind}:${pe.ini}`,
+            kind: 'historia',
+            groupId: g.id,
+            at: pe.fin,
+            actors: ['narradora'],
+            text:
+              pe.kind === 'week'
+                ? 'os ha contado la historia de vuestra semana. ¿La veis?'
+                : 'os ha contado la historia de vuestro mes. ¿La veis?',
+            scope: `historia:${g.id}:${pe.kind}:${pe.ini}`,
+            to: {
+              pathname: '/recap',
+              params: { groupId: g.id, kind: pe.kind, from: String(pe.ini) },
+            },
+          });
+        }
+      }
     }
 
     // 6) preguntas, encuestas y quizzes

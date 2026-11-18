@@ -106,7 +106,9 @@ function RecapSlides() {
 
   // La crónica de la narradora, si el grupo la tiene activada: primero el
   // texto y luego su voz. Mientras tanto (o si falla) se ven las frases de siempre.
-  const narrating = !!group(groupId)?.narrativeEnabled && recap.moments.length > 0;
+  // (la narradora, solo cuando el periodo ha terminado: ver recap-film)
+  const narrating =
+    !!group(groupId)?.narrativeEnabled && recap.to <= Date.now() && recap.moments.length > 0;
   const [narration, setNarration] = useState<Narration | null>(null);
   const [writing, setWriting] = useState(false);
   const [voicing, setVoicing] = useState(false);

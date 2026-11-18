@@ -10,6 +10,7 @@ import {
   MessageCircle,
   Mic,
   Music,
+  Play,
   Camera,
   Reply,
   UserCheck,
@@ -19,6 +20,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { Icon } from '@/components/icon';
+import { LogoMark } from '@/components/logo';
 import { Avatar, Button, Screen, Title } from '@/components/ui';
 import { useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
@@ -46,6 +48,7 @@ const KIND: Record<NotifKind, { icon: LucideIcon; color: string }> = {
   addition: { icon: History, color: '#B07A3A' },
   question: { icon: ChartColumn, color: '#8A5CF6' },
   song: { icon: Music, color: '#D8A21E' },
+  historia: { icon: Play, color: '#2F7D4F' },
 };
 
 /** «Hoy», «Ayer», «Esta semana», «Antes». */
@@ -97,7 +100,7 @@ export default function Notificaciones() {
     markRead(n.scope);
     router.push(n.to as never);
   };
-  const name = (id: string) => user(id).name.split(' ')[0];
+  const name = (id: string) => (id === 'narradora' ? 'La narradora' : user(id).name.split(' ')[0]);
   const many = groups.length > 1;
 
   return (
@@ -192,7 +195,11 @@ export default function Notificaciones() {
                       (hovered || pressed) && { backgroundColor: theme.soft },
                     ]}>
                     <View>
-                      <Avatar userId={n.actors[0]} size={wide ? 46 : 42} />
+                      {n.actors[0] === 'narradora' ? (
+                        <LogoMark size={wide ? 46 : 42} />
+                      ) : (
+                        <Avatar userId={n.actors[0]} size={wide ? 46 : 42} />
+                      )}
                       <View
                         style={[
                           styles.badge,

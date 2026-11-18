@@ -349,6 +349,9 @@ Deno.serve(async (req) => {
     if (!groupId || !validSpan || !/^\d{4}-\d{2}-\d{2}$/.test(periodStart ?? '')) {
       return reply(400, { error: 'Petición no válida' });
     }
+    // La semana (o el mes) se cuenta cuando ha terminado: así se escribe una
+    // sola vez y no se gasta el cupo de Gemini mientras va pasando.
+    if (!story && to > Date.now()) return reply(200, { narration: null, reason: 'en-curso' });
 
     // Tiene que ser del grupo, y el grupo tiene que haber activado la narradora.
     const [{ data: membership }, { data: group }] = await Promise.all([

@@ -24,6 +24,7 @@ import { whereOf } from '@/lib/film';
 import { analizarRitmo, type Ritmo } from '@/lib/beats';
 import { usePreview } from '@/lib/music';
 import { narratorAudio, narratorStream, primeNarrator, stopNarrator } from '@/lib/narrator';
+import { markRead } from '@/lib/notifications';
 import { buildRecap } from '@/lib/recap';
 import { fetchWeatherAt, type PastWeather } from '@/lib/weather';
 import type { JuegoPieza } from '@/pelicula/guion';
@@ -62,7 +63,14 @@ export default function RecapFilm() {
   );
 
   // ── La crónica de la narradora (texto y luego voz) ──
-  const narrating = !!group(groupId)?.narrativeEnabled && recap.moments.length > 0;
+  // La narradora cuenta la semana (o el mes) cuando ha terminado: mientras
+  // tanto se ve cómo va, sin su voz (así no se gasta el cupo de Gemini).
+  const conNarradora = !!group(groupId)?.narrativeEnabled;
+  const enCurso = recap.to > Date.now();
+  const narrating = conNarradora && !enCurso && recap.moments.length > 0;
+  useEffect(() => {
+    markRead(`historia:${groupId}:${recap.kind}:${recap.from}`);
+  }, [groupId, recap.kind, recap.from]);
   const [narration, setNarration] = useState<Narration | null>(null);
   const [writing, setWriting] = useState(narrating);
   const [voicing, setVoicing] = useState(false);
@@ -316,6 +324,13 @@ export default function RecapFilm() {
             {recap.kind === 'week' ? 'VUESTRA SEMANA' : 'VUESTRO MES'}
           </Text>
           <Text style={styles.waitTitle}>{narration?.title || recap.range}</Text>
+          {conNarradora && enCurso && (
+            <Text style={styles.waitNote}>
+              {recap.kind === 'week'
+                ? 'Así va vuestra semana. La narradora os la contará entera cuando termine, el lunes.'
+                : 'Así va vuestro mes. La narradora os lo contará entero cuando termine, el día 1.'}
+            </Text>
+          )}
           {ready && resting ? (
             <Resting
               accent={accent}
