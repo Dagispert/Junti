@@ -2,7 +2,7 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { SendCinematic } from '@/components/cinematics';
 import { CityPicker } from '@/components/city-picker';
@@ -10,6 +10,7 @@ import { useGroupPeople } from '@/components/connection-card';
 import { DatePick } from '@/components/date-pick';
 import { Icon } from '@/components/icon';
 import { type Clip, InlineVideo, VoiceNote } from '@/components/media-players';
+import { DibujarFoto } from '@/components/dibujar-foto';
 import { PhotoCropper } from '@/components/photo-cropper';
 import { VideoTrimmer } from '@/components/video-trimmer';
 import { PressScale } from '@/components/motion';
@@ -23,7 +24,18 @@ import { secondsOf, videoLength, videoPoster } from '@/lib/media';
 import { mmss } from '@/lib/music';
 import { useVoiceRecorder } from '@/lib/recorder';
 import { dateFromWhatsAppName, takeHandOff } from '@/lib/shared';
-import { Camera, Crop, ImageIcon, MapPin, Mic, Play, Plus, Video, X } from 'lucide-react-native';
+import {
+  Camera,
+  Crop,
+  ImageIcon,
+  MapPin,
+  Mic,
+  Pencil,
+  Play,
+  Plus,
+  Video,
+  X,
+} from 'lucide-react-native';
 
 /** Lo que se enseña de un vídeo, como mucho (se elige el tramo). */
 const MAX_VIDEO = 30;
@@ -102,6 +114,8 @@ export default function Publish() {
   const [dateFromPhoto, setDateFromPhoto] = useState(false);
   // La foto que se está recortando (su posición en la lista).
   const [cropping, setCropping] = useState<number | null>(null);
+  // dibujar encima de una foto (para señalar algo)
+  const [dibujando, setDibujando] = useState<number | null>(null);
   // Lo que llega compartido desde otra app (WhatsApp…), ya puesto.
   useEffect(() => {
     const s = takeHandOff();
@@ -150,6 +164,19 @@ export default function Publish() {
         onDone={(cropped) => {
           update(cropping, { uri: cropped });
           setCropping(null);
+        }}
+      />
+    );
+  }
+
+  if (dibujando !== null && items[dibujando]?.kind === 'photo') {
+    return (
+      <DibujarFoto
+        uri={items[dibujando].uri}
+        onCancel={() => setDibujando(null)}
+        onDone={(dibujada) => {
+          update(dibujando, { uri: dibujada });
+          setDibujando(null);
         }}
       />
     );
@@ -428,6 +455,16 @@ export default function Publish() {
                 <Text style={styles.floatText}>Recortar</Text>
               </Pressable>
             )}
+            {media.kind === 'photo' && Platform.OS === 'web' && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Dibujar encima de la foto"
+                onPress={() => setDibujando(current)}
+                style={styles.floatButton}>
+                <Icon icon={Pencil} size={16} color="#FFFFFF" />
+                <Text style={styles.floatText}>Dibujar</Text>
+              </Pressable>
+            )}
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Cambiar"
@@ -684,19 +721,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  floating: { position: 'absolute', top: 22, right: 22, flexDirection: 'row', gap: 8 },
+  // (con «Dibujar» son cuatro: si no caben en una fila, bajan a la siguiente)
+  floating: {
+    position: 'absolute',
+    top: 22,
+    left: 22,
+    right: 22,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    gap: 6,
+  },
   floatButton: {
     flexDirection: 'row',
     gap: 6,
     height: 36,
     minWidth: 36,
-    paddingHorizontal: 12,
+    paddingHorizontal: 11,
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(20,22,26,0.55)',
   },
-  floatText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  floatText: { color: '#fff', fontSize: 14, fontWeight: '600' },
   videoTag: {
     position: 'absolute',
     right: 12,
