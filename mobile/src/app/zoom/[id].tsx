@@ -10,6 +10,7 @@ import { Lupa } from '@/components/lupa';
 import { Avatar, Button, Notice, Screen, Tag } from '@/components/ui';
 import { Hand, MaxContentWidth, Spacing, useTheme } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
+import { sonar } from '@/lib/sonidos';
 import { markRead } from '@/lib/notifications';
 import { daysLeft } from '@/lib/time';
 import {
@@ -86,6 +87,10 @@ export default function Zoom() {
     try {
       const r = await adivinar(proposal.id, texto.trim(), rendirse);
       setLocal(r);
+      if (r.acierto) {
+        sonar('acierto');
+        setTimeout(() => sonar('sello'), 900);
+      } else if (!rendirse) sonar(r.terminado ? 'sello' : 'fallo');
       if (!r.acierto && !rendirse && !r.terminado) setFallo((x) => x + 1);
       if (r.respuesta) setSol(r.respuesta);
       setTexto('');

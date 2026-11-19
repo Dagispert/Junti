@@ -10,6 +10,7 @@ import { Lienzo, type LienzoRef } from '@/components/lienzo';
 import { Avatar, Button, Notice, Screen, Tag } from '@/components/ui';
 import { Hand, MaxContentWidth, Spacing, useTheme } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
+import { sonar } from '@/lib/sonidos';
 import { type PasoDibujo, seguirDibujo, subirDibujo, usePasosDibujo } from '@/lib/dibujo';
 import { markRead } from '@/lib/notifications';
 import { supabase } from '@/lib/supabase';
@@ -63,8 +64,10 @@ export default function Dibujo() {
         const png = await lienzo.current!.exportar();
         const ruta = await subirDibujo(proposal.groupId, me, png);
         await seguirDibujo(proposal.id, n - 1, { ruta });
+        sonar('lapiz');
       } else {
         await seguirDibujo(proposal.id, n - 1, { texto: texto.trim() });
+        sonar('enviar');
         setTexto('');
       }
     } catch (e) {
@@ -281,6 +284,11 @@ function CadenaEntera({
 }) {
   const theme = useTheme();
   const { user } = useStore();
+  // al destaparse la cadena: el papel que se despliega
+  const hay = !!pasos?.length;
+  useEffect(() => {
+    if (hay) sonar('papel');
+  }, [hay]);
   if (!pasos) return <Text style={{ color: theme.textSecondary }}>Cargando…</Text>;
   const primera = pasos[0];
   const ultima = [...pasos].reverse().find((p) => p.tipo === 'frase');

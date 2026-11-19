@@ -30,6 +30,7 @@ import {
   useModo,
   useTema,
 } from '@/lib/appearance';
+import { setSonidos, useSonidos } from '@/lib/sonidos';
 import { setFamilyColorMode, useFamilyColorMode } from '@/lib/families';
 import { Radius, Spacing, TEMAS, useTheme } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
@@ -38,7 +39,16 @@ import { soyAdmin } from '@/lib/errores';
 import { requestTour } from '@/lib/tour';
 import { disablePush, enablePush, pushState, type PushState } from '@/lib/push';
 
-type Seccion = 'nombre' | 'sobre' | 'tema' | 'modo' | 'fondo' | 'colores' | 'avisos' | 'borrar';
+type Seccion =
+  | 'nombre'
+  | 'sobre'
+  | 'tema'
+  | 'modo'
+  | 'fondo'
+  | 'colores'
+  | 'sonidos'
+  | 'avisos'
+  | 'borrar';
 
 /**
  * Tus ajustes, ordenados como los del grupo: arriba, tú de un vistazo; luego
@@ -70,6 +80,7 @@ export default function Settings() {
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [open, setOpen] = useState<Seccion | null>(null);
+  const sonidos = useSonidos();
   // Sobre ti
   const about = profile.about;
   const [nickname, setNickname] = useState(about.nickname ?? '');
@@ -498,6 +509,25 @@ export default function Settings() {
                 ),
               )}
             </View>
+          </>,
+        )}
+        {row(
+          'sonidos',
+          'Sonidos',
+          sonidos ? 'Encendidos' : 'Apagados',
+          <>
+            {chips(
+              [
+                ['si', 'Encendidos'],
+                ['no', 'Apagados'],
+              ] as const,
+              sonidos ? 'si' : 'no',
+              (v) => setSonidos(v === 'si'),
+            )}
+            <Small>
+              Sonidos cortos y bajitos al reaccionar, comentar, acertar en el zoom, encender la tele
+              del karaoke… y en la película de la semana.
+            </Small>
           </>,
         )}
       </Lista>

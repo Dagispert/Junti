@@ -11,4 +11,5 @@ Un minijuego no está terminado hasta que tiene:
 5. **Su fotograma en el carrete del mes** (`useFotogramasJuegos` y `rutaJuego` en `lib/juegos-pelicula.ts`), sin destripar si sigue abierto.
 6. **Contado a la narradora**: `describirJuego` en `supabase/functions/narrate/index.ts` (y su tipo en las ideas «Pensados para vosotros»).
 7. **Avisos** en la campanita (`lib/notifications.ts`), su etiqueta en Retos (`app/group/[id]/retos.tsx`) y fuera del resumen de momentos sueltos (`lib/recap.ts`).
-8. Que funcione entre **iPhone y Android** (p. ej., audio grabado en Chrome: Opus, ver `lib/opus.ts`).
+8. **Sus sonidos** (`lib/sonidos.ts`, archivos en `mobile/public/sonidos/`, hechos con ElevenLabs): al jugar, acertar, enviar, revelar…
+9. Que funcione entre **iPhone y Android** (p. ej., audio grabado en Chrome: Opus, ver `lib/opus.ts`).

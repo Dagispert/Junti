@@ -11,6 +11,7 @@ import { Avatar, Button, Notice, Screen, Tag } from '@/components/ui';
 import { Hand, Spacing, useTheme } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
 import type { Moment } from '@/data/types';
+import { sonar } from '@/lib/sonidos';
 import { idParaPublicar } from '@/lib/cola';
 import { supabase } from '@/lib/supabase';
 import { useCuentoEntero } from '@/lib/cuento-entero';
@@ -83,6 +84,7 @@ export default function Cuento() {
         proposalId: proposal.id,
         voice: voz.result,
       });
+      sonar('pagina');
       voz.reset();
     } catch (e) {
       setNotice(errorText(e));

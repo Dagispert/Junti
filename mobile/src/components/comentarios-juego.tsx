@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
+import { sonar } from '@/lib/sonidos';
 import { supabase } from '@/lib/supabase';
 import { relative } from '@/lib/time';
 
@@ -94,6 +95,7 @@ export function ComentariosJuego({
       .select('id, user_id, text, created_at')
       .single();
     if (!error && data) {
+      sonar('enviar');
       setLista((l) => (l.some((c) => c.id === data.id) ? l : [...l, data as Comentario]));
       setBorrador('');
     }

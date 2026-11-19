@@ -24,6 +24,7 @@ import {
   vocesEnWav,
 } from '@/lib/karaoke';
 import { idParaPublicar } from '@/lib/cola';
+import { sonar } from '@/lib/sonidos';
 import {
   ALTO,
   ANCHO,
@@ -1086,6 +1087,7 @@ function Montage({
       return out;
     })();
     setState('intro');
+    sonar('tele');
     if (hayQueGrabar && !grab.current && !archivo) empezarGrabacion(c);
     const desde = performance.now();
     introTimer.current = setTimeout(async () => {
@@ -1513,6 +1515,7 @@ function Montage({
       if (t >= duration) {
         parar();
         setState('ended');
+        sonar('aplausos');
         const g = grab.current;
         if (g) {
           // el cierre de Junti (unos segundos) antes de terminar el vídeo

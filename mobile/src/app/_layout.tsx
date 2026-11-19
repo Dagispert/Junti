@@ -22,6 +22,7 @@ import { StoreProvider, useStore } from '@/data/store';
 import { AlDia } from '@/lib/al-dia';
 import { apuntarError, instalarErrores } from '@/lib/errores';
 import { arrancar as arrancarInclinacion } from '@/lib/inclinacion';
+import { prepararSonidos } from '@/lib/sonidos';
 import { mostrarGuia } from '@/lib/instalar';
 import { rememberInvite, takeInvite } from '@/lib/invite';
 import { setupInstallable } from '@/lib/push';
@@ -92,6 +93,8 @@ export default function RootLayout() {
   useEffect(instalarErrores, []);
   // la inclinación del móvil (en el iPhone, el permiso se pide con el primer toque)
   useEffect(arrancarInclinacion, []);
+  // los efectos de sonido (se desbloquean con el primer toque)
+  useEffect(prepararSonidos, []);
   return (
     <ThemeProvider value={navTema}>
       <StoreProvider>

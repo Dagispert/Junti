@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Hand, HandBold } from '@/constants/theme';
 import { accentDay, accentNight, DEFAULT_ACCENT } from '@/lib/accent';
+import { type Sonido, sonar } from '@/lib/sonidos';
 import type { DatosPelicula, Plan } from '@/pelicula/guion';
 import { FLASH, Pelicula } from '@/pelicula/pelicula';
 
@@ -77,11 +78,22 @@ export function FilmPlayer({
     let lastSub = '';
     let playing: Plan['voces'][number] | null = null;
     const dayAt = plan.calendario[0] + FLASH + 0.2;
+    // los efectos de sonido de la película, en su momento (solo al verla avanzar)
+    const efectos: [number, Sonido][] = [
+      [0.15, 'reloj'],
+      [plan.persiana[0] + 0.2, 'persiana'],
+      [plan.libreta[0] + 0.3, 'pagina'],
+      [plan.final[0] + 0.4, 'destello'],
+    ];
+    let antes = 0;
     const loop = (now: number) => {
       const dt = Math.min(0.25, (now - last) / 1000);
       last = now;
       if (!stop.current && !ended.current && !congelado.current) t.current += dt;
       const time = Math.min(t.current, plan.total);
+      if (time > antes && time - antes < 0.5)
+        for (const [en, son] of efectos) if (antes < en && time >= en) sonar(son);
+      antes = time;
       film.current?.pintar(time);
       cb.current.onTime?.(time, plan.total);
       if (time >= plan.total && !ended.current) {

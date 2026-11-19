@@ -14,6 +14,7 @@ import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-na
 import { Radius, Spacing, useTheme } from '@/constants/theme';
 import { useStore } from '@/data/store';
 import type { Moment } from '@/data/types';
+import { sonar } from '@/lib/sonidos';
 import { encolar, esErrorDeRed, sinConexion } from '@/lib/cola';
 import { type FamilyId } from '@/lib/families';
 import { clockIn, relative } from '@/lib/time';
@@ -94,7 +95,10 @@ export function MomentCard({
   /** Reaccionar: al ponerla, el emoji sale volando por encima de la publicación. */
   const react = (emoji: string) => {
     const mine = moment.reactions.some((r) => r.emoji === emoji && r.userId === me);
-    if (!mine) setBursts((b) => [...b, { id: ++burstId.current, emoji }]);
+    if (!mine) {
+      setBursts((b) => [...b, { id: ++burstId.current, emoji }]);
+      sonar('pop');
+    }
     toggleReaction(moment.id, emoji).catch(() => {});
   };
   const pickOther = (emoji: string) => {
@@ -106,6 +110,7 @@ export function MomentCard({
     const text = draft.trim();
     if (!text) return;
     const target = replyTo;
+    sonar('enviar');
     setDraft('');
     setReplyTo(null);
     const aLaCola = () =>

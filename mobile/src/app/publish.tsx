@@ -17,6 +17,7 @@ import { PressScale } from '@/components/motion';
 import { Button, Notice, ProgressButton, Screen, Tag, Title } from '@/components/ui';
 import { Radius, Spacing, useTheme } from '@/constants/theme';
 import { errorText, useStore } from '@/data/store';
+import { sonar } from '@/lib/sonidos';
 import { encolar, esErrorDeRed, idParaPublicar, sinConexion } from '@/lib/cola';
 import { dateFromFile, dateFromPickerExif } from '@/lib/exif';
 import type { Place } from '@/lib/geo';
@@ -333,6 +334,7 @@ export default function Publish() {
         if (!esErrorDeRed(error)) throw error;
         await encolar('momento', input, groupId);
       }
+      sonar('obturador');
       setSent(true);
     } catch (error) {
       setNotice(errorText(error));
