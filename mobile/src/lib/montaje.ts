@@ -17,6 +17,7 @@ import {
 import { Brand } from '@/constants/brand';
 import type { KaraokeGame } from '@/data/types';
 
+import { CACHE_LARGA, firmar } from './firmas';
 import { MEDIA_BUCKET, supabase } from './supabase';
 
 /** Qué tomas tiene el montaje (si cambia alguna, hay que volver a grabarlo). */
@@ -35,16 +36,9 @@ export function useMontaje(game?: KaraokeGame) {
   useEffect(() => {
     if (!path) return;
     let vivo = true;
-    supabase.storage
-      .from(MEDIA_BUCKET)
-      .createSignedUrls([path, ...(poster ? [poster] : [])], 3600)
-      .then(({ data }) => {
-        if (vivo && data)
-          setUrls({
-            video: data[0]?.signedUrl ?? undefined,
-            poster: data[1]?.signedUrl ?? undefined,
-          });
-      });
+    firmar(MEDIA_BUCKET, [path, ...(poster ? [poster] : [])]).then((f) => {
+      if (vivo) setUrls({ video: f[path], poster: poster ? f[poster] : undefined });
+    });
     return () => {
       vivo = false;
     };
@@ -69,15 +63,16 @@ export async function subirMontaje(args: {
   const { groupId, me, proposalId, video, poster, firma, duracion, voces, audio } = args;
   const ext = /mp4/.test(video.type) ? 'mp4' : 'webm';
   const base = `${groupId}/${me}/karaoke-${proposalId}-${firma}-${Date.now().toString(36)}`;
-  const up = await supabase.storage
-    .from(MEDIA_BUCKET)
-    .upload(`${base}.${ext}`, video, { contentType: video.type || `video/${ext}` });
+  const up = await supabase.storage.from(MEDIA_BUCKET).upload(`${base}.${ext}`, video, {
+    contentType: video.type || `video/${ext}`,
+    cacheControl: CACHE_LARGA,
+  });
   if (up.error) throw new Error(up.error.message);
   let posterPath: string | null = null;
   if (poster) {
     const p = await supabase.storage
       .from(MEDIA_BUCKET)
-      .upload(`${base}.jpg`, poster, { contentType: 'image/jpeg' });
+      .upload(`${base}.jpg`, poster, { contentType: 'image/jpeg', cacheControl: CACHE_LARGA });
     if (!p.error) posterPath = `${base}.jpg`;
   }
   const { error } = await supabase.rpc('guardar_montaje_karaoke', {

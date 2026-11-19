@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'react';
 
+import { CACHE_LARGA, firmar } from './firmas';
 import { MEDIA_BUCKET, supabase } from './supabase';
 
 export type PasoDibujo = {
@@ -50,11 +51,8 @@ export function usePasosDibujo(proposalId: string, n: number) {
       const lista = (data ?? []) as PasoDibujo[];
       const rutas = lista.filter((p) => p.path).map((p) => p.path!);
       if (rutas.length) {
-        const { data: firmadas } = await supabase.storage
-          .from(MEDIA_BUCKET)
-          .createSignedUrls(rutas, 6 * 3600);
-        const por = new Map((firmadas ?? []).map((f) => [f.path, f.signedUrl]));
-        for (const p of lista) if (p.path) p.url = por.get(p.path) ?? undefined;
+        const por = await firmar(MEDIA_BUCKET, rutas);
+        for (const p of lista) if (p.path) p.url = por[p.path];
       }
       if (vivo) setPasos(lista);
     };
@@ -85,7 +83,7 @@ export async function subirDibujo(groupId: string, me: string, png: Blob) {
   const path = `${groupId}/${me}/dibujo-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.png`;
   const { error } = await supabase.storage
     .from(MEDIA_BUCKET)
-    .upload(path, png, { contentType: 'image/png' });
+    .upload(path, png, { contentType: 'image/png', cacheControl: CACHE_LARGA });
   if (error) throw new Error(error.message);
   return path;
 }

@@ -11,15 +11,11 @@ import { useEffect, useState } from 'react';
 import type { Moment, Proposal, User } from '@/data/types';
 import type { JuegoPieza } from '@/pelicula/guion';
 
+import { firmar as firmarCache } from './firmas';
 import { MEDIA_BUCKET, supabase } from './supabase';
 
-const firmar = async (paths: string[]) => {
-  if (!paths.length) return new Map<string, string>();
-  const { data } = await supabase.storage.from(MEDIA_BUCKET).createSignedUrls(paths, 6 * 3600);
-  return new Map(
-    (data ?? []).filter((d) => d.signedUrl).map((d) => [d.path!, d.signedUrl as string]),
-  );
-};
+const firmar = async (paths: string[]) =>
+  new Map(Object.entries(paths.length ? await firmarCache(MEDIA_BUCKET, paths) : {}));
 
 /** ¿Es un minijuego (con su propia animación)? */
 export const esMinijuego = (p: Proposal) =>

@@ -1,6 +1,8 @@
 import type { Session } from '@supabase/supabase-js';
 import { createContext, use, useEffect, useState, type ReactNode } from 'react';
 
+import { comprimirFoto } from '@/lib/comprimir';
+import { CACHE_LARGA, firmar, olvidarFirmas } from '@/lib/firmas';
 import type { Place } from '@/lib/geo';
 import { extensionFor } from '@/lib/media';
 import { apuntarError } from '@/lib/errores';
@@ -230,7 +232,7 @@ async function putFile(groupId: string, me: string, uri: string, name: string, m
   const path = `${groupId}/${me}/${name}`;
   const upload = await supabase.storage
     .from(MEDIA_BUCKET)
-    .upload(path, blob, { contentType: mime });
+    .upload(path, blob, { contentType: mime, cacheControl: CACHE_LARGA });
   if (upload.error) {
     throw new Error(
       /exceeded|too large|size/i.test(upload.error.message)
@@ -249,7 +251,12 @@ async function saveVisuals(
   stamp: string,
 ): Promise<string[]> {
   const ids: string[] = [];
-  for (const [i, item] of items.entries()) {
+  for (const [i, original] of items.entries()) {
+    // las fotos, más ligeras (1600 px, JPEG 82 %): pesan una fracción y se ven igual
+    const item =
+      original.kind === 'photo'
+        ? { ...original, ...(await comprimirFoto(original.uri, original.mime)) }
+        : original;
     const mime = item.mime ?? (item.kind === 'video' ? 'video/mp4' : 'image/jpeg');
     const name = i === 0 ? stamp : `${stamp}-${i + 1}`;
     const file = await putFile(
@@ -515,12 +522,10 @@ async function load(me: string): Promise<Data> {
 
   // Fotos de perfil: también privadas, con dirección temporal firmada.
   const avatarPaths = (profiles ?? []).map((p) => p.avatar_path).filter(Boolean) as string[];
-  const avatars: Record<string, string> = {};
-  if (avatarPaths.length) {
-    const { data } = await supabase.storage.from(AVATAR_BUCKET).createSignedUrls(avatarPaths, 3600);
-    for (const item of data ?? [])
-      if (item.path && item.signedUrl) avatars[item.path] = item.signedUrl;
-  }
+  // (enlaces guardados y reutilizados: así el móvil no las vuelve a descargar)
+  const avatars: Record<string, string> = avatarPaths.length
+    ? await firmar(AVATAR_BUCKET, avatarPaths)
+    : {};
 
   const users: Record<string, User> = {};
   for (const p of profiles ?? []) {
@@ -626,14 +631,8 @@ async function load(me: string): Promise<Data> {
         .filter(Boolean),
     ),
   ] as string[];
-  const signed: Record<string, string> = {};
-  for (let k = 0; k < paths.length; k += 100) {
-    const { data } = await supabase.storage
-      .from(MEDIA_BUCKET)
-      .createSignedUrls(paths.slice(k, k + 100), 3600);
-    for (const item of data ?? [])
-      if (item.path && item.signedUrl) signed[item.path] = item.signedUrl;
-  }
+  // Los mismos enlaces durante días: el móvil reaprovecha lo ya descargado.
+  const signed: Record<string, string> = await firmar(MEDIA_BUCKET, paths);
 
   for (const g of groups) g.coverUri = g.coverPath ? signed[g.coverPath] : undefined;
 
@@ -994,6 +993,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     signOut: async () => {
       // Este dispositivo deja de recibir avisos de esta cuenta.
       await disablePush().catch(() => {});
+      olvidarFirmas();
       await supabase.auth.signOut();
     },
     saveProfile: async (name, place) => {
@@ -1523,7 +1523,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const path = `${me}/${Date.now()}.jpg`;
       const upload = await supabase.storage
         .from(AVATAR_BUCKET)
-        .upload(path, bytes, { contentType: 'image/jpeg' });
+        .upload(path, bytes, { contentType: 'image/jpeg', cacheControl: CACHE_LARGA });
       if (upload.error) throw new Error(upload.error.message);
       const previous = data.users[me]?.avatarPath;
       check(await supabase.from('profiles').update({ avatar_path: path }).eq('id', me));
@@ -1568,7 +1568,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const path = `${groupId}/${me}/portada-${Date.now()}.jpg`;
         const upload = await supabase.storage
           .from(MEDIA_BUCKET)
-          .upload(path, blob, { contentType: 'image/jpeg' });
+          .upload(path, blob, { contentType: 'image/jpeg', cacheControl: CACHE_LARGA });
         if (upload.error) throw new Error(upload.error.message);
         change.cover_path = path;
       }

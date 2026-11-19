@@ -33,14 +33,14 @@ import { type Fondo, useFondo } from '@/lib/appearance';
 import { useEntradaSuave } from '@/lib/pestanas';
 
 import { EASE_IN_VIEW, SPRING } from './motion';
-import { VideoClip, VideoFrame, Waveform } from './media-players';
+import { VideoFrame, Waveform } from './media-players';
 import type { Moment } from '@/data/types';
 
 /** Contenedor de pantalla con scroll, márgenes seguros y ancho máximo. Al tirar hacia abajo, recarga. */
 // Grano de papel: motas y fibras pequeñas repartidas (siempre las mismas).
 const PAPEL = (() => {
   let x = 7;
-  const r = () => ((x = (x * 16807) % 2147483647) / 2147483647);
+  const r = () => (x = (x * 16807) % 2147483647) / 2147483647;
   let out = '';
   for (let i = 0; i < 140; i++)
     out += `<circle cx='${(r() * 180).toFixed(1)}' cy='${(r() * 180).toFixed(1)}' r='${(0.4 + r() * 0.7).toFixed(2)}' fill='C' fill-opacity='${(0.05 + r() * 0.08).toFixed(3)}'/>`;
@@ -209,7 +209,7 @@ export function Photo({
   moment,
   style,
   badge = true,
-  animate = true,
+  animate: _animate = true,
 }: {
   moment: Moment;
   style?: StyleProp<ViewStyle>;
@@ -228,10 +228,8 @@ export function Photo({
           contentFit="cover"
           transition={200}
         />
-        {/* En los vídeos, la portada se anima: sus primeros segundos en bucle, como un GIF. */}
-        {moment.videoUri && animate && (
-          <VideoClip uri={moment.videoUri} start={moment.videoClip?.start} />
-        )}
+        {/* (Los vídeos ya no se animan aquí: descargaban el vídeo en cada lista y
+            agotaban el cupo de descargas. Se ve su portada; el vídeo, al abrirlo.) */}
         {badge && moment.videoUri && (
           <View style={styles.playBadge}>
             <Text style={{ color: '#1D1F22', fontSize: 11, marginLeft: 2 }}>▶</Text>
@@ -244,11 +242,7 @@ export function Photo({
     // Vídeo sin portada guardada: se muestra su primer fotograma.
     return (
       <View style={[styles.photo, { backgroundColor: '#2B2E33' }, style]}>
-        {animate ? (
-          <VideoClip uri={moment.videoUri} start={moment.videoClip?.start} />
-        ) : (
-          <VideoFrame uri={moment.videoUri} start={moment.videoClip?.start} />
-        )}
+        <VideoFrame uri={moment.videoUri} start={moment.videoClip?.start} />
         {badge && (
           <View style={styles.playBadge}>
             <Text style={{ color: '#1D1F22', fontSize: 11, marginLeft: 2 }}>▶</Text>

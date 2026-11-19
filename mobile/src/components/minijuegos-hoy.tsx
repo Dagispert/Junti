@@ -331,15 +331,12 @@ export function KaraokeHoy({ challenge, answers }: { challenge: Proposal; answer
                   boxShadow: 'inset 0 0 18px rgba(0,0,0,.8)',
                 }}>
                 {enLaTele ? (
-                  <video
-                    src={enLaTele}
-                    poster={montaje.poster ?? ultima?.imageUri}
-                    muted
-                    autoPlay
-                    loop
-                    playsInline
-                    style={LLENA}
-                  />
+                  // la portada (el vídeo se ve al abrir el karaoke: así no se descarga en Hoy)
+                  montaje.poster || ultima?.imageUri ? (
+                    <img src={montaje.poster ?? ultima?.imageUri} alt="" style={LLENA} />
+                  ) : game.artwork ? (
+                    <img src={game.artwork} alt="" style={LLENA} />
+                  ) : null
                 ) : game.artwork ? (
                   <img src={game.artwork} alt="" style={LLENA} />
                 ) : null}

@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'react';
 
+import { firmarUno } from './firmas';
 import { MEDIA_BUCKET, supabase } from './supabase';
 
 /** Lo ampliada que se ve la foto en cada nivel (cada fallo, un nivel más lejos). */
@@ -30,10 +31,7 @@ export function useFotoZoom(path?: string) {
   useEffect(() => {
     if (!path) return;
     let vivo = true;
-    supabase.storage
-      .from(MEDIA_BUCKET)
-      .createSignedUrl(path, 6 * 3600)
-      .then(({ data }) => vivo && setUrl(data?.signedUrl ?? undefined));
+    firmarUno(MEDIA_BUCKET, path).then((u) => vivo && setUrl(u));
     return () => {
       vivo = false;
     };

@@ -6,13 +6,13 @@
 
 import type { KaraokeGame } from '@/data/types';
 
+import { CACHE_LARGA, firmar, firmarUno } from './firmas';
 import { MEDIA_BUCKET, supabase } from './supabase';
 
 /** La dirección del audio: el fragmento de Apple o la pista firmada del almacén. */
 export async function trackUrl(game: KaraokeGame): Promise<string | undefined> {
   if (game.trackPath) {
-    const { data } = await supabase.storage.from('media').createSignedUrl(game.trackPath, 3600);
-    return data?.signedUrl;
+    return firmarUno('media', game.trackPath);
   }
   return game.previewUrl;
 }
@@ -197,7 +197,8 @@ export function aWav(buf: AudioBuffer, hz = 24000): Blob {
   const n = Math.floor(buf.length / paso);
   const canales = Array.from({ length: buf.numberOfChannels }, (_, i) => buf.getChannelData(i));
   const datos = new DataView(new ArrayBuffer(44 + n * 2));
-  const txt = (o: number, t: string) => [...t].forEach((c, i) => datos.setUint8(o + i, c.charCodeAt(0)));
+  const txt = (o: number, t: string) =>
+    [...t].forEach((c, i) => datos.setUint8(o + i, c.charCodeAt(0)));
   txt(0, 'RIFF');
   datos.setUint32(4, 36 + n * 2, true);
   txt(8, 'WAVE');
@@ -231,7 +232,7 @@ export async function guardarVozToma(
   const path = `${groupId}/${me}/voz-${momentId}.wav`;
   const up = await supabase.storage
     .from(MEDIA_BUCKET)
-    .upload(path, aWav(buf), { contentType: 'audio/wav', upsert: true });
+    .upload(path, aWav(buf), { contentType: 'audio/wav', upsert: true, cacheControl: CACHE_LARGA });
   if (up.error) throw new Error(up.error.message);
   const { error } = await supabase.from('voces_tomas').insert({ moment_id: momentId, path });
   // si otro móvil se adelantó, vale con la suya
@@ -242,16 +243,17 @@ export async function guardarVozToma(
 export async function vocesEnWav(ids: string[]): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   if (!ids.length) return out;
-  const { data } = await supabase.from('voces_tomas').select('moment_id, path').in('moment_id', ids);
+  const { data } = await supabase
+    .from('voces_tomas')
+    .select('moment_id, path')
+    .in('moment_id', ids);
   if (!data?.length) return out;
-  const { data: firmadas } = await supabase.storage
-    .from(MEDIA_BUCKET)
-    .createSignedUrls(
-      data.map((d) => d.path),
-      3600,
-    );
-  data.forEach((d, i) => {
-    const u = firmadas?.[i]?.signedUrl;
+  const firmadas = await firmar(
+    MEDIA_BUCKET,
+    data.map((d) => d.path),
+  );
+  data.forEach((d) => {
+    const u = firmadas[d.path];
     if (u) out.set(d.moment_id, u);
   });
   return out;

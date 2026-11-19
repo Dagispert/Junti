@@ -9,14 +9,11 @@ export function MontajeEnBucle({ game, alto = 260 }: { game: KaraokeGame; alto?:
   if (!game.montaje) return null;
   return (
     <View style={[styles.marco, { height: alto, width: (alto * 9) / 16 }]}>
-      {!!video && (
-        <video
-          src={video}
-          poster={poster}
-          muted
-          autoPlay
-          loop
-          playsInline
+      {/* la portada; el vídeo, al tocar «Ver» (así no se descarga solo) */}
+      {!!(poster || video) && (
+        <img
+          src={poster ?? undefined}
+          alt=""
           style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
         />
       )}

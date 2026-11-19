@@ -246,14 +246,11 @@ function Home({
     <View style={styles.home}>
       <View style={[styles.cover, cerrado && styles.coverVideo]}>
         {cerrado ? (
-          // terminado: el karaoke de todos, en bucle y sin sonido
-          <video
-            src={montaje.video}
-            poster={montaje.poster}
-            muted
-            autoPlay
-            loop
-            playsInline
+          // terminado: la portada del karaoke de todos (el vídeo, al tocar «Ver»;
+          // así no se descarga solo cada vez que se abre)
+          <img
+            src={montaje.poster ?? game.artwork}
+            alt=""
             style={{
               position: 'absolute',
               inset: 0,
@@ -1137,7 +1134,8 @@ function Montage({
       const stream = new MediaStream([...pistaVideo, ...dest.stream.getAudioTracks()]);
       const rec = new MediaRecorder(stream, {
         mimeType: recorderType() || undefined,
-        videoBitsPerSecond: 3_000_000,
+        // (1 Mbps: en el móvil se ve igual y pesa un tercio)
+        videoBitsPerSecond: 1_000_000,
       });
       const trozos: Blob[] = [];
       rec.ondataavailable = (e) => e.data.size && trozos.push(e.data);

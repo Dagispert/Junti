@@ -13,3 +13,10 @@ Un minijuego no está terminado hasta que tiene:
 7. **Avisos** en la campanita (`lib/notifications.ts`), su etiqueta en Retos (`app/group/[id]/retos.tsx`) y fuera del resumen de momentos sueltos (`lib/recap.ts`).
 8. **Sus sonidos** (`lib/sonidos.ts`, archivos en `mobile/public/sonidos/`, hechos con ElevenLabs): al jugar, acertar, enviar, revelar…
 9. Que funcione entre **iPhone y Android** (p. ej., audio grabado en Chrome: Opus, ver `lib/opus.ts`).
+
+## Cuidar las descargas (el plan gratis de Supabase solo da unos 5 GB al mes)
+
+- **Nunca reproducir vídeos solos** en listas, tarjetas o portadas: se enseña la portada y el vídeo se carga al tocarlo.
+- **Enlaces a archivos siempre con `firmar` / `firmarUno`** (`lib/firmas.ts`): reutilizan el mismo enlace durante días para que el móvil no vuelva a descargar. Nunca `createSignedUrl(s)` directamente.
+- **Subidas con `cacheControl: CACHE_LARGA`**, y las fotos pasadas antes por `comprimirFoto` (`lib/comprimir.ts`).
+- Vídeos grabados en la app con poca tasa de bits (~1 Mbps).
