@@ -30,7 +30,7 @@ const VOLUMEN: Partial<Record<Sonido, number>> = {
   enviar: 0.35,
   aplausos: 0.4,
   tele: 0.4,
-  persiana: 0.45,
+  persiana: 0.2,
   reloj: 0.4,
 };
 
